@@ -20,6 +20,7 @@ import (
 	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/autostart"
 	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
 	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/datadir"
+	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/listenaddr"
 )
 
 // StateEvent is the server lifecycle payload the Wails runner emits on the
@@ -89,10 +90,12 @@ type Bindings struct {
 }
 
 // ServerState reports the current lifecycle state for page mounts that miss
-// the last 'server:state' event.
+// the last 'server:state' event. The address gets the same DisplayAddress
+// treatment as the event path: a page mounted before the first state event
+// would otherwise render a hostless "http://:8097".
 func (b *Bindings) ServerState() StateEvent {
 	sup := b.supervisor()
-	ev := StateEvent{State: sup.State(), Address: sup.Address()}
+	ev := StateEvent{State: sup.State(), Address: listenaddr.DisplayAddress(sup.Address())}
 	if err := sup.Error(); err != nil {
 		ev.Error = err.Error()
 	}

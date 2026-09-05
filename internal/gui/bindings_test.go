@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -233,6 +234,23 @@ func TestServerStateBindingTracksSupervisor(t *testing.T) {
 	waitForState(t, failSup, StateFailed)
 	if ev := failed.ServerState(); ev.State != StateFailed || ev.Error != "bind: address in use" {
 		t.Fatalf("failed ServerState = %+v", ev)
+	}
+}
+
+// A wildcard listen (the ":8097" default) must surface as a resolvable
+// host:port on page mounts that miss the last server:state event — the
+// raw hostless form rendered "Running on http://:8097".
+func TestServerStateBindingDisplaysWildcardHost(t *testing.T) {
+	store := testStore(t)
+	b, sup := newBindingsFixture(t, &fakeApp{addr: ":8097", serve: make(chan error), closed: make(chan struct{})}, store, nil)
+	if err := sup.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waitForState(t, sup, StateRunning)
+	ev := b.ServerState()
+	host, port, err := net.SplitHostPort(ev.Address)
+	if err != nil || port != "8097" || host == "" {
+		t.Fatalf("running ServerState address = %q, want a resolvable host with port 8097", ev.Address)
 	}
 }
 
