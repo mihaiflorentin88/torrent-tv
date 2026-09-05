@@ -53,7 +53,7 @@ class MainActivity : Activity() {
                 return true
             }
         }
-        webView.addJavascriptInterface(Bridge(this), "FileListTVNative")
+        webView.addJavascriptInterface(Bridge(this, LinkNetworkInfo(this)), "FileListTVNative")
         setContentView(webView)
         webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
     }
