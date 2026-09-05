@@ -86,3 +86,57 @@ jobs:
         run: python3 -m unittest discover -s tools/tests -p 'test_*.py'
       - name: Repository whitespace checks
         run: git diff --check
+
+  android-tv:
+    name: TorrentTV Android shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build the shared TV web app
+        run: npm run build -w @filelist/tv
+      - name: Sync web app into the APK assets
+        run: cd clients/android-tv && ./gradlew :app:syncWebApp
+      - name: Same-bundle check (Parity contract rule 1)
+        run: |
+          cmp clients/tv/dist/app.js clients/android-tv/app/src/main/assets/www/app.js
+          cmp clients/tv/dist/app.css clients/android-tv/app/src/main/assets/www/app.css
+      - name: Unit tests
+        run: cd clients/android-tv && ./gradlew :app:testDebugUnitTest
+      - name: Build the APK
+        run: cd clients/android-tv && ./gradlew :app:assembleDebug
+      - name: Boot smoke on the API 26 ATV emulator (the 2018 floor)
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 26
+          target: android-tv
+          arch: x86
+          script: |
+            adb install -r clients/android-tv/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -n com.torrenttv.app/.MainActivity
+            sleep 15
+            adb logcat -d | grep -m1 "TorrentTV: ready" || true
+            adb shell uiautomator dump /sdcard/torrenttv.xml
+            adb pull /sdcard/torrenttv.xml torrenttv-smoke.xml
+            grep -q "TorrentTV" torrenttv-smoke.xml || (adb exec-out screencap -p > torrenttv-failure.png && exit 1)
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: torrenttv-smoke
+          path: |
+            torrenttv-smoke.xml
+            torrenttv-failure.png
+          if-no-files-found: ignore
+          retention-days: 7
