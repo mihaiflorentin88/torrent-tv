@@ -123,8 +123,12 @@ Automatic deletion of a torrent and its files — every Managed download sharing
 The oldest Tizen TV platform the single TV client is built to run on: 5.0. Declared in the manifest as `required_version` — a pure floor; one package serves every newer platform with no ceiling.
 _Avoid_: target version (what a validation run is aimed at)
 
+**Android floor**:
+The oldest Android TV platform TorrentTV, the Android TV client, runs on: Android 8.0, declared as `minSdk 26` — a pure floor; one APK serves every newer platform with no ceiling. Same posture as the Tizen Support floor.
+_Avoid_: target SDK (a build setting, not the support promise)
+
 **Verified TV**:
-A physical TV recorded in the Tizen verification log, where behavior counts as confirmed only by direct observation; the household's 2019 premium set and 2023 S90C are the Verified TVs. Any other Tizen set at or above the Support floor is best-effort.
+A physical TV recorded in the Tizen verification log, where behavior counts as confirmed only by direct observation; the household's 2019 premium set and 2023 S90C are the Verified TVs. Any other Tizen set at or above the Support floor is best-effort. The Android client's verification log lives in docs/ANDROIDTV.md and starts with no named hardware.
 _Avoid_: target TV, test device
 
 **Error panel**:
