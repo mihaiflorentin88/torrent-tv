@@ -17,6 +17,7 @@ export interface NavigationCandidate<T> {
 }
 
 export function remoteAction(key: string, keyCode: number): Direction | 'enter' | 'back' | 'ime-done' | 'ime-cancel' | null {
+  if (key === 'GoBack' || key === 'BrowserBack' || keyCode === 27) return 'back';
   if (keyCode === 65376) return 'ime-done';
   if (keyCode === 65385) return 'ime-cancel';
   if (key === 'ArrowLeft' || keyCode === 37) return 'left';

@@ -20,6 +20,15 @@ export function isDownloadComplete(download: Download): boolean {
 }
 
 export function playerAction(key: string, keyCode: number): PlayerAction {
+  if (key === 'MediaPlay') return 'play';
+  if (key === 'MediaPause') return 'pause';
+  if (key === 'MediaPlayPause') return 'play-pause';
+  if (key === 'MediaStop') return 'stop';
+  if (key === 'MediaRewind') return 'rewind';
+  if (key === 'MediaFastForward') return 'fast-forward';
+  if (key === 'MediaTrackPrevious') return 'previous';
+  if (key === 'MediaTrackNext') return 'next';
+  if (key === 'GoBack' || key === 'BrowserBack' || keyCode === 27) return 'back';
   if (key === 'ArrowLeft' || keyCode === 37) return 'left';
   if (key === 'ArrowRight' || keyCode === 39) return 'right';
   if (key === 'ArrowUp' || keyCode === 38) return 'up';

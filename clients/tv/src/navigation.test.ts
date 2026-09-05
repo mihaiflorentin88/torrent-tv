@@ -131,3 +131,11 @@ describe('modal dialog focus traps', () => {
     }
   });
 });
+
+describe('remoteAction Android back arrivals', () => {
+  it('treats GoBack, BrowserBack, and Escape as back', () => {
+    expect(remoteAction('GoBack', 0)).toBe('back');
+    expect(remoteAction('BrowserBack', 0)).toBe('back');
+    expect(remoteAction('Escape', 27)).toBe('back');
+  });
+});

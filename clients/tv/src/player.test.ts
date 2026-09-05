@@ -33,3 +33,21 @@ describe('player helpers', () => {
     expect(hiddenKeyRoute(null)).toBeNull();
   });
 });
+
+describe('playerAction Android media keys', () => {
+  it('maps Android media key names', () => {
+    expect(playerAction('MediaPlay', 0)).toBe('play');
+    expect(playerAction('MediaPause', 0)).toBe('pause');
+    expect(playerAction('MediaPlayPause', 179)).toBe('play-pause');
+    expect(playerAction('MediaStop', 178)).toBe('stop');
+    expect(playerAction('MediaRewind', 177)).toBe('rewind');
+    expect(playerAction('MediaFastForward', 228)).toBe('fast-forward');
+    expect(playerAction('MediaTrackPrevious', 227)).toBe('previous');
+    expect(playerAction('MediaTrackNext', 226)).toBe('next');
+  });
+  it('maps Android back arrivals', () => {
+    expect(playerAction('GoBack', 0)).toBe('back');
+    expect(playerAction('BrowserBack', 0)).toBe('back');
+    expect(playerAction('Escape', 27)).toBe('back');
+  });
+});
