@@ -75,3 +75,9 @@ clients/tizen/certificates/*
 
 # Subagent-driven-development scratch workspace
 .superpowers/
+clients/android-tv/app/src/main/assets/www/
+clients/android-tv/.build/
+clients/android-tv/.gradle/
+clients/android-tv/local.properties
+clients/android-tv/app/build/
+clients/android-tv/build/
