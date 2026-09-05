@@ -62,7 +62,84 @@ Android 8.0 WebView is the same Chromium era as the Tizen 5.0 engine floor.
 | Display name plumbing | Platform-injected constant (shell → web app), not hardcoded strings |
 | Server change | Permissive CORS on `/api/v1` so a locally-packaged client can call the API |
 
-### Approaches rejected
+## Parity contract
+
+"Identical to the Tizen app" is a testable requirement, not an aspiration.
+Three rules make it hold:
+
+1. **One bundle.** Both TVs run the same web artifact built from `clients/tv`
+   by the same Vite config. The Android shell ships those bytes as-is; it
+   injects no page styling and no UI code of its own. Any visual or
+   interaction difference that is not a named exception below is a defect.
+2. **No platform branching in UI code.** The shared web app keeps resolving
+   runtime differences through feature detection and the platform bridge
+   objects, exactly as ADR-0006 prescribes for engine generations. No
+   `isAndroid`-style conditionals in screens, components, or CSS — ever.
+   Platform behavior lives behind the four seams, never inside the UI.
+3. **The inventory below is the acceptance checklist.** The implementation
+   plan must verify every line on an Android emulator (API 26 ATV image)
+   against the same walkthrough executed on the Tizen old-engine smoke or a
+   physical Tizen set.
+
+Inventory (from `clients/tv` as it exists today — every item identical on
+TorrentTV):
+
+- **Setup:** LAN discovery scan with progress, discovered-server cards,
+  manual address entry through the system IME, connect, rescan, forget
+  saved server, status line, saved-server persistence across launches.
+- **Home:** backdrop hero with eyebrow/overview/"View versions", Continue
+  watching rail with progress bars, Favorites rail, Recently added rail,
+  portal promotions rotation with "Advertisement" labeling.
+- **Search:** IME query entry, submit, clear, results, Newest/Most
+  seeded/Rating/A–Z sort, category filter chip, cursor paging.
+- **Library:** dashboard, continue watching, favorites, watched, downloads,
+  categories grid → per-category item grid; watched/in-progress badges and
+  resume positions on cards.
+- **Tracker:** dashboard (recently added + strong swarms), browse with sort
+  and paging, categories grid.
+- **Title detail:** backdrop, metadata, state badges, overview, resume
+  button honoring saved position and watched state, favorite toggle, season
+  tabs, season-pack cards (expand, download, pause, resume, retry, delete
+  with confirmation dialog), episode rows expanding to per-version source
+  buttons, automatic episode-list expansion with live refresh.
+- **Downloads:** search, filter (all / still downloading / downloaded /
+  paused / errors), sort (recent, title, progress, size, speed), per-download
+  play and transfer actions, delete with confirmation dialog, live polling
+  with scroll-anchor preservation.
+- **Player:** opening/progressive/downloaded messaging, buffering OSD with
+  percentage, play/pause/stop, restart, ±10 s, timeline scrub with debounce,
+  hidden-controls behavior (any key reveals; left/right scrub; up/down/enter
+  refocus), audio track menu with refresh and preference persistence,
+  subtitle menu (off, grouped local/built-in/provider candidates, native
+  fallback), find-online-subtitles dialog, automatic RO→EN subtitle
+  selection chain, subtitle delay ±0.5 s and reset, aspect auto/letterbox/
+  full, playback info pane, retry after failure, waiting-for-segments
+  recovery with live download progress, completion → next-episode chaining,
+  position save at the same cadence, transient OSD messages.
+- **Jobs:** list with search, state/kind/retryable/updated filters, paging,
+  retry action, detail pane with logs (level/attempt filters, expandable
+  entries, load older).
+- **Events:** catalog coverage numbers, fetch latest, rebuild catalog.
+- **Settings:** preferred audio/subtitle languages, watched threshold,
+  worker count, title refresh timeout, environment-managed field display,
+  save, dependency tests (filelist, qbittorrent, storage, tmdb, subdl),
+  change/forget server, server update check/apply with confirmation dialog,
+  status panel, and releases link.
+- **Portal & live updates:** "Other projects" menu entry and dialog; SSE
+  events (portal, update status/failure, catalog and metadata updates,
+  search completion, job updates) with reconnect snapshot reconciliation.
+- **Global:** 5-way D-pad navigation with structured focus everywhere,
+  long-press-back to exit, focus restoration after dialogs and route
+  changes, boot splash, fatal-error panel, client diagnostics reporting.
+
+Named exceptions (the complete list):
+
+- App display name and monogram: "TorrentTV" / "TT" instead of
+  "FileList TV" / "FL" (the user-requested rebrand of the Android client).
+- The four platform seams, implemented natively behind the same logical
+  contracts (player, discovery network info, key codes, exit).
+
+## Approaches rejected
 
 - **Fully native Kotlin (Leanback/Compose) rewrite** — re-implements every
   screen, drifts from the Tizen design by construction, and leaves two TV
@@ -204,6 +281,14 @@ launcher banner, and `<title>` say TorrentTV; `applicationId` is
 - CI: the Tizen old-engine smoke keeps booting the same bundle; an Android
   emulator (API 26 ATV system image) installs the APK and smoke-boots the
   app to the setup screen — the analogue of the Tizen headless smoke.
+- Same-bundle check: CI asserts the web asset bytes packaged into the APK
+  are identical to the dist the Tizen WGT packaging consumes, so "one
+  bundle" stays a build fact, not an intention.
+- Parity walkthrough: the Parity contract inventory becomes the
+  implementation plan's verification script, executed on the Android
+  emulator with the Tizen app as the reference behavior; every line checked
+  or the difference is either fixed or promoted to a named exception in
+  this spec.
 - Physical verification stays best-effort until the household names its
   Android TV hardware; per ADR-0006's posture, behavior counts as confirmed
   only by direct observation on a named device. Naming those sets is an
