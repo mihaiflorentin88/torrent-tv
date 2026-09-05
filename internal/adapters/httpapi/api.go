@@ -125,7 +125,7 @@ func New(service *application.Service, settings *config.Store, log *slog.Logger,
 	mux.HandleFunc("GET /api/v1/streams/{id}/browser", a.browserStream)
 	mux.HandleFunc("GET /api/v1/streams/{id}/snap", a.streamSnap)
 	mux.Handle("/", appShell(webFS))
-	return recoverer(log, access(log, trusted(settings, mux)))
+	return recoverer(log, access(log, trusted(settings, corsAPI(mux))))
 }
 
 // appShell serves the embedded web build. A GET outside /api/ that matches no
@@ -1354,6 +1354,26 @@ func write(w http.ResponseWriter, status int, v any) {
 
 func problem(w http.ResponseWriter, status int, err error) {
 	write(w, status, map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "detail": err.Error()})
+}
+
+// corsAPI lets locally-packaged TV clients (Tizen's widget runtime bypasses
+// CORS; a WebView does not) call the API the server advertises on the home
+// LAN. Preflights are answered here because the method-specific mux routes
+// would otherwise drop OPTIONS on the SPA handler.
+func corsAPI(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v1") {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			if r.Method == http.MethodOptions {
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, HEAD, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+				w.Header().Set("Access-Control-Max-Age", "600")
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func trusted(s *config.Store, next http.Handler) http.Handler {
