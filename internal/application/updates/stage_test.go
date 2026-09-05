@@ -307,7 +307,7 @@ func TestStageRejectsCorruptDownloadAndLeavesNoResidue(t *testing.T) {
 
 func TestStageRejectsOversizedStream(t *testing.T) {
 	dest := t.TempDir()
-	sel := testSelection("torrent-tv-0.4.0-linux-amd64.tar.gz", "0.4.0", []byte("payload"))
+	sel := testSelection("torrent-tv-0.4.0-linux-amd64-desktop.tar.gz", "0.4.0", []byte("payload"))
 	limits := Limits{Compressed: 16, Expanded: 1 << 20, Entries: 10}
 	_, err := StageArchive(dest, sel, bytes.NewReader([]byte(strings.Repeat("x", 64))), limits)
 	if !errors.Is(err, ErrStagingLimit) {
@@ -323,7 +323,7 @@ func TestStageRejectsOversizedStream(t *testing.T) {
 
 func TestStageImposesNoMinimumSize(t *testing.T) {
 	dest := t.TempDir()
-	sel := testSelection("torrent-tv-0.4.0-linux-amd64.tar.gz", "0.4.0", nil)
+	sel := testSelection("torrent-tv-0.4.0-linux-amd64-desktop.tar.gz", "0.4.0", nil)
 	staged, err := StageArchive(dest, sel, bytes.NewReader(nil), defaultTestLimits())
 	if err != nil {
 		t.Fatalf("StageArchive of empty stream: %v", err)
@@ -478,7 +478,7 @@ func TestExtractHandlesDirectoryMembersAndNestedPaths(t *testing.T) {
 		{name: "torrent-tv.exe", data: winPayload},
 		{name: "docs/guide.md", data: []byte("guide\n")},
 	})
-	winSel := testSelection("torrent-tv-0.4.0-windows-amd64.zip", "0.4.0", winArchive)
+	winSel := testSelection("torrent-tv-0.4.0-windows-amd64-desktop.zip", "0.4.0", winArchive)
 	winStaged := stageData(t, winDest, winArchive, winSel, defaultTestLimits())
 	winResult, err := winStaged.Extract(winDest, Identity{GOOS: "windows", GOARCH: "amd64", Flavor: FlavorGUI}.Target(), defaultTestLimits())
 	if err != nil {
@@ -519,7 +519,7 @@ func TestExtractAcceptsZeroSizeMembers(t *testing.T) {
 		{name: "torrent-tv.exe", data: winPayload},
 		{name: "empty.txt", data: nil},
 	})
-	winSel := testSelection("torrent-tv-0.4.0-windows-amd64.zip", "0.4.0", winArchive)
+	winSel := testSelection("torrent-tv-0.4.0-windows-amd64-desktop.zip", "0.4.0", winArchive)
 	winStaged := stageData(t, winDest, winArchive, winSel, defaultTestLimits())
 	winResult, err := winStaged.Extract(winDest, Identity{GOOS: "windows", GOARCH: "amd64", Flavor: FlavorGUI}.Target(), defaultTestLimits())
 	if err != nil {
@@ -586,7 +586,7 @@ func TestExtractVerifiesExecutableIdentity(t *testing.T) {
 			archive := buildTarGz(t, members)
 			asset := tarAssetName("0.4.0", testCase.goarch)
 			if testCase.goarm > 0 {
-				asset = "torrent-tv-0.4.0-linux-armv7.tar.gz"
+				asset = "torrent-tv-0.4.0-linux-armv7-headless.tar.gz"
 			}
 			sel := testSelection(asset, testCase.selVer, archive)
 			staged := stageData(t, dest, archive, sel, defaultTestLimits())
@@ -609,7 +609,7 @@ func TestExtractVerifiesExecutableIdentity(t *testing.T) {
 }
 
 func TestVerifyExecutableRejectsForeignPlatforms(t *testing.T) {
-	sel := testSelection("torrent-tv-0.4.0-linux-amd64.tar.gz", "0.4.0", nil)
+	sel := testSelection("torrent-tv-0.4.0-linux-amd64-desktop.tar.gz", "0.4.0", nil)
 	linuxBinary := fixtureBinary(t, "linux", "amd64", 0, nil, "0.4.0")
 	windowsBinary := fixtureBinary(t, "windows", "amd64", 0, nil, "0.4.0")
 	if err := VerifyExecutable(linuxBinary, sel, Identity{GOOS: "linux", GOARCH: "amd64", Flavor: FlavorGUI}.Target()); err != nil {
@@ -754,7 +754,7 @@ func zipTree(t *testing.T, root, prefix string) []zipMember {
 }
 
 func bundleSelection(content []byte) Selection {
-	return testSelection("torrent-tv-0.4.0-darwin-universal.zip", "0.4.0", content)
+	return testSelection("torrent-tv-0.4.0-macos-universal-app.zip", "0.4.0", content)
 }
 
 func bundleTarget() Target {

@@ -176,7 +176,7 @@ func (stubSource) LatestRelease(context.Context) (updates.Release, error) {
 		Tag: tag,
 		URL: "https://github.com/mihaiflorentin88/torrent-tv/releases/tag/" + tag,
 		Assets: []updates.Asset{
-			{Name: "torrent-tv-0.4.0-darwin-arm64.tar.gz", URL: url("torrent-tv-0.4.0-darwin-arm64.tar.gz")},
+			{Name: "torrent-tv-0.4.0-macos-arm64-cli.tar.gz", URL: url("torrent-tv-0.4.0-macos-arm64-cli.tar.gz")},
 			{Name: "SHA256SUMS", URL: url("SHA256SUMS")},
 		},
 	}, nil
@@ -184,5 +184,5 @@ func (stubSource) LatestRelease(context.Context) (updates.Release, error) {
 
 func (stubSource) ChecksumManifest(_ context.Context, _ string) (string, error) {
 	sum := sha256.Sum256([]byte("irrelevant"))
-	return hex.EncodeToString(sum[:]) + "  torrent-tv-0.4.0-darwin-arm64.tar.gz\n", nil
+	return hex.EncodeToString(sum[:]) + "  torrent-tv-0.4.0-macos-arm64-cli.tar.gz\n", nil
 }

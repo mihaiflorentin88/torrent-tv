@@ -20,6 +20,6 @@ if [ -z "${ANDROID_HOME:-}" ] && [ -d /opt/homebrew/share/android-commandlinetoo
 fi
 ./gradlew --no-daemon :app:syncWebApp :app:assembleRelease
 mkdir -p "$root/.build/artifacts"
-cp "$root/app/build/outputs/apk/release/app-release.apk" "$root/.build/artifacts/torrent-tv-$version.apk"
-(cd "$root/.build/artifacts" && sha256sum "torrent-tv-$version.apk" > "torrent-tv-$version.apk.sha256")
-echo "$root/.build/artifacts/torrent-tv-$version.apk"
+cp "$root/app/build/outputs/apk/release/app-release.apk" "$root/.build/artifacts/torrent-tv-$version-android-tv.apk"
+(cd "$root/.build/artifacts" && sha256sum "torrent-tv-$version-android-tv.apk" > "torrent-tv-$version-android-tv.apk.sha256")
+echo "$root/.build/artifacts/torrent-tv-$version-android-tv.apk"

@@ -25,7 +25,7 @@ make validate-tizen-wgt TIZEN_TARGET=5.0
 
 ### TorrentTV (Android TV) build and boot smoke
 
-`make torrenttv-apk` builds the Android TV client: it requires `clients/tv/dist` to exist (build it with `npm run build -w @torrent-tv/tv`; the Gradle sync fails loudly when it is missing), syncs it into the APK assets with the Android page variant, runs the Kotlin unit tests, and produces `clients/android-tv/.build/artifacts/TorrentTV-<version>.apk` plus its checksum. CI's `android-tv` job adds the same-bundle check — the packaged `app.js`/`app.css` must be byte-identical to the Tizen bundle (the spec's Parity contract) — and boots the real APK on the API 26 Android TV emulator, the 2018 support floor, asserting the TorrentTV setup screen renders. See [ANDROIDTV.md](ANDROIDTV.md).
+`make torrenttv-apk` builds the Android TV client: it requires `clients/tv/dist` to exist (build it with `npm run build -w @torrent-tv/tv`; the Gradle sync fails loudly when it is missing), syncs it into the APK assets with the Android page variant, runs the Kotlin unit tests, and produces `clients/android-tv/.build/artifacts/torrent-tv-<version>-android-tv.apk` plus its checksum. CI's `android-tv` job adds the same-bundle check — the packaged `app.js`/`app.css` must be byte-identical to the Tizen bundle (the spec's Parity contract) — and boots the real APK on the API 26 Android TV emulator, the 2018 support floor, asserting the TorrentTV setup screen renders. See [ANDROIDTV.md](ANDROIDTV.md).
 
 ## Server builds and Raspberry Pi deployment
 

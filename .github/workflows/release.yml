@@ -86,14 +86,14 @@ jobs:
           # Linux GUI cross-builds: verbatim wails-cross docker invocation from
           # the Makefile (build-arm64 / build-all linux lines,
           # build/docker/Dockerfile.cross, -tags production,gtk3).
-          - target: linux-amd64
+          - target: linux-amd64-desktop
             goos: linux
             goarch: amd64
             suffix: ''
             format: tar
             runner: ubuntu-latest
             method: docker-cross
-          - target: linux-arm64
+          - target: linux-arm64-desktop
             goos: linux
             goarch: arm64
             suffix: ''
@@ -102,7 +102,7 @@ jobs:
             method: docker-cross
           # Pure headless (Makefile build-all last line): CGO_ENABLED=0,
           # internal/gui compiles to the ErrNoDisplay fallback via build tags.
-          - target: linux-armv7
+          - target: linux-armv7-headless
             goos: linux
             goarch: arm
             goarm: '7'
@@ -133,14 +133,14 @@ jobs:
           # Windows: cgo-free on the ubuntu runner (CGO_ENABLED=0 in
           # build/windows/Taskfile.yml); icon/version .syso + -H windowsgui
           # come from the windows:build task (Makefile build-all windows lines).
-          - target: windows-amd64
+          - target: windows-amd64-desktop
             goos: windows
             goarch: amd64
             suffix: .exe
             format: zip
             runner: ubuntu-latest
             method: windows
-          - target: windows-arm64
+          - target: windows-arm64-desktop
             goos: windows
             goarch: arm64
             suffix: .exe
@@ -151,7 +151,7 @@ jobs:
           # darwin:build; Makefile build-all darwin lines). The amd64 slice
           # cross-compiles via clang -arch x86_64 (CGO_FLAGS in
           # build/darwin/Taskfile.yml).
-          - target: darwin-amd64
+          - target: macos-amd64-cli
             goos: darwin
             goarch: amd64
             suffix: ''
@@ -159,7 +159,7 @@ jobs:
             runner: macos-latest
             method: darwin-native
             cgo_flags: -arch x86_64 -mmacosx-version-min=11.0
-          - target: darwin-arm64
+          - target: macos-arm64-cli
             goos: darwin
             goarch: arm64
             suffix: ''
@@ -329,18 +329,18 @@ jobs:
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: release-darwin-arm64
+          name: release-macos-arm64-cli
           path: release-arm64
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: release-darwin-amd64
+          name: release-macos-amd64-cli
           path: release-amd64
       - name: Merge slices with lipo and package universal .app (make package-darwin)
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
           mkdir -p bin slice-arm64 slice-amd64
-          tar -xzf "release-arm64/torrent-tv-${version}-darwin-arm64.tar.gz" -C slice-arm64
-          tar -xzf "release-amd64/torrent-tv-${version}-darwin-amd64.tar.gz" -C slice-amd64
+          tar -xzf "release-arm64/torrent-tv-${version}-macos-arm64-cli.tar.gz" -C slice-arm64
+          tar -xzf "release-amd64/torrent-tv-${version}-macos-amd64-cli.tar.gz" -C slice-amd64
           lipo -create -output bin/torrent-tv \
             slice-arm64/torrent-tv slice-amd64/torrent-tv
           GOCACHE="$(go env GOCACHE)" wails3 task darwin:package:existing BUNDLE_NAME="Torrent TV"
@@ -356,10 +356,10 @@ jobs:
       - name: Zip .app bundle (ditto preserves the ad-hoc signature)
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
-          ditto -c -k --keepParent "bin/Torrent TV.app" "torrent-tv-${version}-darwin-universal.zip"
+          ditto -c -k --keepParent "bin/Torrent TV.app" "torrent-tv-${version}-macos-universal-app.zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-darwin-universal
+          name: release-macos-universal-app
           path: torrent-tv-*
           if-no-files-found: error
           retention-days: 14
@@ -411,19 +411,19 @@ jobs:
           version="$(tr -d '[:space:]' < VERSION)"
           cd release
           payload=(
-            "torrent-tv-${version}-linux-amd64.tar.gz"
-            "torrent-tv-${version}-linux-arm64.tar.gz"
+            "torrent-tv-${version}-linux-amd64-desktop.tar.gz"
+            "torrent-tv-${version}-linux-arm64-desktop.tar.gz"
             "torrent-tv-${version}-linux-amd64-headless.tar.gz"
             "torrent-tv-${version}-linux-arm64-headless.tar.gz"
-            "torrent-tv-${version}-linux-armv7.tar.gz"
-            "torrent-tv-${version}-windows-amd64.zip"
-            "torrent-tv-${version}-windows-arm64.zip"
-            "torrent-tv-${version}-darwin-amd64.tar.gz"
-            "torrent-tv-${version}-darwin-arm64.tar.gz"
-            "torrent-tv-${version}-darwin-universal.zip"
-            "torrent-tv-${version}.wgt"
-            "torrent-tv-${version}.apk"
-            "torrent-tv-${version}.apk.sha256"
+            "torrent-tv-${version}-linux-armv7-headless.tar.gz"
+            "torrent-tv-${version}-windows-amd64-desktop.zip"
+            "torrent-tv-${version}-windows-arm64-desktop.zip"
+            "torrent-tv-${version}-macos-amd64-cli.tar.gz"
+            "torrent-tv-${version}-macos-arm64-cli.tar.gz"
+            "torrent-tv-${version}-macos-universal-app.zip"
+            "torrent-tv-${version}-samsung-tizen.wgt"
+            "torrent-tv-${version}-android-tv.apk"
+            "torrent-tv-${version}-android-tv.apk.sha256"
             sbom-go.cdx.json
             sbom-npm.cdx.json
             sbom-release.spdx.json

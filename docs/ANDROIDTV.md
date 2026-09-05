@@ -23,8 +23,8 @@ The build syncs `clients/tv/dist` into the APK assets (replacing only
 inside the Gradle build, and produces:
 
 ```text
-clients/android-tv/.build/artifacts/TorrentTV-<VERSION>.apk
-clients/android-tv/.build/artifacts/TorrentTV-<VERSION>.apk.sha256
+clients/android-tv/.build/artifacts/torrent-tv-<VERSION>-android-tv.apk
+clients/android-tv/.build/artifacts/torrent-tv-<VERSION>-android-tv.apk.sha256
 ```
 
 The artifact name rides the repository's `VERSION` train, the same way the
@@ -36,7 +36,7 @@ Install by sideload — Android TV treats unknown sources per device
 (Settings → Device Preferences → Security & Restrictions):
 
 ```sh
-adb install clients/android-tv/.build/artifacts/TorrentTV-<VERSION>.apk
+adb install clients/android-tv/.build/artifacts/torrent-tv-<VERSION>-android-tv.apk
 ```
 
 Updates are manual: install the newer APK over the old one (same

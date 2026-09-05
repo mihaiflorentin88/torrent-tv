@@ -184,8 +184,12 @@ func (r *Resolver) Resolve(ctx context.Context, hint string) (Selection, error) 
 }
 
 // assetName resolves the exact release asset for an installation flavor from
-// the release matrix. ok is false when the combination has no release asset,
-// which makes the installation manual-only.
+// the release matrix. Asset names follow the release naming standard
+// torrent-tv-<version>-<platform>[-<flavor>].<ext>, where the flavor marker
+// tells the deployment shape: desktop (GUI app + server), headless (server
+// only), cli (terminal binary that can open the desktop UI or serve), and
+// app (the packaged macOS .app). ok is false when the combination has no
+// release asset, which makes the installation manual-only.
 func assetName(flavor, goos, goarch, version string) (string, bool) {
 	base := "torrent-tv-" + version + "-"
 	switch goos {
@@ -194,21 +198,21 @@ func assetName(flavor, goos, goarch, version string) (string, bool) {
 		case FlavorGUI:
 			switch goarch {
 			case "amd64", "arm64":
-				return base + "linux-" + goarch + ".tar.gz", true
+				return base + "linux-" + goarch + "-desktop.tar.gz", true
 			}
 		case FlavorHeadless:
 			switch goarch {
 			case "amd64", "arm64":
 				return base + "linux-" + goarch + "-headless.tar.gz", true
 			case "arm":
-				return base + "linux-armv7.tar.gz", true
+				return base + "linux-armv7-headless.tar.gz", true
 			}
 		}
 	case "windows":
 		if flavor == FlavorGUI {
 			switch goarch {
 			case "amd64", "arm64":
-				return base + "windows-" + goarch + ".zip", true
+				return base + "windows-" + goarch + "-desktop.zip", true
 			}
 		}
 	case "darwin":
@@ -216,10 +220,10 @@ func assetName(flavor, goos, goarch, version string) (string, bool) {
 		case FlavorGUI:
 			switch goarch {
 			case "amd64", "arm64":
-				return base + "darwin-" + goarch + ".tar.gz", true
+				return base + "macos-" + goarch + "-cli.tar.gz", true
 			}
 		case FlavorBundle:
-			return base + "darwin-universal.zip", true
+			return base + "macos-universal-app.zip", true
 		}
 	}
 	return "", false

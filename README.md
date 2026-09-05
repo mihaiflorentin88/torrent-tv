@@ -72,7 +72,7 @@ The default trusted networks are loopback and RFC1918 private address ranges. Na
 
 ## Frontend and TV package
 
-`make frontend` builds and tests the browser and Tizen clients in Docker, then creates and validates the unsigned Apps2Samsung artifact at `clients/tizen/.build/artifacts/torrent-tv-<version>.wgt`. Apps2Samsung signs it for the selected TV during installation. See [the Tizen build and installation guide](docs/TIZEN.md), including the living physical-TV verification log.
+`make frontend` builds and tests the browser and Tizen clients in Docker, then creates and validates the unsigned Apps2Samsung artifact at `clients/tizen/.build/artifacts/torrent-tv-<version>-samsung-tizen.wgt`. Apps2Samsung signs it for the selected TV during installation. See [the Tizen build and installation guide](docs/TIZEN.md), including the living physical-TV verification log.
 
 ## Raspberry Pi deployment
 

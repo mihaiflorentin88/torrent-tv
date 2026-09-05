@@ -4,7 +4,7 @@ VERSION ?= $(shell tr -d '[:space:]' < VERSION)
 PI_HOST ?=
 TIZEN_VERSION ?= $(VERSION)
 TIZEN_TARGET ?= 7.0
-TIZEN_WGT := clients/tizen/.build/artifacts/torrent-tv-$(TIZEN_VERSION).wgt
+TIZEN_WGT := clients/tizen/.build/artifacts/torrent-tv-$(TIZEN_VERSION)-samsung-tizen.wgt
 GO_CACHE ?= /tmp/torrent-tv-go-cache
 GO_LDFLAGS := -s -w -X github.com/mihaiflorentin88/torrent-tv/internal/composition.Version=$(VERSION)
 
@@ -155,7 +155,7 @@ frontend:
 	docker run --rm --user "$(shell id -u):$(shell id -g)" -v "$(CURDIR):/src" -v /src/node_modules -v /src/clients/tv/node_modules torrent-tv-frontend-build
 	$(MAKE) tizen-wgt
 
-## tizen-wgt: pack the unsigned Tizen TV app -> clients/tizen/.build/artifacts/torrent-tv-$(TIZEN_VERSION).wgt
+## tizen-wgt: pack the unsigned Tizen TV app -> clients/tizen/.build/artifacts/torrent-tv-$(TIZEN_VERSION)-samsung-tizen.wgt
 tizen-wgt:
 	python3 tools/tizen_wgt.py pack \
 		--source clients/tv/dist \

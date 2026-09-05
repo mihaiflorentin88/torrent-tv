@@ -38,16 +38,16 @@ func matrixAsset(t *testing.T, version, goos, goarch, flavor string) string {
 func stableRelease(version string) Release {
 	tag := "v" + version
 	names := []string{
-		fmt.Sprintf("torrent-tv-%s-linux-amd64.tar.gz", version),
-		fmt.Sprintf("torrent-tv-%s-linux-arm64.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-linux-amd64-desktop.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-linux-arm64-desktop.tar.gz", version),
 		fmt.Sprintf("torrent-tv-%s-linux-amd64-headless.tar.gz", version),
 		fmt.Sprintf("torrent-tv-%s-linux-arm64-headless.tar.gz", version),
-		fmt.Sprintf("torrent-tv-%s-linux-armv7.tar.gz", version),
-		fmt.Sprintf("torrent-tv-%s-windows-amd64.zip", version),
-		fmt.Sprintf("torrent-tv-%s-windows-arm64.zip", version),
-		fmt.Sprintf("torrent-tv-%s-darwin-amd64.tar.gz", version),
-		fmt.Sprintf("torrent-tv-%s-darwin-arm64.tar.gz", version),
-		fmt.Sprintf("torrent-tv-%s-darwin-universal.zip", version),
+		fmt.Sprintf("torrent-tv-%s-linux-armv7-headless.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-windows-amd64-desktop.zip", version),
+		fmt.Sprintf("torrent-tv-%s-windows-arm64-desktop.zip", version),
+		fmt.Sprintf("torrent-tv-%s-macos-amd64-cli.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-macos-arm64-cli.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-macos-universal-app.zip", version),
 	}
 	release := Release{Tag: tag, Notes: "release notes", Draft: false, Prerelease: false, PublishedAt: testPublishedAt}
 	release.URL = fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s", releaseOwner, releaseRepo, tag)
@@ -311,7 +311,7 @@ func TestReleaseResolutionRejectsWrongRepository(t *testing.T) {
 			func(r *Release) {
 				assets := r.Assets
 				for i, asset := range assets {
-					if strings.Contains(asset.Name, "linux-amd64.tar.gz") && !strings.Contains(asset.Name, "headless") {
+					if strings.Contains(asset.Name, "linux-amd64-desktop.tar.gz") && !strings.Contains(asset.Name, "headless") {
 						assets[i].URL = "https://github.com/attacker/mirror/releases/download/v" + testVersion + "/" + asset.Name
 					}
 				}

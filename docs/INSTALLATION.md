@@ -14,29 +14,37 @@ The server listens on `8097` (web) and `42069` (torrent peers). Both are configu
 
 ## Download
 
-Prebuilt archives for every supported platform are on the [releases page](https://github.com/mihaiflorentin88/torrent-tv/releases), named `torrent-tv-<version>-<target>.zip` (Windows) or `.tar.gz` (everything else). Each archive contains the binary plus a `README.md`.
+Prebuilt archives for every supported platform are on the [releases page](https://github.com/mihaiflorentin88/torrent-tv/releases). Names follow one standard — `torrent-tv-<version>-<platform>[-<flavor>].<ext>` — so the filename tells you what a build is and where it runs:
 
-| Release asset | What it is | Use it when |
+- **`app`** — the packaged macOS application (a `.app` bundle inside the zip).
+- **`desktop`** — desktop app + server in one archive (GUI included).
+- **`cli`** — a raw binary meant to run from a terminal; it can open the desktop UI or run the headless `serve` server.
+- **`headless`** — pure server build, GUI excluded at compile time.
+- TV clients carry their platform instead of a flavor: `samsung-tizen` (WGT) and `android-tv` (APK).
+
+| Release asset | What it is | Pick it when |
 | --- | --- | --- |
-| `torrent-tv-<version>-darwin-universal.zip` | The universal **Torrent TV.app** (Apple Silicon + Intel), zipped with `ditto` so the ad-hoc signature survives | **Recommended download on macOS.** Unzip and drag the app to Applications — you get the desktop app and the `serve` server in one bundle. |
-| `torrent-tv-<version>-darwin-arm64.tar.gz` | Raw `torrent-tv-darwin-arm64` binary | macOS CLI / `serve` setups on Apple Silicon without the .app bundle. |
-| `torrent-tv-<version>-darwin-amd64.tar.gz` | Raw `torrent-tv-darwin-amd64` binary | macOS CLI / `serve` setups on Intel Macs. |
-| `torrent-tv-<version>-linux-amd64.tar.gz` | `torrent-tv-linux-amd64` with desktop app + server | 64-bit x86 Linux desktops/servers with WebKitGTK 4.1 installed (see [Linux runtime packages](#linux-runtime-packages)). |
-| `torrent-tv-<version>-linux-arm64.tar.gz` | `torrent-tv-linux-arm64` with desktop app + server | 64-bit ARM desktop distros (Raspberry Pi OS Bookworm, Ubuntu 24.04) with WebKitGTK 4.1 — GUI-capable. |
-| `torrent-tv-<version>-linux-armv7.tar.gz` | Pure headless `torrent-tv-linux-armv7` (GUI excluded at build time) | Older 32-bit ARM boards (e.g. Raspberry Pi 2/3 on 32-bit OS). Server only. |
-| `torrent-tv-<version>-linux-amd64-headless.tar.gz` | Pure static `torrent-tv-linux-amd64-headless` (GUI excluded at build time via `-tags headless`) | 64-bit x86 servers without WebKitGTK. Server only. |
-| `torrent-tv-<version>-linux-arm64-headless.tar.gz` | Pure static `torrent-tv-linux-arm64-headless` (GUI excluded at build time via `-tags headless`) | 64-bit ARM servers without WebKitGTK (e.g. Raspberry Pi 4/5 on a minimal distro). Server only. |
-| `torrent-tv-<version>-windows-amd64.zip` | `torrent-tv-windows-amd64.exe` with desktop app + server | 64-bit x86 Windows. SmartScreen warns on first run — choose **More info → Run anyway**. |
-| `torrent-tv-<version>-windows-arm64.zip` | `torrent-tv-windows-arm64.exe` with desktop app + server | Windows on ARM (e.g. Snapdragon laptops). |
+| `torrent-tv-<version>-macos-universal-app.zip` | The universal **Torrent TV.app** (Apple Silicon + Intel), zipped with `ditto` so the ad-hoc signature survives | **You want the normal macOS app.** Unzip and drag it to Applications — desktop app and `serve` server in one bundle. |
+| `torrent-tv-<version>-macos-arm64-cli.tar.gz` | `torrent-tv` binary for the terminal: no arguments opens the desktop window, `serve` runs the headless server | You drive an Apple Silicon Mac from the terminal instead of using the .app. |
+| `torrent-tv-<version>-macos-amd64-cli.tar.gz` | Same terminal binary for Intel Macs | Terminal use on Intel Macs. |
+| `torrent-tv-<version>-linux-amd64-desktop.tar.gz` | Desktop app + server in one binary | 64-bit x86 Linux with WebKitGTK 4.1 installed (see [Linux runtime packages](#linux-runtime-packages)). |
+| `torrent-tv-<version>-linux-arm64-desktop.tar.gz` | Desktop app + server in one binary | 64-bit ARM desktop distros (Raspberry Pi OS Bookworm, Ubuntu 24.04) with WebKitGTK 4.1. |
+| `torrent-tv-<version>-linux-amd64-headless.tar.gz` | Pure static server binary (GUI excluded via the `headless` build tag) | 64-bit x86 servers without WebKitGTK. |
+| `torrent-tv-<version>-linux-arm64-headless.tar.gz` | Pure static server binary (GUI excluded via the `headless` build tag) | 64-bit ARM servers without WebKitGTK (e.g. Raspberry Pi 4/5 on a minimal distro). |
+| `torrent-tv-<version>-linux-armv7-headless.tar.gz` | Pure headless 32-bit ARM server binary (GUI unreachable on `linux/arm`) | Older 32-bit ARM boards (e.g. Raspberry Pi 2/3 on a 32-bit OS). |
+| `torrent-tv-<version>-windows-amd64-desktop.zip` | `torrent-tv.exe` with desktop app + server | 64-bit x86 Windows. SmartScreen warns on first run — choose **More info → Run anyway**. |
+| `torrent-tv-<version>-windows-arm64-desktop.zip` | `torrent-tv.exe` with desktop app + server | Windows on ARM (e.g. Snapdragon laptops). |
+
+**macOS: .app or .tar.gz?** The `app` zip is the click-and-go desktop application. The `cli` archives hold the same GUI-capable binary for terminal workflows — remote SSH boxes, launchd scripts, or `serve`-only setups — and can always open the desktop window when a display is present.
 
 Every release also ships:
 
 - `SHA256SUMS` — verify with `sha256sum -c SHA256SUMS --ignore-missing`.
 - CycloneDX/SPDX SBOMs for the Go and npm dependencies.
-- The unsigned Tizen `torrent-tv-<version>.wgt` (see [Samsung Tizen application](#samsung-tizen-application)).
-- The sideload `TorrentTV-<version>.apk` with its `.sha256` checksum (see [Android TV application](#android-tv-application-torrenttv)).
+- The unsigned Tizen `torrent-tv-<version>-samsung-tizen.wgt` (see [Samsung Tizen application](#samsung-tizen-application)).
+- The sideload `torrent-tv-<version>-android-tv.apk` with its `.apk.sha256` checksum (see [Android TV application](#android-tv-application-torrenttv)).
 
-Every binary except `torrent-tv-linux-armv7`, `torrent-tv-linux-arm64-headless`, and `torrent-tv-linux-amd64-headless` contains both the desktop app and the headless server; those three are pure headless builds with the GUI excluded at build time (the armv7 build via its architecture constraints, the headless builds via the `headless` build tag). If you build from source instead, `make help` lists every target with the exact artifact it produces.
+Every archive contains the binary — named `torrent-tv` (`torrent-tv.exe` on Windows), so the installed path stays stable across versions — plus a `README.md`. `desktop` and `cli` builds contain both the desktop app and the headless server; `headless` builds exclude the GUI at build time (armv7 via its architecture constraints, the others via the `headless` build tag). If you build from source instead, `make help` lists every target with the exact artifact it produces.
 
 Headless arm64/amd64 servers whose distro lacks `libwebkit2gtk-4.1` should use the prebuilt `linux-arm64-headless` / `linux-amd64-headless` archives above. To build them from source instead, `make build-arm64-headless` produces `bin/torrent-tv-linux-arm64-headless` and `make build-amd64-headless` produces `bin/torrent-tv-linux-amd64-headless`; `make deploy-pi PI_HOST=user@host` builds and stages the arm64 one onto a Raspberry Pi in one step.
 
@@ -200,7 +208,7 @@ Replace the binary and restart; settings and catalog survive. On a Raspberry Pi,
 
 The project was renamed from `filelist-streaming-service` to **Torrent TV** (`torrent-tv`). Installations of version 0.3.0 or older keep working, but they carry the old names. A one-time move brings them onto the new identity:
 
-1. **Binary and release assets.** New releases ship `torrent-tv-<version>-<target>` archives (and a `torrent-tv-<version>.wgt` / `.apk`), so the old self-updater stops finding assets — download the new archive from the [releases page](https://github.com/mihaiflorentin88/torrent-tv/releases) or redeploy with `make deploy-pi` once and upgrade in place afterwards.
+1. **Binary and release assets.** New releases ship `torrent-tv-<version>-<platform>[-<flavor>]` archives (a `torrent-tv-<version>-samsung-tizen.wgt` and a `torrent-tv-<version>-android-tv.apk`), so the old self-updater stops finding assets — download the new archive from the [releases page](https://github.com/mihaiflorentin88/torrent-tv/releases) or redeploy with `make deploy-pi` once and upgrade in place afterwards.
 2. **Linux data directory.** The default data location is now `/var/lib/torrent-tv` (was `/var/lib/filelist-streaming-service` or `/var/lib/filelist-streaming`) and XDG installs move from `~/.local/share/filelist-streaming` to `~/.local/share/torrent-tv`. Stop the server, move the directory, and update any `--data-dir` pointer or systemd override.
 3. **systemd service.** The unit is now `torrent-tv.service` running as the `torrent-tv` user (`deploy/systemd/torrent-tv.service`; `make deploy-pi` installs it). Disable and remove the old `filelist-streaming.service` after the new one is up.
 4. **macOS/Windows app data.** The desktop GUI now stores its data under `Application Support/Torrent TV` (macOS) or `%APPDATA%\Torrent TV` (Windows); move the old `FileList Streaming` folder if you want to keep settings and catalog.
@@ -210,8 +218,8 @@ The Filelist tracker settings (username, passkey) are untouched by the rename.
 
 ## Samsung Tizen application
 
-Use the unsigned `torrent-tv-<version>.wgt` from a tagged release, or build it with `make frontend` and `make validate-tizen-wgt`. The TV client runs on Samsung Tizen 5.0 and newer. See [TIZEN.md](TIZEN.md) for Developer Mode, TV pairing, and Apps2Samsung installation. The TV and server must share the same private LAN.
+Use the unsigned `torrent-tv-<version>-samsung-tizen.wgt` from a tagged release, or build it with `make frontend` and `make validate-tizen-wgt`. The TV client runs on Samsung Tizen 5.0 and newer. See [TIZEN.md](TIZEN.md) for Developer Mode, TV pairing, and Apps2Samsung installation. The TV and server must share the same private LAN.
 
 ## Android TV application (TorrentTV)
 
-Use the `TorrentTV-<version>.apk` from a tagged release, or build it with `make torrenttv-apk`. The app runs on Android TV 8.0 (API 26, the 2018 Android TV baseline) and newer, installs by sideload (`adb install`, or a file manager after allowing unknown sources per device), and updates by installing the newer APK over the old one. The app displays as TorrentTV and runs the same screens and design as the Tizen client (see [ANDROIDTV.md](ANDROIDTV.md) and [ADR-0009](adr/0009-android-tv-client-torrenttv.md)). The TV and server must share the same private LAN.
+Use the `torrent-tv-<version>-android-tv.apk` from a tagged release, or build it with `make torrenttv-apk`. The app runs on Android TV 8.0 (API 26, the 2018 Android TV baseline) and newer, installs by sideload (`adb install`, or a file manager after allowing unknown sources per device), and updates by installing the newer APK over the old one. The app displays as TorrentTV and runs the same screens and design as the Tizen client (see [ANDROIDTV.md](ANDROIDTV.md) and [ADR-0009](adr/0009-android-tv-client-torrenttv.md)). The TV and server must share the same private LAN.
