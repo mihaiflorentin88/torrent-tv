@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=1920,height=1080">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: http: https:; script-src 'self'; connect-src http: https:; media-src http: https: blob:; style-src 'self' 'unsafe-inline'">
+    <title>TorrentTV</title>
+    <style>
+      html,body{margin:0;width:100%;height:100%;background:#071018;color:#f5f8fa;font-family:Arial,sans-serif}
+      #startup{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:100px;box-sizing:border-box;text-align:center;background:#071018;z-index:100}
+      #startup h1{font-size:64px;margin:0 0 26px;color:#52d3a2}#startup-message{font-size:28px;line-height:1.5;white-space:pre-wrap;max-width:1500px}
+    </style>
+    <link rel="stylesheet" href="app.css">
+  </head>
+  <body>
+    <div id="startup"><h1>TorrentTV</h1><div id="startup-message">Starting application…</div></div>
+    <div id="app"></div>
+    <script type="text/javascript" src="fatal-error.js"></script>
+    <script type="text/javascript" src="startup.js"></script>
+    <script type="text/javascript" src="platform-bridge.js"></script>
+    <script type="text/javascript" src="app.js"></script>
+  </body>
+</html>
