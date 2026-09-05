@@ -7,6 +7,7 @@ import { AVTrack, clampSeek, formatTime, hiddenKeyRoute, isDownloadComplete, nor
 import { householdSections, trackerCategories } from './catalog-data';
 import { discoverServers, DiscoveredServer, normalizeServerURL } from './discovery';
 import { appIdentity } from './app-name';
+import { exitApplication, registerMediaKeys } from './platform';
 import './tv.css';
 import './performance.css';
 
@@ -23,10 +24,6 @@ function captureTVDownloadAnchor(): TVDownloadAnchor | null { const container = 
 function restoreTVDownloadAnchor(anchor: TVDownloadAnchor | null) { if (!anchor) return; const container = document.querySelector<HTMLElement>('.tv-content'); const row = document.querySelector<HTMLElement>(`[data-download-id="${CSS.escape(anchor.id)}"]`); if (!container || !row) return; const delta = row.getBoundingClientRect().top - anchor.top; if (Math.abs(delta) > 0.5) container.scrollTop += delta }
 
 window.FileListBoot?.stage('Rendering interface');
-
-function exitApplication() {
-  try { window.tizen?.application?.getCurrentApplication().exit(); } catch { }
-}
 
 type SubtitleMenuRow = { key: string; row: number; position: number; heading: string; candidate: SubtitleCandidate; detail: string };
 function subtitleMenuRows(candidates: SubtitleCandidate[], firstRow: number, keyPrefix: string): SubtitleMenuRow[] {
@@ -709,7 +706,7 @@ function App() {
   async function manageSeasonPack(source: CatalogSource, season: number, action: SeasonPackAction) { if (!api) throw new Error('Server is not connected.'); if (action === 'download' || (action === 'retry' && !source.libraryState?.downloadId)) { await downloadSeason(source, season); return } const id = source.libraryState?.downloadId; if (!id) throw new Error('This season download is not registered yet. Refresh the title and try again.'); try { if (action === 'delete') await api.deleteDownload(id); else await api.call(`/downloads/${encodeURIComponent(id)}/${action}`, { method: 'POST' }); await refreshDownloads() } catch (error) { setStatus((error as Error).message); throw error } }
   async function advanceEpisode(preferences: PlaybackPreferences) { if (!api || !player) return; try { const next = await api.nextEpisode(player.download.id); await Promise.all([loadState(), refreshDownloads()]); if (next) setPlayer({ download: next, resumeMs: 0, preferences: { ...preferences, sourceId: next.id, subtitleMode: preferences.subtitleMode === 'off' ? 'off' : 'auto', subtitleProvider: '', subtitleCandidateId: '' } }); else setPlayer(null) } catch (error) { setStatus(`Could not start the next episode: ${(error as Error).message}`); setPlayer(null) } }
   async function manageDownload(download: Download, action: string) { if (!api) throw new Error('Server is not connected.'); try { if (action === 'remove') await api.deleteDownload(download.id); else await api.call(`/downloads/${encodeURIComponent(download.id)}/${action}`, { method: 'POST' }); const incoming = (await api.downloads()).items; setDownloads(current => reconcileDownloads(current, incoming)); } catch (error) { setStatus((error as Error).message); throw error } }
-  useEffect(() => { ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaRewind', 'MediaFastForward', 'MediaTrackPrevious', 'MediaTrackNext'].forEach(key => { try { window.tizen?.tvinputdevice?.registerKey(key); } catch { } }); if (server) void connect(server); }, []);
+  useEffect(() => { registerMediaKeys(); if (server) void connect(server); }, []);
   useEffect(() => { const input = () => { viewportInput.current++ }; window.addEventListener('keydown', input); return () => window.removeEventListener('keydown', input) }, []);
   useEffect(() => {
     if (!api) return;
