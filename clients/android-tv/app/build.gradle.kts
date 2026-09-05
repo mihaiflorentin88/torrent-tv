@@ -41,6 +41,13 @@ dependencies {
 // everything else — app.js, app.css, boot scripts — ships byte-identical to
 // the Tizen WGT.
 val syncWebApp = tasks.register<Copy>("syncWebApp") {
+    // Fail loudly instead of packaging a shell without its app: the web
+    // bundle must be built before this task runs.
+    doFirst {
+        if (!file("../../tv/dist/app.js").exists()) {
+            throw GradleException("clients/tv/dist is missing — run 'npm run build -w @filelist/tv' first")
+        }
+    }
     from("../../tv/dist") { exclude("index.html") }
     from("assets/index.html")
     from("assets/platform-bridge.js")
