@@ -47,6 +47,21 @@ jobs:
         run: make tizen-wgt validate-tizen-wgt
       - name: Validate the same WGT against the Tizen 5.0 support floor
         run: make validate-tizen-wgt TIZEN_TARGET=5.0
+      - name: Set up JDK 17 for the TorrentTV shell
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Ensure Android SDK platform 35
+        run: sdkmanager --install "platforms;android-35" >/dev/null 2>&1 || true
+      - name: Package TorrentTV APK
+        run: make torrenttv-apk
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-torrenttv
+          path: clients/android-tv/.build/artifacts/*
+          if-no-files-found: error
+          retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: web-static
@@ -407,6 +422,8 @@ jobs:
             "filelist-streaming-${version}-darwin-arm64.tar.gz"
             "filelist-streaming-${version}-darwin-universal.zip"
             "FileListTV-${version}.wgt"
+            "TorrentTV-${version}.apk"
+            "TorrentTV-${version}.apk.sha256"
             sbom-go.cdx.json
             sbom-npm.cdx.json
             sbom-release.spdx.json
