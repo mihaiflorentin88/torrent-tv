@@ -5,8 +5,8 @@ import { appIdentity } from './app-name';
 afterEach(() => { delete (window as any).FileListTVIdentity; });
 
 describe('appIdentity', () => {
-  it('defaults to FileList TV with the FL monogram', () => {
-    expect(appIdentity()).toEqual({ name: 'FileList TV', monogram: 'FL' });
+  it('defaults to Torrent TV with the TT monogram', () => {
+    expect(appIdentity()).toEqual({ name: 'Torrent TV', monogram: 'TT' });
   });
   it('prefers the platform-injected identity', () => {
     (window as any).FileListTVIdentity = { name: 'TorrentTV', monogram: 'TT' };
@@ -18,6 +18,6 @@ describe('appIdentity', () => {
   });
   it('falls back when the injected name is blank', () => {
     (window as any).FileListTVIdentity = { name: '   ' };
-    expect(appIdentity().name).toBe('FileList TV');
+    expect(appIdentity().name).toBe('Torrent TV');
   });
 });

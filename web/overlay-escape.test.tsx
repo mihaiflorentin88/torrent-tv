@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { API, type CatalogDetail, type CatalogSource, type Download, type HouseholdState } from '@filelist/shared';
+import { API, type CatalogDetail, type CatalogSource, type Download, type HouseholdState } from '@torrent-tv/shared';
 import { App } from './src';
 
 // App-level DOM tests for the non-player overlays (ticket #57): the Detail

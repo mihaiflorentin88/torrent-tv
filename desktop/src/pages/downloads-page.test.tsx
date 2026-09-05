@@ -15,11 +15,11 @@ const fakeApi = vi.hoisted(() => ({
   call: vi.fn(),
 }));
 
-vi.mock('../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings', () => ({
+vi.mock('../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings', () => ({
   OpenURL: fakeBindings.openURL,
 }));
 
-vi.mock('@filelist/web/shared-api', () => ({
+vi.mock('@torrent-tv/web/shared-api', () => ({
   configureSharedApi: () => { },
   sharedApi: () => fakeApi,
 }));

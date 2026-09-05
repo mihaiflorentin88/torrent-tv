@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/portal"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/updates"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/portal"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/updates"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 )
 
 func testLogger() *slog.Logger {

@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/outbound"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/outbound"
 )
 
 type Client struct {
@@ -157,7 +157,7 @@ func (c *Client) request(ctx context.Context, path string) (*http.Response, erro
 			return nil, err
 		}
 		req.SetBasicAuth(user, pass)
-		req.Header.Set("User-Agent", "FileList-Streaming/0.2")
+		req.Header.Set("User-Agent", "TorrentTV/0.2")
 		return req, nil
 	}, outbound.Policy{Provider: "FileList", Attempts: 3, MaxInlineDelay: 15 * time.Second})
 }

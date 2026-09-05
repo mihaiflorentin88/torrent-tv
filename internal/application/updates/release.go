@@ -15,7 +15,7 @@ import (
 // metadata, assets, and checksums are only trusted from these coordinates.
 const (
 	releaseOwner = "mihaiflorentin88"
-	releaseRepo  = "filelist-streaming-service"
+	releaseRepo  = "torrent-tv"
 	releaseHost  = "github.com"
 
 	// manifestName is the checksum manifest published alongside the release
@@ -187,7 +187,7 @@ func (r *Resolver) Resolve(ctx context.Context, hint string) (Selection, error) 
 // the release matrix. ok is false when the combination has no release asset,
 // which makes the installation manual-only.
 func assetName(flavor, goos, goarch, version string) (string, bool) {
-	base := "filelist-streaming-" + version + "-"
+	base := "torrent-tv-" + version + "-"
 	switch goos {
 	case "linux":
 		switch flavor {

@@ -5,7 +5,7 @@ package gui
 import (
 	"testing"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/autostart"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/autostart"
 )
 
 // setAutostartTestDir points the darwin autostart artifact at a temp dir for

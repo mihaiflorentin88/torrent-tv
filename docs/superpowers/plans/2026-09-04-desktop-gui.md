@@ -454,7 +454,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 )
 
 func TestRestartRequiredMovedFromHandler(t *testing.T) {
@@ -499,7 +499,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/composition"
+	"github.com/mihaiflorentin88/torrent-tv/internal/composition"
 )
 
 type guiOptions struct {
@@ -1080,10 +1080,10 @@ import (
 	"path/filepath"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/composition"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/datadir"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/singleinstance"
+	"github.com/mihaiflorentin88/torrent-tv/internal/composition"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/datadir"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/singleinstance"
 )
 
 type Options struct {

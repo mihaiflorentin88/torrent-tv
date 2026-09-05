@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { type Mock, type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { API, type Download, type MediaInfo, type PlaybackPreferences } from '@filelist/shared';
+import { API, type Download, type MediaInfo, type PlaybackPreferences } from '@torrent-tv/shared';
 import { BrowserPlayer } from './src';
 
 // Component-seam tests for Player shortcuts: real BrowserPlayer in happy-dom,

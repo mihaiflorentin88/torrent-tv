@@ -47,14 +47,14 @@ saved_qb_temp=$(configured QB_TEMP_PATH || true)
 prompt "qBittorrent incomplete-download path" "${saved_qb_temp:-${download_root%/}/.incomplete}"
 qb_temp=$REPLY
 saved_qb_backup=$(configured QB_BACKUP_DIR || true)
-prompt "qBittorrent config backup directory" "${saved_qb_backup:-/var/backups/filelist-streaming/qbittorrent}"
+prompt "qBittorrent config backup directory" "${saved_qb_backup:-/var/backups/torrent-tv/qbittorrent}"
 qb_backup=$REPLY
 saved_app_target=$(configured APP_TARGET || true)
 # S7: the service-owned bin directory replaced /usr/local/bin. Fresh
 # installs and installs whose saved path is an old default migrate to it;
 # an explicitly configured custom path is preserved.
-app_bin_default=/var/lib/filelist-streaming/bin/filelist-streaming
-app_bin_legacy=/usr/local/bin/filelist-streaming
+app_bin_default=/var/lib/torrent-tv/bin/torrent-tv
+app_bin_legacy=/usr/local/bin/torrent-tv
 case "$saved_app_target" in
 "" | "$app_bin_legacy") prompt_default=$app_bin_default ;;
 *) prompt_default=$saved_app_target ;;
@@ -110,8 +110,8 @@ mkdir -p "$(dirname "$profile")"
 } >"$profile_tmp"
 mv "$profile_tmp" "$profile"
 
-stage="/tmp/filelist-streaming-deploy-$$"
-case "$stage" in /tmp/filelist-streaming-deploy-[0-9]*) ;; *)
+stage="/tmp/torrent-tv-deploy-$$"
+case "$stage" in /tmp/torrent-tv-deploy-[0-9]*) ;; *)
 	echo "unsafe staging path" >&2
 	exit 1
 	;;
@@ -134,9 +134,9 @@ fi
 ssh "$host" "install -d -m 700 '$stage'"
 cleanup() { ssh "$host" "rm -rf -- '$stage'" >/dev/null 2>&1 || true; }
 trap cleanup EXIT INT TERM
-scp "$binary" "$host:$stage/filelist-streaming"
-scp "$unit" "$host:$stage/filelist-streaming.service"
-scp "$logrotate" "$host:$stage/filelist-streaming.logrotate"
+scp "$binary" "$host:$stage/torrent-tv"
+scp "$unit" "$host:$stage/torrent-tv.service"
+scp "$logrotate" "$host:$stage/torrent-tv.logrotate"
 scp "$repo_root/deploy/qbittorrent/qBittorrent.streaming.conf" "$host:$stage/qBittorrent.streaming.conf"
 scp "$repo_root/tools/qbittorrent_config.py" "$host:$stage/qbittorrent_config.py"
 
@@ -149,12 +149,12 @@ download_root=$4
 qb_temp=$5
 qb_backup=$6
 target=$7
-service=filelist-streaming.service
-service_user=filelist-streaming
-service_group=filelist-streaming
-app_bin_dir=/var/lib/filelist-streaming/bin
-owned_target=$app_bin_dir/filelist-streaming
-legacy_target=/usr/local/bin/filelist-streaming
+service=torrent-tv.service
+service_user=torrent-tv
+service_group=torrent-tv
+app_bin_dir=/var/lib/torrent-tv/bin
+owned_target=$app_bin_dir/torrent-tv
+legacy_target=/usr/local/bin/torrent-tv
 unit_path=/etc/systemd/system/$service
 # Fresh installs and both historic defaults move to the service-owned bin
 # directory; an explicitly configured custom path is preserved as-is.
@@ -208,9 +208,9 @@ rollback() {
 }
 trap rollback EXIT INT TERM
 
-test -f "$stage/filelist-streaming"
-test -f "$stage/filelist-streaming.service"
-test -f "$stage/filelist-streaming.logrotate"
+test -f "$stage/torrent-tv"
+test -f "$stage/torrent-tv.service"
+test -f "$stage/torrent-tv.logrotate"
 test -f "$stage/qBittorrent.streaming.conf"
 test -f "$stage/qbittorrent_config.py"
 command -v python3 >/dev/null
@@ -248,10 +248,10 @@ systemctl start "$qb_service"
 systemctl is-active --quiet "$qb_service"
 
 if ! id "$service_user" >/dev/null 2>&1; then
-	useradd --system --home-dir /var/lib/filelist-streaming --no-create-home --shell /usr/sbin/nologin "$service_user"
+	useradd --system --home-dir /var/lib/torrent-tv --no-create-home --shell /usr/sbin/nologin "$service_user"
 fi
 usermod -a -G qbittorrent "$service_user"
-install -d -m 0750 -o "$service_user" -g "$service_group" /var/lib/filelist-streaming /var/lib/filelist-streaming/data /var/lib/filelist-streaming/data/logs
+install -d -m 0750 -o "$service_user" -g "$service_group" /var/lib/torrent-tv /var/lib/torrent-tv/data /var/lib/torrent-tv/data/logs
 install -d -m 0755 -o "$service_user" -g "$service_group" "$app_bin_dir"
 
 app_phase=true
@@ -267,7 +267,7 @@ fi
 
 # Stage the new binary and validate it, and only then touch the unit: an
 # unusable payload must never deactivate the current installation.
-install -m 0755 "$stage/filelist-streaming" "${target}.new"
+install -m 0755 "$stage/torrent-tv" "${target}.new"
 test -x "${target}.new"
 test -s "${target}.new"
 
@@ -275,9 +275,9 @@ test -s "${target}.new"
 # root; ProtectSystem=strict must whitelist it inside the unit. The
 # shipped ExecStart already points at the service-owned bin directory; a
 # custom target is substituted so the unit keeps matching the binary.
-sed -i "s|@DOWNLOAD_ROOT@|$download_root|" "$stage/filelist-streaming.service"
+sed -i "s|@DOWNLOAD_ROOT@|$download_root|" "$stage/torrent-tv.service"
 if [ "$target" != "$owned_target" ]; then
-	sed -i "s|^ExecStart=.*|ExecStart=$target serve --data-dir /var/lib/filelist-streaming/data|" "$stage/filelist-streaming.service"
+	sed -i "s|^ExecStart=.*|ExecStart=$target serve --data-dir /var/lib/torrent-tv/data|" "$stage/torrent-tv.service"
 fi
 mv -f -- "${target}.new" "$target"
 
@@ -294,8 +294,8 @@ else
 	fi
 fi
 
-install -m 0644 "$stage/filelist-streaming.service" "$unit_path"
-install -m 0644 "$stage/filelist-streaming.logrotate" /etc/logrotate.d/filelist-streaming
+install -m 0644 "$stage/torrent-tv.service" "$unit_path"
+install -m 0644 "$stage/torrent-tv.logrotate" /etc/logrotate.d/torrent-tv
 systemctl daemon-reload
 
 if ! systemctl enable --now "$service" || ! systemctl restart "$service" || ! systemctl is-active --quiet "$service"; then

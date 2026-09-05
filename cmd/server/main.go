@@ -15,17 +15,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/updates"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/composition"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/gui"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/datadir"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/listenaddr"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/updates"
+	"github.com/mihaiflorentin88/torrent-tv/internal/composition"
+	"github.com/mihaiflorentin88/torrent-tv/internal/gui"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/datadir"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/listenaddr"
 )
 
 // settingsPathEnv keeps its historic precedence (spec: Data directory): when
 // set, composition loads the settings file it points at; otherwise the file
 // lives at <resolved data dir>/settings.json.
-const settingsPathEnv = "FILELIST_STREAMING_SETTINGS_PATH"
+const settingsPathEnv = "TORRENT_TV_SETTINGS_PATH"
 
 type guiOptions struct {
 	Minimized bool
@@ -51,8 +51,8 @@ func newRootCommand(runGUI func(guiOptions) error, runServe func(string, bool, l
 	var dataDir string
 	var minimized bool
 	root := &cobra.Command{
-		Use:     "filelist-streaming",
-		Short:   "FileList Streaming media server",
+		Use:     "torrent-tv",
+		Short:   "Torrent TV media server",
 		Version: versionString(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := guiOptions{Minimized: minimized, DataDir: dataDir}

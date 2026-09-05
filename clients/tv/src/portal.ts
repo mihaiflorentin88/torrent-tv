@@ -3,7 +3,7 @@
 // vitest suite runs in a plain node environment, so the behaviors the TV
 // must honor are pinned here without a DOM, and main.tsx consumes the same
 // functions and identity constants the tests assert against.
-import type { PortalState, UpdateStatus } from '@filelist/shared';
+import type { PortalState, UpdateStatus } from '@torrent-tv/shared';
 
 // Sidebar focus row of the Other projects entry. Appended after the fixed
 // menu rows (the last menu row is 32), so portal links appearing or

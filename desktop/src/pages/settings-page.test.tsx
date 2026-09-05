@@ -1,8 +1,8 @@
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PortalState, UpdateStatus } from '@filelist/shared';
-import type { UpdateController } from '@filelist/web/portal';
+import type { PortalState, UpdateStatus } from '@torrent-tv/shared';
+import type { UpdateController } from '@torrent-tv/web/portal';
 import { resetPortal, seedServerState } from '../lib/state';
 import { SettingsPage } from './SettingsPage';
 
@@ -44,7 +44,7 @@ const enabledSnapshot: PortalState = { accountsEnabled: true, adsEnabled: false,
 const disabledSnapshot: PortalState = { accountsEnabled: false, adsEnabled: false, donor: false, links: [] };
 const updateStatus: UpdateStatus = { currentVersion: '1.2.3', available: true, latest: '1.3.0', releasesUrl: 'https://example.invalid/releases', selfUpdate: true, applying: false };
 
-vi.mock('../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings', () => ({
+vi.mock('../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings', () => ({
   LoadSettings: fakeBindings.loadSettings,
   MissingRequired: fakeBindings.missingRequired,
   RestartServer: fakeBindings.restartServer,
@@ -52,7 +52,7 @@ vi.mock('../bindings/github.com/mihaiflorentin88/filelist-streaming-service/inte
   SettingsSchema: fakeBindings.settingsSchema,
 }));
 
-vi.mock('@filelist/web/shared-api', () => ({
+vi.mock('@torrent-tv/web/shared-api', () => ({
   configureSharedApi: () => { },
   sharedApi: () => fakeApi,
 }));

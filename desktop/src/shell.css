@@ -1,6 +1,6 @@
 /* Desktop shell chrome only: layout, sidebar, header, status pill, state
    dots, and the desktop pages' empty-state scaffolding. Every color comes
-   from the web tokens in @filelist/web/style.css (:root custom properties);
+   from the web tokens in @torrent-tv/web/style.css (:root custom properties);
    no webapp class is redefined here, so reused views render identically to
    the web client. */
 

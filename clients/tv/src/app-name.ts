@@ -12,7 +12,7 @@ declare global {
 
 export function appIdentity(): AppIdentity {
   const injected = window.FileListTVIdentity;
-  if (!injected || typeof injected.name !== 'string' || !injected.name.trim()) return { name: 'FileList TV', monogram: 'FL' };
+  if (!injected || typeof injected.name !== 'string' || !injected.name.trim()) return { name: 'Torrent TV', monogram: 'TT' };
   const name = injected.name.trim();
   if (typeof injected.monogram === 'string' && injected.monogram.trim()) return { name, monogram: injected.monogram.trim() };
   const words = name.split(/\s+/);

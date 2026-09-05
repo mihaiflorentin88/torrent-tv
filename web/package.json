@@ -1,5 +1,5 @@
 {
-  "name": "@filelist/web",
+  "name": "@torrent-tv/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "build": "tsc --noEmit && vite build"
   },
   "dependencies": {
-    "@filelist/shared": "0.1.0",
+    "@torrent-tv/shared": "0.1.0",
     "preact": "10.29.8"
   },
   "devDependencies": {

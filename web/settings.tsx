@@ -3,7 +3,7 @@
 // renders these on both the Settings and Events views.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChild } from 'preact';
-import { SettingsField } from '@filelist/shared';
+import { SettingsField } from '@torrent-tv/shared';
 import { sharedApi } from './shared-api';
 
 export function Events({ onError, confirmRebuild = false }: { onError: (value: string) => void; confirmRebuild?: boolean }) {

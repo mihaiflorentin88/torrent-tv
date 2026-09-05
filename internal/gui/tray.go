@@ -60,7 +60,7 @@ type trayItem struct {
 // carries a tooltip explaining why, so a failed read is never silently
 // presented as "off".
 func trayMenuModel(s State, autostartEnabled bool, autostartErr error) []trayItem {
-	items := []trayItem{{Label: "Open FileList Streaming", Action: trayActionOpen}}
+	items := []trayItem{{Label: "Open Torrent TV", Action: trayActionOpen}}
 
 	toggle := trayItem{
 		Label:    "Start server",

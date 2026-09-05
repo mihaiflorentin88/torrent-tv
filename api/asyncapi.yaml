@@ -1,5 +1,5 @@
 asyncapi: 3.0.0
-info: {title: FileList Streaming Events, version: 0.3.0}
+info: {title: Torrent TV Events, version: 0.3.0}
 servers: {lan: {host: 'server.lan:8097', protocol: http, pathname: /api/v1/events}}
 channels:
   events:

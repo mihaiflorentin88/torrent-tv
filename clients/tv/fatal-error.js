@@ -1,4 +1,4 @@
-/* FileList TV fatal error panel (ticket #80).
+/* Torrent TV fatal error panel (ticket #80).
  * Shipped verbatim (see vite.config.ts) and never transpiled: classic ES5 only.
  * Owned by the boot layer so the panel paints even when the app bundle itself
  * crashed: the first unhandled error renders a full-screen explanation and

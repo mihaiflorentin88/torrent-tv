@@ -4,7 +4,7 @@ The normative contract is [OpenAPI](../api/openapi.yaml); the future event contr
 
 ## Vertical-slice routes
 
-- `GET /system/info`: product name, user-configurable `instanceName`, version, setup state, and capabilities. Tizen discovery accepts only a valid FileList Streaming response.
+- `GET /system/info`: product name, user-configurable `instanceName`, version, setup state, and capabilities. Tizen discovery accepts only a valid Torrent TV response.
 - `GET|PUT /settings`: redacted current settings and atomic file-backed updates; `GET /settings/schema` supplies field help and credential-acquisition guidance without exposing secrets.
 - `POST /dependencies/{filelist|qbittorrent|storage|tmdb|subtitles|subdl}/test`: independent diagnostics. `subdl` validates the configured API key against the account endpoint; errors include the provider's sanitized response but never credentials.
 - `POST /diagnostics/client`: bounded, trusted-LAN client warning/error reports for TV failures; messages are written to the server log without accepting credentials or arbitrary log levels.

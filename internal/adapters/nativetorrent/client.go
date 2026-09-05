@@ -23,7 +23,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
 // Config is the native engine's deployment surface.

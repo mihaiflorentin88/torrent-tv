@@ -31,7 +31,9 @@ This file records constraints and invariants that must survive context resets an
 
 ## Release and repository rules
 
-- `VERSION` is the release source of truth. It must equal the Tizen package and manifest versions; release tags use `v<VERSION>`. The Android release artifact is named from it (`TorrentTV-<VERSION>.apk`), while the app's own `versionName`/`versionCode` live in `clients/android-tv/app/build.gradle.kts`.
+- The repository is `mihaiflorentin88/torrent-tv` (renamed from `filelist-streaming-service`). Release assets, the WGT, and the APK are all named `torrent-tv-<version>…`; the update-feed service validates that exact payload set.
+- Renamed-repo transition: releases tagged before the rename ship `filelist-streaming-…` assets and are therefore ineligible to the update-feed service — its reconciliation skips them and keeps the previously published notice, so the first post-rename tag is the first one the feed can publish.
+- `VERSION` is the release source of truth. It must equal the Tizen package and manifest versions; release tags use `v<VERSION>`. The Android release artifact is named from it (`torrent-tv-<VERSION>.apk`), while the app's own `versionName`/`versionCode` live in `clients/android-tv/app/build.gradle.kts` (application id `com.torrenttv.app` is unchanged).
 - Generated web bundles, WGTs, binaries, SBOMs, certificates, runtime data, logs, editor state, and local design scratch files stay ignored.
 - Run `make check`, the Docker frontend build, WGT validation, and the secret audit before publishing. GitHub CI repeats unit/compiler/package checks; Security runs Gitleaks, govulncheck, Trivy, CodeQL, actionlint, Zizmor, and dependency review.
 - Pin GitHub Actions to the commit behind an annotated release tag (`refs/tags/<tag>^{}`), not the tag-object SHA. Trivy SARIF must set `limit-severities-for-sarif: true`; otherwise its exit code includes severities outside the configured HIGH/CRITICAL release gate.
@@ -58,5 +60,5 @@ This file records constraints and invariants that must survive context resets an
 
 - `v0.2.0` was published from commit `c94f5945f816c03de1fe34456c5a3db1dc4f3c1a` on 2026-08-02.
 - Hosted CI, CodeQL, Gitleaks, govulncheck, Trivy, actionlint, Zizmor, the six-platform release matrix, Tizen WGT validation, SBOM generation, checksums, provenance, and release publication all completed successfully.
-- The release contains Linux amd64/arm64/armv7, Windows amd64, macOS amd64/arm64, `FileListTV-0.2.0.wgt`, SHA-256 checksums, CycloneDX Go/npm SBOMs, and an SPDX release SBOM.
+- The release contains Linux amd64/arm64/armv7, Windows amd64, macOS amd64/arm64, `torrent-tv-0.2.0.wgt`, SHA-256 checksums, CycloneDX Go/npm SBOMs, and an SPDX release SBOM.
 - The repository secret audit found no committed credentials. Keep `.env`, runtime settings/data, keys, certificates, logs, downloaded media, and generated artifacts outside Git; use `.env.example` and documented placeholders only.

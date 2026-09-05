@@ -5,12 +5,12 @@
 // focus machinery below is duplicated from src.tsx (pending a shared
 // module) because the removal confirm owns an Escape-closable overlay.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Download, DownloadSort, downloadTransferActions, DownloadTransferAction, formatBytes, orderDownloadIDs } from '@filelist/shared';
+import { Download, DownloadSort, downloadTransferActions, DownloadTransferAction, formatBytes, orderDownloadIDs } from '@torrent-tv/shared';
 import { Icon } from './icons';
 
-// Canonical reconcileDownloads lives in @filelist/shared; re-exported here
+// Canonical reconcileDownloads lives in @torrent-tv/shared; re-exported here
 // so desktop consumers resolve it from this module alongside the view.
-export { reconcileDownloads } from '@filelist/shared';
+export { reconcileDownloads } from '@torrent-tv/shared';
 
 type ViewportAnchor = { id: string; top: number };
 export function captureDownloadAnchor(): ViewportAnchor | null { const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-download-id]')); const row = rows.find(item => item.getBoundingClientRect().bottom > 0); return row ? { id: row.dataset.downloadId || '', top: row.getBoundingClientRect().top } : null }

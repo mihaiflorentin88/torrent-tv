@@ -19,7 +19,7 @@ func defaultDarwinPlistDir() string {
 	return filepath.Join(home, "Library", "LaunchAgents")
 }
 
-func plistPath() string { return filepath.Join(DarwinPlistDir(), "com.filelist-streaming.plist") }
+func plistPath() string { return filepath.Join(DarwinPlistDir(), "com.torrenttv.plist") }
 
 // xmlEscape escapes a string for embedding in a plist XML document.
 func xmlEscape(s string) string {
@@ -42,7 +42,7 @@ func platformEnable(opts Options) error {
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">` + "\n")
 	b.WriteString(`<plist version="1.0">` + "\n<dict>\n")
-	b.WriteString("\t<key>Label</key>\n\t<string>com.filelist-streaming</string>\n")
+	b.WriteString("\t<key>Label</key>\n\t<string>com.torrenttv</string>\n")
 	b.WriteString("\t<key>ProgramArguments</key>\n\t<array>\n")
 	for _, a := range args {
 		b.WriteString("\t\t<string>" + xmlEscape(a) + "</string>\n")

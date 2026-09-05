@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Settings } from '@filelist/web/settings';
-import { UpdateSection, type UpdateController } from '@filelist/web/portal';
-import { sharedApi } from '@filelist/web/shared-api';
-import type { Settings as SettingsRecord } from '../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config/models';
-import type { SchemaField, SettingsView } from '../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/httpapi/models';
+import { Settings } from '@torrent-tv/web/settings';
+import { UpdateSection, type UpdateController } from '@torrent-tv/web/portal';
+import { sharedApi } from '@torrent-tv/web/shared-api';
+import type { Settings as SettingsRecord } from '../bindings/github.com/mihaiflorentin88/torrent-tv/internal/platform/config/models';
+import type { SchemaField, SettingsView } from '../bindings/github.com/mihaiflorentin88/torrent-tv/internal/adapters/httpapi/models';
 import {
   LoadSettings,
   MissingRequired,
   RestartServer,
   SaveSettings,
   SettingsSchema,
-} from '../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings';
+} from '../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings';
 import { openExternal, usePortal, useServerState } from '../lib/state';
 
 // Settings page: the shared web Settings component with the bindings as the

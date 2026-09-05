@@ -35,15 +35,15 @@ func TestLoadAtAnchorsRelativeDefaultsToSettingsDir(t *testing.T) {
 }
 
 // TestLoadAtPiServeFixturePreservesEffectivePaths pins the production
-// constraint: the Pi runs `serve --data-dir /var/lib/filelist-streaming/data`
-// with WorkingDirectory=/var/lib/filelist-streaming and a settings file of
+// constraint: the Pi runs `serve --data-dir /var/lib/torrent-tv/data`
+// with WorkingDirectory=/var/lib/torrent-tv and a settings file of
 // relative default paths, so today every "data/x" value resolves to
 // <data dir>/x. The fixture mirrors exactly that layout and proves the
 // effective absolute paths are identical under the Pi's working directory
 // AND under an arbitrary CWD (which is the point: the old CWD anchoring
 // broke wherever CWD differed).
 func TestLoadAtPiServeFixturePreservesEffectivePaths(t *testing.T) {
-	root := t.TempDir() // stands in for /var/lib/filelist-streaming
+	root := t.TempDir() // stands in for /var/lib/torrent-tv
 	dataDir := filepath.Join(root, "data")
 	body := `{` +
 		`"databasePath": "data/filelist.db",` +

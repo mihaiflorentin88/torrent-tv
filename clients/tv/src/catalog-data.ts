@@ -1,4 +1,4 @@
-import {canonicalHouseholdItems,CatalogFacets, HouseholdItem, HouseholdState} from '@filelist/shared';
+import {canonicalHouseholdItems,CatalogFacets, HouseholdItem, HouseholdState} from '@torrent-tv/shared';
 
 export type HouseholdSection = {key:'continue'|'favorites'|'recent'|'watched';title:string;items:HouseholdItem[]};
 

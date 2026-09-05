@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { clampVolume, DEFAULT_PLAYER_SETTINGS, loadPlayerSettings, PLAYER_MUTED_KEY, PLAYER_VOLUME_KEY, savePlayerSettings } from '@filelist/shared';
-import type { PlayerSettingsStorage } from '@filelist/shared';
+import { clampVolume, DEFAULT_PLAYER_SETTINGS, loadPlayerSettings, PLAYER_MUTED_KEY, PLAYER_VOLUME_KEY, savePlayerSettings } from '@torrent-tv/shared';
+import type { PlayerSettingsStorage } from '@torrent-tv/shared';
 
 // — Persisted player settings: pure load/save over an injected storage so the
 // browser passes localStorage and tests pass a plain object. Absent or corrupt

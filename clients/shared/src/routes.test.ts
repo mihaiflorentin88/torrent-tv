@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildPath, parsePath } from '@filelist/shared';
-import type { View } from '@filelist/shared';
+import { buildPath, parsePath } from '@torrent-tv/shared';
+import type { View } from '@torrent-tv/shared';
 
 // — Client routes: every web screen owns a URL, so a refresh or a shared link
 // lands on the same view. buildPath and parsePath are pure inverses over the

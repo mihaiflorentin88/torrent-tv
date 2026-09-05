@@ -14,11 +14,11 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/composition"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/datadir"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/listenaddr"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/singleinstance"
+	"github.com/mihaiflorentin88/torrent-tv/internal/composition"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/datadir"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/listenaddr"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/singleinstance"
 )
 
 // Run assembles and runs the Wails desktop app: data-dir resolution,
@@ -88,7 +88,7 @@ func Run(opts Options) error {
 	}
 	bind.setSupervisor(sup)
 	app := application.New(application.Options{
-		Name: "FileList Streaming",
+		Name: "Torrent TV",
 		// Dock/taskbar icon for raw runs (make package-darwin stamps the
 		// .app bundle's own icon; this covers `go run ./cmd/server gui`).
 		// Options.Icon — not SetIcon: the framework applies it during
@@ -127,7 +127,7 @@ func Run(opts Options) error {
 	// path back to setup. Incomplete configuration opens the window
 	// regardless (spec: CLI); the tray's click-to-show path stays as is.
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:     "FileList Streaming",
+		Title:     "Torrent TV",
 		Width:     1100,
 		Height:    720,
 		MinWidth:  960,

@@ -15,12 +15,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/httpapi"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/composition"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/autostart"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/datadir"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/listenaddr"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/httpapi"
+	"github.com/mihaiflorentin88/torrent-tv/internal/composition"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/autostart"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/datadir"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/listenaddr"
 )
 
 // StateEvent is the server lifecycle payload the Wails runner emits on the

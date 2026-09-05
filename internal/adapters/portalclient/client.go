@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/portal"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/portal"
 )
 
 // baseURL is the fixed upstream address. It is deliberately not configurable.

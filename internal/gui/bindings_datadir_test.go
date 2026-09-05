@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/autostart"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/datadir"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/autostart"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/datadir"
 )
 
 // relocatableBindings wires a Bindings the way the runner does, but with
@@ -42,7 +42,7 @@ func relocatableBindings(t *testing.T, oldDir, exeDir string) (*Bindings, *Super
 	t.Helper()
 	store := completeStore(t, oldDir)
 	probe := &factoryProbe{}
-	exe := filepath.Join(exeDir, "filelist-streaming")
+	exe := filepath.Join(exeDir, "torrent-tv")
 	b := &Bindings{settings: store, dataDir: oldDir, dataDirSource: "default"}
 	b.exePathFn = func() (string, error) { return exe, nil }
 	sup := NewSupervisor(SupervisorDeps{Log: testLogger(), Settings: store})
@@ -91,7 +91,7 @@ func TestChangeDataDirStopsMovesRestarts(t *testing.T) {
 			t.Fatalf("%s must have moved to the new dir: %v", name, err)
 		}
 	}
-	pointer, err := os.ReadFile(datadir.PointerPath(filepath.Join(exeDir, "filelist-streaming")))
+	pointer, err := os.ReadFile(datadir.PointerPath(filepath.Join(exeDir, "torrent-tv")))
 	if err != nil {
 		t.Fatalf("pointer file: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestChangeDataDirReregistersAutostart(t *testing.T) {
 	midDir := t.TempDir()
 	finalDir := t.TempDir()
 	exeDir := t.TempDir()
-	exe := filepath.Join(exeDir, "filelist-streaming")
+	exe := filepath.Join(exeDir, "torrent-tv")
 
 	var mu sync.Mutex
 	var registrations []autostart.Options
@@ -378,7 +378,7 @@ func TestChangeDataDirPostMoveFailureLeavesStopped(t *testing.T) {
 	oldDir := t.TempDir()
 	newDir := t.TempDir()
 	exeDir := t.TempDir()
-	exe := filepath.Join(exeDir, "filelist-streaming")
+	exe := filepath.Join(exeDir, "torrent-tv")
 
 	b, sup, probe := relocatableBindings(t, oldDir, exeDir)
 	remapErr := errors.New("disk I/O folly")
@@ -419,7 +419,7 @@ func TestChangeDataDirGuardBlocksConcurrentAutoStart(t *testing.T) {
 	store := newRunnerStore(t, filepath.Join(oldDir, "settings.json")) // fresh store: required keys missing
 	probe := &factoryProbe{}
 	b := &Bindings{settings: store, dataDir: oldDir, dataDirSource: "default"}
-	b.exePathFn = func() (string, error) { return filepath.Join(exeDir, "filelist-streaming"), nil }
+	b.exePathFn = func() (string, error) { return filepath.Join(exeDir, "torrent-tv"), nil }
 	b.relocateFn = func(exePath, from, to string) error { return datadir.Relocate(exePath, from, to) }
 	entered := make(chan struct{})
 	release := make(chan struct{})

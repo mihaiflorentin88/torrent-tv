@@ -13,8 +13,8 @@ make frontend
 The build uses the pinned Node 24 Docker image and an ephemeral container volume for `node_modules`, so Node and frontend dependencies do not need to be installed on the host. Packaging uses only Python 3 standard-library modules. It creates:
 
 ```text
-clients/tizen/.build/artifacts/FileListTV-0.3.0.wgt
-clients/tizen/.build/artifacts/FileListTV-0.3.0.wgt.sha256
+clients/tizen/.build/artifacts/torrent-tv-0.3.0.wgt
+clients/tizen/.build/artifacts/torrent-tv-0.3.0.wgt.sha256
 ```
 
 The WGT is deliberately unsigned. Apps2Samsung accepts a custom `.wgt`, obtains or reuses a Samsung certificate, and re-signs the package for the selected TV during installation. Signature files from an old build are excluded to prevent a mismatched certificate from leaking into the artifact. No certificate, password, or TV DUID is stored in this repository.
@@ -34,9 +34,9 @@ Offline validation cannot prove certificate/DUID acceptance or runtime behavior.
 
 1. Put the computer and TV on the same LAN. The TV must be reachable on its internal development port (26101); that port cannot be enabled independently.
 2. On the TV, open **Apps**, then **App Settings**, enter `12345`, enable **Developer mode**, enter the IP address of the computer running Apps2Samsung, and reboot the TV. If that computer's IP changes, update this setting.
-3. Start Apps2Samsung and select the TV. Choose the custom WGT option and select `clients/tizen/.build/artifacts/FileListTV-0.3.0.wgt` from disk.
+3. Start Apps2Samsung and select the TV. Choose the custom WGT option and select `clients/tizen/.build/artifacts/torrent-tv-0.3.0.wgt` from disk.
 4. Install it. Apps2Samsung can request a Samsung account login the first time it needs to create signing material; later installs reuse the certificate. Do not copy that signing material into the repository.
-5. Launch **FileList TV**, select the discovered server or choose **Manual address**, and exercise the physical-TV checks above.
+5. Launch **Torrent TV**, select the discovered server or choose **Manual address**, and exercise the physical-TV checks above.
 
 If Apps2Samsung cannot discover or connect to the TV, verify Developer Mode after reboot, the authorized computer IP, same-LAN routing and firewall rules, and the TV's IP. A Samsung `1010` installation error commonly indicates a signing/certificate problem; retry Apps2Samsung certificate setup before changing the WGT.
 
@@ -62,13 +62,13 @@ Version 0.2.5 hardens the canonical resume action. A partially watched movie or 
 
 Version 0.2.6 groups every household dashboard rail to one card per canonical series title and makes complete-season release alternatives explicit. Each pack card owns its exact download state; a completed version is marked without disabling other releases. The detail focus graph fixes season tabs on row 2, pack alternatives on row 3, and episodes on row 4 and below, so Down follows the screen and Left/Right selects another pack. Series detail polls cache-only state in place while the pack is registered.
 
-Version 0.2.7 makes complete-season cards safe disclosures: OK expands one card at a time, and only the inner Download button starts work. Active, paused, failed, and completed packs expose the relevant Pause, Resume, Retry, and protected Delete controls. The detail graph uses seasons on row 2, pack headers on row 3, expanded actions on row 4, and episodes from row 10, so every D-pad direction follows the visible layout. First launch now scans a bounded local subnet for validated FileList Streaming servers; a discovered URL is normalized, verified, saved, and reused exactly like a successful manual connection. Rescan, Manual address, and Forget saved server remain available.
+Version 0.2.7 makes complete-season cards safe disclosures: OK expands one card at a time, and only the inner Download button starts work. Active, paused, failed, and completed packs expose the relevant Pause, Resume, Retry, and protected Delete controls. The detail graph uses seasons on row 2, pack headers on row 3, expanded actions on row 4, and episodes from row 10, so every D-pad direction follows the visible layout. First launch now scans a bounded local subnet for validated Torrent TV servers; a discovered URL is normalized, verified, saved, and reused exactly like a successful manual connection. Rescan, Manual address, and Forget saved server remain available.
 
 Current canonical navigation opens every My Library and Tracker card in title details. Episode cards expand version actions; unmanaged versions say **Play and download**, while owned versions say **Play**. Season and episode controls expose separate download/watch markers. Back collapses an expanded episode before leaving details. Starting a season pack keeps details open and updates its episode rows.
 
 Downloads telemetry is reconciled by stable download ID. Polling never invokes focus restoration or replaces existing keyed controls, existing rows retain their order, and the focused action remains attached to the same DOM node. Telemetry reserves stable lines; longer selected-file and complete-torrent facts expand instead of being clipped. New rows are allowed and the first visible row is anchored when they are inserted above it.
 
-The HTML now paints **FileList TV — Starting application…** before JavaScript runs. A successful Preact render removes it. If the bundle is missing, slow, or throws during startup, the screen remains visible and displays the failed stage or exception instead of becoming an unexplained black screen. Report the exact on-screen message when diagnosing a physical-TV failure.
+The HTML now paints **Torrent TV — Starting application…** before JavaScript runs. A successful Preact render removes it. If the bundle is missing, slow, or throws during startup, the screen remains visible and displays the failed stage or exception instead of becoming an unexplained black screen. Report the exact on-screen message when diagnosing a physical-TV failure.
 
 The packaged launcher icon is `icon.png`, a 117×117 RGBA rendering of the repository's editable `icon.svg` source. Samsung identifies this size as the test-installed TV application icon. If the updated icon does not appear immediately after installing 0.1.3, reboot the TV once to clear the launcher cache.
 
@@ -143,7 +143,7 @@ The 2019 premium set is where the 0.3.0 Support-floor failure was first observed
 
 ## Optional manual Tizen CLI signing
 
-Apps2Samsung users do not need this path. If Tizen Studio and the Samsung TV extensions already exist, `clients/tizen/scripts/package.sh` accepts an existing certificate profile in `TIZEN_PROFILE` and creates `FileListTV-0.3.0-signed.wgt`. This separate filename prevents it from overwriting the unsigned Apps2Samsung artifact. The script never creates certificate material.
+Apps2Samsung users do not need this path. If Tizen Studio and the Samsung TV extensions already exist, `clients/tizen/scripts/package.sh` accepts an existing certificate profile in `TIZEN_PROFILE` and creates `torrent-tv-0.3.0-signed.wgt`. This separate filename prevents it from overwriting the unsigned Apps2Samsung artifact. The script never creates certificate material.
 
 ## Device behavior
 

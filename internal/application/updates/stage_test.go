@@ -227,7 +227,7 @@ func defaultTestLimits() Limits {
 }
 
 func tarAssetName(version, goarch string) string {
-	return "filelist-streaming-" + version + "-linux-" + goarch + ".tar.gz"
+	return "torrent-tv-" + version + "-linux-" + goarch + ".tar.gz"
 }
 
 // happyTarMembers mirrors the published tar layout: a ./ anchored payload
@@ -235,7 +235,7 @@ func tarAssetName(version, goarch string) string {
 func happyTarMembers(payload []byte) []tarMember {
 	return []tarMember{
 		{name: ".", typ: tar.TypeDir, mode: 0o755},
-		{name: "./filelist-streaming", data: payload, mode: 0o755},
+		{name: "./torrent-tv", data: payload, mode: 0o755},
 		{name: "./README.md", data: []byte("filelist streaming\n"), mode: 0o644},
 	}
 }
@@ -307,7 +307,7 @@ func TestStageRejectsCorruptDownloadAndLeavesNoResidue(t *testing.T) {
 
 func TestStageRejectsOversizedStream(t *testing.T) {
 	dest := t.TempDir()
-	sel := testSelection("filelist-streaming-0.4.0-linux-amd64.tar.gz", "0.4.0", []byte("payload"))
+	sel := testSelection("torrent-tv-0.4.0-linux-amd64.tar.gz", "0.4.0", []byte("payload"))
 	limits := Limits{Compressed: 16, Expanded: 1 << 20, Entries: 10}
 	_, err := StageArchive(dest, sel, bytes.NewReader([]byte(strings.Repeat("x", 64))), limits)
 	if !errors.Is(err, ErrStagingLimit) {
@@ -323,7 +323,7 @@ func TestStageRejectsOversizedStream(t *testing.T) {
 
 func TestStageImposesNoMinimumSize(t *testing.T) {
 	dest := t.TempDir()
-	sel := testSelection("filelist-streaming-0.4.0-linux-amd64.tar.gz", "0.4.0", nil)
+	sel := testSelection("torrent-tv-0.4.0-linux-amd64.tar.gz", "0.4.0", nil)
 	staged, err := StageArchive(dest, sel, bytes.NewReader(nil), defaultTestLimits())
 	if err != nil {
 		t.Fatalf("StageArchive of empty stream: %v", err)
@@ -391,7 +391,7 @@ func TestExtractRejectsTraversalAbsoluteAndDeviceMembers(t *testing.T) {
 		{
 			name: "file flavor symlink",
 			members: append(happyTarMembers(payload), tarMember{
-				name: "./filelist-streaming-link", typ: tar.TypeSymlink, link: "filelist-streaming",
+				name: "./torrent-tv-link", typ: tar.TypeSymlink, link: "torrent-tv",
 			}),
 		},
 	}
@@ -440,7 +440,7 @@ func TestExtractHandlesDirectoryMembersAndNestedPaths(t *testing.T) {
 	dest := t.TempDir()
 	payload := fileBytes(t, fixtureBinary(t, "linux", "amd64", 0, nil, "0.4.0"))
 	members := []tarMember{
-		{name: "./filelist-streaming", data: payload, mode: 0o755},
+		{name: "./torrent-tv", data: payload, mode: 0o755},
 		// Nested regular member without an explicit directory entry.
 		{name: "./docs/guide.md", data: []byte("guide\n"), mode: 0o644},
 		// Explicit directory member plus content beneath it.
@@ -475,10 +475,10 @@ func TestExtractHandlesDirectoryMembersAndNestedPaths(t *testing.T) {
 	winDest := t.TempDir()
 	winPayload := fileBytes(t, fixtureBinary(t, "windows", "amd64", 0, nil, "0.4.0"))
 	winArchive := buildZip(t, []zipMember{
-		{name: "filelist-streaming.exe", data: winPayload},
+		{name: "torrent-tv.exe", data: winPayload},
 		{name: "docs/guide.md", data: []byte("guide\n")},
 	})
-	winSel := testSelection("filelist-streaming-0.4.0-windows-amd64.zip", "0.4.0", winArchive)
+	winSel := testSelection("torrent-tv-0.4.0-windows-amd64.zip", "0.4.0", winArchive)
 	winStaged := stageData(t, winDest, winArchive, winSel, defaultTestLimits())
 	winResult, err := winStaged.Extract(winDest, Identity{GOOS: "windows", GOARCH: "amd64", Flavor: FlavorGUI}.Target(), defaultTestLimits())
 	if err != nil {
@@ -494,7 +494,7 @@ func TestExtractAcceptsZeroSizeMembers(t *testing.T) {
 	dest := t.TempDir()
 	payload := fileBytes(t, fixtureBinary(t, "linux", "amd64", 0, nil, "0.4.0"))
 	archive := buildTarGz(t, []tarMember{
-		{name: "./filelist-streaming", data: payload, mode: 0o755},
+		{name: "./torrent-tv", data: payload, mode: 0o755},
 		{name: "./empty-marker", data: nil, mode: 0o644},
 	})
 	sel := testSelection(tarAssetName("0.4.0", "amd64"), "0.4.0", archive)
@@ -516,10 +516,10 @@ func TestExtractAcceptsZeroSizeMembers(t *testing.T) {
 	winDest := t.TempDir()
 	winPayload := fileBytes(t, fixtureBinary(t, "windows", "amd64", 0, nil, "0.4.0"))
 	winArchive := buildZip(t, []zipMember{
-		{name: "filelist-streaming.exe", data: winPayload},
+		{name: "torrent-tv.exe", data: winPayload},
 		{name: "empty.txt", data: nil},
 	})
-	winSel := testSelection("filelist-streaming-0.4.0-windows-amd64.zip", "0.4.0", winArchive)
+	winSel := testSelection("torrent-tv-0.4.0-windows-amd64.zip", "0.4.0", winArchive)
 	winStaged := stageData(t, winDest, winArchive, winSel, defaultTestLimits())
 	winResult, err := winStaged.Extract(winDest, Identity{GOOS: "windows", GOARCH: "amd64", Flavor: FlavorGUI}.Target(), defaultTestLimits())
 	if err != nil {
@@ -580,13 +580,13 @@ func TestExtractVerifiesExecutableIdentity(t *testing.T) {
 			members := happyTarMembers(payload)
 			if testCase.goarm > 0 {
 				members = []tarMember{
-					{name: "./filelist-streaming", data: payload, mode: 0o755},
+					{name: "./torrent-tv", data: payload, mode: 0o755},
 				}
 			}
 			archive := buildTarGz(t, members)
 			asset := tarAssetName("0.4.0", testCase.goarch)
 			if testCase.goarm > 0 {
-				asset = "filelist-streaming-0.4.0-linux-armv7.tar.gz"
+				asset = "torrent-tv-0.4.0-linux-armv7.tar.gz"
 			}
 			sel := testSelection(asset, testCase.selVer, archive)
 			staged := stageData(t, dest, archive, sel, defaultTestLimits())
@@ -609,7 +609,7 @@ func TestExtractVerifiesExecutableIdentity(t *testing.T) {
 }
 
 func TestVerifyExecutableRejectsForeignPlatforms(t *testing.T) {
-	sel := testSelection("filelist-streaming-0.4.0-linux-amd64.tar.gz", "0.4.0", nil)
+	sel := testSelection("torrent-tv-0.4.0-linux-amd64.tar.gz", "0.4.0", nil)
 	linuxBinary := fixtureBinary(t, "linux", "amd64", 0, nil, "0.4.0")
 	windowsBinary := fixtureBinary(t, "windows", "amd64", 0, nil, "0.4.0")
 	if err := VerifyExecutable(linuxBinary, sel, Identity{GOOS: "linux", GOARCH: "amd64", Flavor: FlavorGUI}.Target()); err != nil {
@@ -664,7 +664,7 @@ func universalFixture(t *testing.T) []byte {
 func signedBundleZip(t *testing.T, version, identifier string, sign bool, extraMembers []zipMember) []byte {
 	t.Helper()
 	bundleRoot := t.TempDir()
-	appDir := filepath.Join(bundleRoot, "FileList Streaming.app")
+	appDir := filepath.Join(bundleRoot, "Torrent TV.app")
 	contents := filepath.Join(appDir, "Contents")
 	macOS := filepath.Join(contents, "MacOS")
 	if err := os.MkdirAll(macOS, 0o755); err != nil {
@@ -674,7 +674,7 @@ func signedBundleZip(t *testing.T, version, identifier string, sign bool, extraM
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleExecutable</key><string>filelist-streaming</string>
+	<key>CFBundleExecutable</key><string>torrent-tv</string>
 	<key>CFBundleIdentifier</key><string>%s</string>
 	<key>CFBundleVersion</key><string>%s</string>
 	<key>CFBundleShortVersionString</key><string>%s</string>
@@ -682,7 +682,7 @@ func signedBundleZip(t *testing.T, version, identifier string, sign bool, extraM
 	if err := os.WriteFile(filepath.Join(contents, "Info.plist"), []byte(plist), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(macOS, "filelist-streaming"), universalFixture(t), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(macOS, "torrent-tv"), universalFixture(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	// A framework-style versioned directory with the canonical Current -> A
@@ -703,7 +703,7 @@ func signedBundleZip(t *testing.T, version, identifier string, sign bool, extraM
 			t.Fatalf("codesign fixture bundle: %v\n%s", err, output)
 		}
 	}
-	members := zipTree(t, appDir, "FileList Streaming.app")
+	members := zipTree(t, appDir, "Torrent TV.app")
 	members = append(members, extraMembers...)
 	return buildZip(t, members)
 }
@@ -754,7 +754,7 @@ func zipTree(t *testing.T, root, prefix string) []zipMember {
 }
 
 func bundleSelection(content []byte) Selection {
-	return testSelection("filelist-streaming-0.4.0-darwin-universal.zip", "0.4.0", content)
+	return testSelection("torrent-tv-0.4.0-darwin-universal.zip", "0.4.0", content)
 }
 
 func bundleTarget() Target {
@@ -798,7 +798,7 @@ func TestExtractRejectsBundleIdentityMismatches(t *testing.T) {
 		{name: "unsigned bundle", version: "0.4.0", identifier: bundleIdentifier, sign: false, wantErr: ErrBinaryIdentity},
 		{
 			name: "escaping framework symlink", version: "0.4.0", identifier: bundleIdentifier, sign: true,
-			extra: []zipMember{{name: "FileList Streaming.app/Contents/Frameworks/Evil", link: "../../../../../../etc/passwd"}},
+			extra: []zipMember{{name: "Torrent TV.app/Contents/Frameworks/Evil", link: "../../../../../../etc/passwd"}},
 			// The escaping symlink invalidates the signature too, but member
 			// validation must reject it before signature checks run.
 			wantErr: ErrArchiveInvalid,
@@ -852,8 +852,8 @@ func TestStageRejectsInvalidSelectionChecksum(t *testing.T) {
 
 func TestReadBundleInfoParsesIdentityFields(t *testing.T) {
 	plist := `<?xml version="1.0"?><plist><dict>
-		<key>CFBundleIdentifier</key><string>com.filelist-streaming.app</string>
-		<key>CFBundleExecutable</key><string>filelist-streaming</string>
+		<key>CFBundleIdentifier</key><string>com.torrent-tv.app</string>
+		<key>CFBundleExecutable</key><string>torrent-tv</string>
 		<key>CFBundleVersion</key><string>9.9.9</string>
 		<key>CFBundleShortVersionString</key><string>9.9.9</string>
 		<key>Unrelated</key><string>ignored</string>
@@ -866,7 +866,7 @@ func TestReadBundleInfoParsesIdentityFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readBundleInfo: %v", err)
 	}
-	if info != (bundleInfo{Identifier: "com.filelist-streaming.app", Executable: "filelist-streaming", Version: "9.9.9", ShortVersion: "9.9.9"}) {
+	if info != (bundleInfo{Identifier: "com.torrent-tv.app", Executable: "torrent-tv", Version: "9.9.9", ShortVersion: "9.9.9"}) {
 		t.Errorf("bundleInfo = %+v", info)
 	}
 }

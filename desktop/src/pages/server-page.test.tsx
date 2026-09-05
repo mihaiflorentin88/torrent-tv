@@ -26,7 +26,7 @@ const fakeBindings = vi.hoisted(() => ({
 
 // The generated bindings module exports one function per Go method; the
 // factory maps them onto the same camelCase fakes the assertions use.
-vi.mock('../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings', () => ({
+vi.mock('../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings', () => ({
   AutostartStatus: fakeBindings.autostartStatus,
   DataDirInfo: fakeBindings.dataDirInfo,
   DisableAutostart: fakeBindings.disableAutostart,
@@ -51,7 +51,7 @@ const fakeApi = vi.hoisted(() => ({
   portalMe: vi.fn(),
 }));
 
-vi.mock('@filelist/web/shared-api', () => ({
+vi.mock('@torrent-tv/web/shared-api', () => ({
   configureSharedApi: () => { },
   sharedApi: () => fakeApi,
 }));

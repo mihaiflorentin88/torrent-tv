@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type MediaAudioTrack, type PlaybackPreferences, audioPlaybackRoute, fallbackAudioTrack } from '@filelist/shared';
+import { type MediaAudioTrack, type PlaybackPreferences, audioPlaybackRoute, fallbackAudioTrack } from '@torrent-tv/shared';
 
 const track = (streamIndex: number, codec: string, extra: Partial<MediaAudioTrack> = {}): MediaAudioTrack => ({ streamIndex, codec, ...extra });
 const preferences = (audioLanguage: string, audioTrackIndex = -1): Pick<PlaybackPreferences, 'audioLanguage' | 'audioTrackIndex'> => ({ audioLanguage, audioTrackIndex });

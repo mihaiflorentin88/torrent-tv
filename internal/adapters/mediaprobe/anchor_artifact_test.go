@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 )
 
 // generateSineFixture produces a long audio-only Matroska so that windows can

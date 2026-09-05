@@ -1,6 +1,6 @@
 # Development guide
 
-0.2.7 checkpoint: complete-season cards are safe disclosures in both clients, with explicit download/lifecycle actions and deterministic TV focus rows. Tizen can discover validated servers on the local subnet and persists either a successful discovered or manual address. The unsigned `FileListTV-0.2.7.wgt` SHA-256 is `41166a397d76530222013a1c0fd5c51db6d3a7462ffb992a88ba38bfa76081a3`; physical-TV validation remains pending and is tracked in [TIZEN.md](TIZEN.md).
+0.2.7 checkpoint: complete-season cards are safe disclosures in both clients, with explicit download/lifecycle actions and deterministic TV focus rows. Tizen can discover validated servers on the local subnet and persists either a successful discovered or manual address. The unsigned `torrent-tv-0.2.7.wgt` SHA-256 is `41166a397d76530222013a1c0fd5c51db6d3a7462ffb992a88ba38bfa76081a3`; physical-TV validation remains pending and is tracked in [TIZEN.md](TIZEN.md).
 
 ## Local checks
 
@@ -25,7 +25,7 @@ make validate-tizen-wgt TIZEN_TARGET=5.0
 
 ### TorrentTV (Android TV) build and boot smoke
 
-`make torrenttv-apk` builds the Android TV client: it requires `clients/tv/dist` to exist (build it with `npm run build -w @filelist/tv`; the Gradle sync fails loudly when it is missing), syncs it into the APK assets with the Android page variant, runs the Kotlin unit tests, and produces `clients/android-tv/.build/artifacts/TorrentTV-<version>.apk` plus its checksum. CI's `android-tv` job adds the same-bundle check — the packaged `app.js`/`app.css` must be byte-identical to the Tizen bundle (the spec's Parity contract) — and boots the real APK on the API 26 Android TV emulator, the 2018 support floor, asserting the TorrentTV setup screen renders. See [ANDROIDTV.md](ANDROIDTV.md).
+`make torrenttv-apk` builds the Android TV client: it requires `clients/tv/dist` to exist (build it with `npm run build -w @torrent-tv/tv`; the Gradle sync fails loudly when it is missing), syncs it into the APK assets with the Android page variant, runs the Kotlin unit tests, and produces `clients/android-tv/.build/artifacts/TorrentTV-<version>.apk` plus its checksum. CI's `android-tv` job adds the same-bundle check — the packaged `app.js`/`app.css` must be byte-identical to the Tizen bundle (the spec's Parity contract) — and boots the real APK on the API 26 Android TV emulator, the 2018 support floor, asserting the TorrentTV setup screen renders. See [ANDROIDTV.md](ANDROIDTV.md).
 
 ## Server builds and Raspberry Pi deployment
 
@@ -33,13 +33,13 @@ make validate-tizen-wgt TIZEN_TARGET=5.0
 make deploy-pi
 ```
 
-`deploy-pi` cross-compiles the headless ARM64 binary and prompts for the SSH target and non-secret deployment paths. Enter accepts remembered values from ignored `deploy/.deploy.local.conf`; `PI_HOST=user@server.lan make deploy-pi` overrides the remembered host. The binary installs under the service-owned `/var/lib/filelist-streaming/bin` directory (older `/usr/local/bin` installs migrate; explicit custom paths are preserved) so the in-application updater can stage and swap it without root. The script backs up and safely merges the qBittorrent streaming policy before replacing the application service, and rolls the unit, binary, and qBittorrent configuration back on failure. Routine deployment installs no packages. The service may use up to 2 GiB, with a 1.5 GiB soft watermark.
+`deploy-pi` cross-compiles the headless ARM64 binary and prompts for the SSH target and non-secret deployment paths. Enter accepts remembered values from ignored `deploy/.deploy.local.conf`; `PI_HOST=user@server.lan make deploy-pi` overrides the remembered host. The binary installs under the service-owned `/var/lib/torrent-tv/bin` directory (older `/usr/local/bin` installs migrate; explicit custom paths are preserved) so the in-application updater can stage and swap it without root. The script backs up and safely merges the qBittorrent streaming policy before replacing the application service, and rolls the unit, binary, and qBittorrent configuration back on failure. Routine deployment installs no packages. The service may use up to 2 GiB, with a 1.5 GiB soft watermark.
 
 `tools/progressive_stream_smoke.py` is a destructive integration test for a release that is not already managed. Run it on the server with the protected application settings path. It applies a per-torrent test limit (2 MiB/s by default), checks startup and tail ranges, optionally runs an existing `ffprobe`, resets that limit, then removes the test torrent and files in `finally`. It never changes qBittorrent's global speed limit and refuses to reuse an existing download.
 
 ## Desktop GUI
 
-The single binary embeds both UIs: the desktop shell (`internal/gui/static`, built from `desktop/` with Preact) and the browser UI (`internal/adapters/httpapi/static`). `make build` produces a host-native cgo GUI build (macOS/Linux hosts; Windows hosts stay cgo-free), and `make build-all` produces the seven release binaries through the Wails Docker cross toolchain; on a macOS host it ends by packaging the universal `bin/FileList Streaming.app` from the two darwin slices.
+The single binary embeds both UIs: the desktop shell (`internal/gui/static`, built from `desktop/` with Preact) and the browser UI (`internal/adapters/httpapi/static`). `make build` produces a host-native cgo GUI build (macOS/Linux hosts; Windows hosts stay cgo-free), and `make build-all` produces the seven release binaries through the Wails Docker cross toolchain; on a macOS host it ends by packaging the universal `bin/Torrent TV.app` from the two darwin slices.
 
 Tooling:
 
@@ -61,7 +61,7 @@ go run ./cmd/server          # bare launch opens the desktop GUI
 go run ./cmd/server serve    # headless server
 ```
 
-`go run ./cmd/server` resolves the GUI's platform default data directory (on macOS: `~/Library/Application Support/FileList Streaming`). A bare `go run ./cmd/server serve` resolves `data/` next to the temporary binary that `go run` builds, so pass `--data-dir data` to keep the state in your working directory. The GUI needs a graphics session; without one it exits with an error pointing at `serve`.
+`go run ./cmd/server` resolves the GUI's platform default data directory (on macOS: `~/Library/Application Support/Torrent TV`). A bare `go run ./cmd/server serve` resolves `data/` next to the temporary binary that `go run` builds, so pass `--data-dir data` to keep the state in your working directory. The GUI needs a graphics session; without one it exits with an error pointing at `serve`.
 
 Cross-builds:
 
@@ -70,7 +70,7 @@ make build-arm64    # linux/arm64 GUI binary via the wails-cross Docker image
 make build-all      # all seven release binaries + universal macOS .app (Docker; .app needs a macOS host)
 ```
 
-`make wails-cross` builds the wails-cross container images used by the Linux GUI cross-builds (first run pulls/builds ~800 MB per platform). The Linux cross builds compile with cgo against gtk3/webkit2gtk-4.1 inside the container (`-tags production,gtk3`), so no host GTK packages are needed. `filelist-streaming-linux-armv7` stays a pure `CGO_ENABLED=0` headless build: the GUI is excluded by build tags on `linux/arm` (`internal/gui` compiles to the `ErrNoDisplay` fallback), which is why no webkit2gtk toolchain is required for that target.
+`make wails-cross` builds the wails-cross container images used by the Linux GUI cross-builds (first run pulls/builds ~800 MB per platform). The Linux cross builds compile with cgo against gtk3/webkit2gtk-4.1 inside the container (`-tags production,gtk3`), so no host GTK packages are needed. `torrent-tv-linux-armv7` stays a pure `CGO_ENABLED=0` headless build: the GUI is excluded by build tags on `linux/arm` (`internal/gui` compiles to the `ErrNoDisplay` fallback), which is why no webkit2gtk toolchain is required for that target.
 
 ## Architecture and contracts
 
@@ -85,8 +85,8 @@ The durable environment, provider, cache, TV-focus, and release invariants are i
 - Title details now select the newest unfinished playback record by canonical or embedded catalog identity. Movies show **Resume** and series show the exact **Resume SxxExx**, with the saved position and source shown beneath it.
 - Tizen Play and Resume occupy the same primary focus slot and stable key. The spatial test covers Back → primary action, primary action ↔ Favorite, and primary action ↔ season navigation.
 - The pinned Docker build passed both production clients and 24 Tizen tests. Shared client tests, Go tests/vet, 11 deployment/package tests, WGT packaging, and offline validation passed without installing workstation packages.
-- The deployed Raspberry Pi reports version 0.2.5. Deployment created `/var/backups/filelist-streaming/qbittorrent/qBittorrent.conf.20260814T180430Z.124000` before safely merging and restarting qBittorrent.
-- The unsigned `FileListTV-0.2.5.wgt` SHA-256 is `0fe2436f79d2c9331151efacd8a68e1a20079586fa574b5bc782d3a4a1105e8c`; physical S90C focus and playback confirmation remains pending installation.
+- The deployed Raspberry Pi reports version 0.2.5. Deployment created `/var/backups/torrent-tv/qbittorrent/qBittorrent.conf.20260814T180430Z.124000` before safely merging and restarting qBittorrent.
+- The unsigned `torrent-tv-0.2.5.wgt` SHA-256 is `0fe2436f79d2c9331151efacd8a68e1a20079586fa574b5bc782d3a4a1105e8c`; physical S90C focus and playback confirmation remains pending installation.
 
 ## 2026-08-02 Raspberry Pi verification
 
@@ -133,7 +133,7 @@ Verification completed on the private-LAN Raspberry Pi deployment:
 - Retrying the formerly timed-out `catalog-title-refresh:6WKKs2nwavNH6sqZ5bkf` job completed in about four seconds, found 13 **Star Wars Episode VI Return of the Jedi** releases, and persisted queue/search/completion logs.
 - Retrying completed metadata job `metadata:v76k9PnVFy31zBcbnA0O` queued a forced TMDB request and completed with a new attempt and structured logs; it no longer reports “metadata job could not be queued.”
 - Submitted **Star Trek Strange New Worlds** search returned two current cache matches in under a second, completed asynchronously with 26 FileList releases, and persisted its tracker-search job/logs.
-- Go tests/vet, eight Python package tests, 16 Tizen navigation/player tests, browser/Tizen TypeScript builds, and Apps2Samsung WGT validation passed. The generated `FileListTV-0.2.0.wgt` SHA-256 is `275b3de0ddd63a9520690f3b3866f559623404198095212b1cd551c233bc11bc`.
+- Go tests/vet, eight Python package tests, 16 Tizen navigation/player tests, browser/Tizen TypeScript builds, and Apps2Samsung WGT validation passed. The generated `torrent-tv-0.2.0.wgt` SHA-256 is `275b3de0ddd63a9520690f3b3866f559623404198095212b1cd551c233bc11bc`.
 
 SubDL could not be exercised against the live provider during this pass because no SubDL key was present in `.env` or stored settings. The official v2 documentation was checked for the Bearer-authenticated search, unpacked direct-file URLs, `format=file` fallback, account test, and rate-limit headers; browser Settings now provides the missing key field and test action.
 
@@ -141,7 +141,7 @@ SubDL could not be exercised against the live provider during this pass because 
 
 - Tizen Tracker Categories now uses the complete cache-backed facet response; Home and My Library use the browser-equivalent household sections, Recently Added always requests newest order, and Events shows cache coverage.
 - Release preparation resolves an existing managed release/file before opening FileList torrent metadata. Canonical favorites prefer their still-managed playback source or a completed/newest managed source for the title.
-- Go tests/vet, nine Python package tests, 19 Tizen tests, browser/Tizen TypeScript and Vite builds, and Apps2Samsung WGT validation passed without installing workstation packages. The generated `FileListTV-0.2.1.wgt` SHA-256 is `744967059d1536b77e8109aa064e7b9d3008663d27928876093d6c68edb7c0c7`.
+- Go tests/vet, nine Python package tests, 19 Tizen tests, browser/Tizen TypeScript and Vite builds, and Apps2Samsung WGT validation passed without installing workstation packages. The generated `torrent-tv-0.2.1.wgt` SHA-256 is `744967059d1536b77e8109aa064e7b9d3008663d27928876093d6c68edb7c0c7`.
 - The ARM64 `0.2.1` daemon was deployed with the package-free upgrade script. It remained active with zero restarts; the live cache reported 20 facet categories versus 5 represented by the 12-card startup page, and preparing an existing managed release/file returned the same source in 2 ms.
 
 ## 2026-08-14 progressive playback and deployment checkpoint
@@ -149,8 +149,8 @@ SubDL could not be exercised against the live provider during this pass because 
 - qBittorrent 4.3.9 requires selected media at normal file priority `1`; maximum priority `7` flattens every piece to the same level and defeats first/last scheduling. The adapter reapplies sequential and first/last flags once after add/restart or a file-priority change, then leaves stable torrents untouched.
 - While incomplete, qBittorrent reports the final `content_path` even though the sparse file lives under its global `temp_path`. The progressive strategy now reads the effective temporary path from `app/preferences`, contains it beneath the configured download root, and switches to the final path at completion.
 - A controlled 6.74 GB movie was limited only for the test to 2 MiB/s. At 3.387% completion, startup bytes `0-1048575` returned HTTP 206 in 36.092 s, tail bytes `6735700886-6736749461` returned HTTP 206 in 22.740 s, and server `ffprobe` parsed `matroska,webm` with duration `6494.432000`. The test reset its per-torrent limit and deleted the torrent plus temporary/final files. The live global qBittorrent download limit remained `0` (unlimited).
-- Deployment used the remembered non-secret large-disk paths, restarted qBittorrent, and created a fresh protected backup on every run. The final deployed backup for this checkpoint is `/var/backups/filelist-streaming/qbittorrent/qBittorrent.conf.20260814T143853Z.114815`.
-- Full Go tests, vet, race tests, 11 Python tests, 19 Tizen tests, both TypeScript/Vite builds, deployment shell syntax, WGT packaging, and offline validation passed. The unsigned `FileListTV-0.2.2.wgt` SHA-256 is `c028421d17b294f78f5cf1c5480f0d06eed94e04f7fae3a1b270ad11308199c2`.
+- Deployment used the remembered non-secret large-disk paths, restarted qBittorrent, and created a fresh protected backup on every run. The final deployed backup for this checkpoint is `/var/backups/torrent-tv/qbittorrent/qBittorrent.conf.20260814T143853Z.114815`.
+- Full Go tests, vet, race tests, 11 Python tests, 19 Tizen tests, both TypeScript/Vite builds, deployment shell syntax, WGT packaging, and offline validation passed. The unsigned `torrent-tv-0.2.2.wgt` SHA-256 is `c028421d17b294f78f5cf1c5480f0d06eed94e04f7fae3a1b270ad11308199c2`.
 - The reputable TV UX audit added initial Cancel focus, Back-to-cancel handling, dialog semantics, and focus restoration to the consolidated Tizen delete confirmation. Physical S90C AVPlay, remote, and visual behavior remains pending.
 
 ## 2026-08-02 SubDL and library presentation checkpoint

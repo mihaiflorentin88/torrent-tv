@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/updates"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/updates"
 )
 
 func main() {
@@ -266,10 +266,10 @@ type fixtureSource struct {
 func (s fixtureSource) LatestRelease(context.Context) (updates.Release, error) {
 	return updates.Release{
 		Tag: "v" + s.sel.Version,
-		URL: "https://github.com/mihaiflorentin88/filelist-streaming-service/releases/tag/v" + s.sel.Version,
+		URL: "https://github.com/mihaiflorentin88/torrent-tv/releases/tag/v" + s.sel.Version,
 		Assets: []updates.Asset{
-			{Name: s.sel.AssetName, URL: "https://github.com/mihaiflorentin88/filelist-streaming-service/releases/download/v" + s.sel.Version + "/" + s.sel.AssetName},
-			{Name: "SHA256SUMS", URL: "https://github.com/mihaiflorentin88/filelist-streaming-service/releases/download/v" + s.sel.Version + "/SHA256SUMS"},
+			{Name: s.sel.AssetName, URL: "https://github.com/mihaiflorentin88/torrent-tv/releases/download/v" + s.sel.Version + "/" + s.sel.AssetName},
+			{Name: "SHA256SUMS", URL: "https://github.com/mihaiflorentin88/torrent-tv/releases/download/v" + s.sel.Version + "/SHA256SUMS"},
 		},
 	}, nil
 }

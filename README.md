@@ -1,10 +1,10 @@
-# FileList Streaming Service
+# Torrent TV
 
 A self-hosted Go media server with a built-in torrent engine, a responsive web application, a Samsung Tizen TV client, and a desktop app for browsing FileList and streaming downloads as they arrive. It is designed for a trusted private LAN and a small server such as a Raspberry Pi 4.
 
 Version **0.3.0** adds the built-in torrent engine — no qBittorrent or Docker required — first-run setup prompts, and automatic ffmpeg/ffprobe detection. Progressive HTTP Range playback from an incomplete download is server-verified; physical Samsung AVPlay verification below 100% remains pending.
 
-**[Install](docs/INSTALLATION.md)** — download a binary for Linux, Windows, or macOS from the [releases page](https://github.com/mihaiflorentin88/filelist-streaming-service/releases) and run it. Nothing else is required to start.
+**[Install](docs/INSTALLATION.md)** — download a binary for Linux, Windows, or macOS from the [releases page](https://github.com/mihaiflorentin88/torrent-tv/releases) and run it. Nothing else is required to start.
 
 ## Features
 
@@ -65,18 +65,18 @@ go run ./cmd/server
 
 Open `http://127.0.0.1:8097`, enter your FileList settings, and save them. Runtime settings are stored in `data/settings.json` with mode `0600`. Browser Settings includes dependency-specific Test buttons and copyable field help with links to every provider. The repository `.env` is for developer diagnostics only and is never read by the application.
 
-The first start asks for the three settings it cannot guess: a writable download root, the FileList username, and the passkey. Answers are stored into `data/settings.json`; headless environments without a terminal skip the questions, keep the defaults, and log a warning, so set `FILELIST_STREAMING_DOWNLOAD_ROOT` (or a settings file) for systemd.
+The first start asks for the three settings it cannot guess: a writable download root, the FileList username, and the passkey. Answers are stored into `data/settings.json`; headless environments without a terminal skip the questions, keep the defaults, and log a warning, so set `TORRENT_TV_DOWNLOAD_ROOT` (or a settings file) for systemd.
 
 The default trusted networks are loopback and RFC1918 private address ranges. Narrow them in Settings when practical. Do not expose this no-login service to the internet.
 
 
 ## Frontend and TV package
 
-`make frontend` builds and tests the browser and Tizen clients in Docker, then creates and validates the unsigned Apps2Samsung artifact at `clients/tizen/.build/artifacts/FileListTV-<version>.wgt`. Apps2Samsung signs it for the selected TV during installation. See [the Tizen build and installation guide](docs/TIZEN.md), including the living physical-TV verification log.
+`make frontend` builds and tests the browser and Tizen clients in Docker, then creates and validates the unsigned Apps2Samsung artifact at `clients/tizen/.build/artifacts/torrent-tv-<version>.wgt`. Apps2Samsung signs it for the selected TV during installation. See [the Tizen build and installation guide](docs/TIZEN.md), including the living physical-TV verification log.
 
 ## Raspberry Pi deployment
 
-`make deploy-pi PI_HOST=user@server.lan` cross-compiles the headless ARM64 server, then prompts for the server and non-secret qBittorrent/application paths. Answers are remembered in ignored `deploy/.deploy.local.conf`. The binary is installed under the service-owned `/var/lib/filelist-streaming/bin` directory so the in-application updater can replace it without root; installs that still live in `/usr/local/bin` are migrated, while an explicitly configured custom path is kept (reported as manual-update-only when its directory cannot be owned by the service user). Every run creates a new protected qBittorrent config backup, merges only the credential-free streaming template, and restores the previous unit, application binary, and qBittorrent configuration if deployment fails. The target operation uses `sudo` and therefore requires explicit approval.
+`make deploy-pi PI_HOST=user@server.lan` cross-compiles the headless ARM64 server, then prompts for the server and non-secret qBittorrent/application paths. Answers are remembered in ignored `deploy/.deploy.local.conf`. The binary is installed under the service-owned `/var/lib/torrent-tv/bin` directory so the in-application updater can replace it without root; installs that still live in `/usr/local/bin` are migrated, while an explicitly configured custom path is kept (reported as manual-update-only when its directory cannot be owned by the service user). Every run creates a new protected qBittorrent config backup, merges only the credential-free streaming template, and restores the previous unit, application binary, and qBittorrent configuration if deployment fails. The target operation uses `sudo` and therefore requires explicit approval.
 
 ## Server dependencies and fresh-machine setup
 
@@ -112,4 +112,4 @@ The idempotent script supports `apt`, `dnf`, `pacman`, and `zypper`. It never ch
 
 Every push to `master` runs Go tests/race/vet, browser and TV compiler/tests, WGT validation, and packaging tests. A separate security workflow runs Gitleaks, govulncheck, Trivy, CodeQL, actionlint, Zizmor, and pull-request dependency review; Dependabot checks Go, npm, Actions, and Docker dependencies weekly.
 
-`VERSION` is the single release version. A matching `v<VERSION>` tag builds and publishes Linux amd64/arm64/armv7, Windows amd64/arm64, macOS amd64/arm64 (plus a universal `FileList Streaming.app`), and an unsigned Apps2Samsung WGT. Releases also contain SHA-256 checksums, CycloneDX/SPDX SBOMs, and build-provenance attestations. See [maintainer notes](docs/MAINTAINER_NOTES.md) and [security policy](SECURITY.md).
+`VERSION` is the single release version. A matching `v<VERSION>` tag builds and publishes Linux amd64/arm64/armv7, Windows amd64/arm64, macOS amd64/arm64 (plus a universal `Torrent TV.app`), and an unsigned Apps2Samsung WGT. Releases also contain SHA-256 checksums, CycloneDX/SPDX SBOMs, and build-provenance attestations. See [maintainer notes](docs/MAINTAINER_NOTES.md) and [security policy](SECURITY.md).

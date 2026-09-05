@@ -14,21 +14,21 @@ func TestDarwinEnableDisableRoundTrip(t *testing.T) {
 	DarwinPlistDir = func() string { return dir }
 	defer func() { DarwinPlistDir = defaultDarwinPlistDir }()
 
-	if err := Enable(Options{ExePath: "/Applications/FileList Streaming.app/Contents/MacOS/filelist-streaming", Args: []string{"--minimized", "--data-dir", "/opt/fs/data"}}); err != nil {
+	if err := Enable(Options{ExePath: "/Applications/Torrent TV.app/Contents/MacOS/torrent-tv", Args: []string{"--minimized", "--data-dir", "/opt/fs/data"}}); err != nil {
 		t.Fatalf("Enable: %v", err)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "com.filelist-streaming.plist"))
+	b, err := os.ReadFile(filepath.Join(dir, "com.torrenttv.plist"))
 	if err != nil {
 		t.Fatalf("plist: %v", err)
 	}
 	text := string(b)
 	for _, want := range []string{
-		"com.filelist-streaming",
+		"com.torrenttv",
 		"<key>RunAtLoad</key>",
 		"<true/>",
 		"<key>KeepAlive</key>",
 		"<false/>",
-		"<string>/Applications/FileList Streaming.app/Contents/MacOS/filelist-streaming</string>",
+		"<string>/Applications/Torrent TV.app/Contents/MacOS/torrent-tv</string>",
 		"<string>--minimized</string>",
 		"<string>--data-dir</string>",
 	} {

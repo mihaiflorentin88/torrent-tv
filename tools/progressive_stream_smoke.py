@@ -274,9 +274,9 @@ def main() -> int:
             settings = json.load(handle)
     settings.update(
         {
-            "qbittorrentUrl": os.environ.get("FILELIST_STREAMING_QBITTORRENT_URL", settings.get("qbittorrentUrl", "")),
-            "qbittorrentUsername": os.environ.get("FILELIST_STREAMING_QBITTORRENT_USERNAME", settings.get("qbittorrentUsername", "")),
-            "qbittorrentPassword": os.environ.get("FILELIST_STREAMING_QBITTORRENT_PASSWORD", settings.get("qbittorrentPassword", "")),
+            "qbittorrentUrl": os.environ.get("TORRENT_TV_QBITTORRENT_URL", settings.get("qbittorrentUrl", "")),
+            "qbittorrentUsername": os.environ.get("TORRENT_TV_QBITTORRENT_USERNAME", settings.get("qbittorrentUsername", "")),
+            "qbittorrentPassword": os.environ.get("TORRENT_TV_QBITTORRENT_PASSWORD", settings.get("qbittorrentPassword", "")),
         }
     )
     if not settings["qbittorrentUrl"]:

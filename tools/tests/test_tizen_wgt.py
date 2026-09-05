@@ -53,7 +53,7 @@ class WGTTests(unittest.TestCase):
             (source / "signature1.xml").write_text("stale")
             (root / "config.xml").write_bytes(VALID_CONFIG)
             (root / "icon.png").write_bytes(png(117, 117))
-            output = root / "FileListTV-0.1.2.wgt"
+            output = root / "torrent-tv-0.1.2.wgt"
 
             entries = tizen_wgt.collect_entries(source, root / "config.xml", root / "icon.png")
             self.assertNotIn("signature1.xml", entries)

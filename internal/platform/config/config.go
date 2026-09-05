@@ -18,7 +18,7 @@ import (
 
 const (
 	DefaultSettingsPath = "data/settings.json"
-	EnvironmentPrefix   = "FILELIST_STREAMING_"
+	EnvironmentPrefix   = "TORRENT_TV_"
 )
 
 type Settings struct {
@@ -70,7 +70,7 @@ type Settings struct {
 
 func Defaults() Settings {
 	return Settings{
-		InstanceName:  "FileList Streaming",
+		InstanceName:  "Torrent TV",
 		ListenAddress: ":8097", TrustedCIDRs: []string{"127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}, DatabasePath: "data/filelist.db",
 		DownloadRoot: "data/downloads", FileListURL: "https://filelist.io", QBittorrentURL: "http://127.0.0.1:8080", DownloadEngine: "native", TorrentPeerPort: 42069, TorrentSessionDir: "data/torrent-session",
 		InitialBufferBytes: 128 << 20, ReadAheadBytes: 256 << 20, PieceWaitTimeoutSeconds: 600, StreamStartBytes: 2 << 20, CatalogMaxAgeHours: 24,
@@ -113,7 +113,7 @@ func LoadAt(path string) (*Store, error) {
 			return nil, fmt.Errorf("decode settings: %w", err)
 		}
 		if base.InstanceName == "" {
-			base.InstanceName = "FileList Streaming"
+			base.InstanceName = "Torrent TV"
 		}
 		if base.WatchedThresholdPercent == 0 {
 			base.WatchedThresholdPercent = 90

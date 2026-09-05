@@ -4,7 +4,7 @@
 // src.tsx; API calls and the event stream follow the shared API origin so
 // the desktop GUI points them at its loopback server.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Job, JobLog } from '@filelist/shared';
+import { Job, JobLog } from '@torrent-tv/shared';
 import { Icon } from './icons';
 import { sharedApi } from './shared-api';
 

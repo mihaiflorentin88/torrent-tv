@@ -97,7 +97,7 @@ All functionality attempted in the previous plugin belongs in the new product ba
 ## 3. Monorepo structure
 
 ```text
-filelist-streaming/
+torrent-tv/
 ├── README.md
 ├── go.work / go.mod
 ├── Makefile / Taskfile.yml
@@ -261,7 +261,7 @@ WGT/Apps2Samsung workflow:
 - create author/distributor certificates and register TV DUID where required;
 - never commit certificates/private keys/passwords;
 - declare network, input-device, product-info and AVPlay privileges/access domains in `config.xml`, verified against target SDK/model;
-- Vite build, copy assets, Tizen package/sign to `FileListTV-<version>.wgt`;
+- Vite build, copy assets, Tizen package/sign to `torrent-tv-<version>.wgt`;
 - test with SDB/Tizen CLI on physical TV first;
 - publish WGT, checksum, supported years/minimum Tizen and changelog in GitHub Releases;
 - integrate the release repository with the current Apps2Samsung provider/community manifest flow. Apps2Samsung currently discovers GitHub releases and WGT assets;

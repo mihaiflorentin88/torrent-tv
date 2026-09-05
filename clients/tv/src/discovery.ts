@@ -66,7 +66,7 @@ async function probeWithoutAbortController(url: string, timeoutMs: number): Prom
         const response = await fetch(`${url}/api/v1/system/info`, { cache: 'no-store' });
         if (!response.ok) return null;
         const info = await response.json() as ServerInfo;
-        if (info.name !== 'FileList Streaming' || !info.version) return null;
+        if (info.name !== 'Torrent TV' || !info.version) return null;
         return { url, info };
       })().catch(() => null),
       new Promise<null>(resolve => {
@@ -86,7 +86,7 @@ async function probe(url: string, timeoutMs: number, capabilities: Capabilities)
     const response = await fetch(`${url}/api/v1/system/info`, { signal: controller.signal, cache: 'no-store' });
     if (!response.ok) return null;
     const info = await response.json() as ServerInfo;
-    if (info.name !== 'FileList Streaming' || !info.version) return null;
+    if (info.name !== 'Torrent TV' || !info.version) return null;
     return { url, info };
   } catch {
     return null;

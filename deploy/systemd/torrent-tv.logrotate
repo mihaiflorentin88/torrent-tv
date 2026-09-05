@@ -1,4 +1,4 @@
-/var/lib/filelist-streaming/data/logs/server.log {
+/var/lib/torrent-tv/data/logs/server.log {
     daily
     maxsize 10M
     rotate 14
@@ -7,5 +7,5 @@
     copytruncate
     missingok
     notifempty
-    su filelist-streaming filelist-streaming
+    su torrent-tv torrent-tv
 }

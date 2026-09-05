@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type SubtitleCandidate, subtitleRank, canonicalLanguage, languageDisplayName, subtitleItemLabel, subtitleMenuGroups } from '@filelist/shared';
+import { type SubtitleCandidate, subtitleRank, canonicalLanguage, languageDisplayName, subtitleItemLabel, subtitleMenuGroups } from '@torrent-tv/shared';
 
 describe('Canonical language normalization', () => {
   it('maps ISO-639-2 word codes to their canonical 639-1 code', () => {

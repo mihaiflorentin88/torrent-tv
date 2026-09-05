@@ -146,7 +146,7 @@ The `onerror` callback delivers standard string error constants across 5.0 and 7
 
 ### 5. Subtitle Handling (App-Rendered WebVTT vs. AVPlay Engine)
 - While AVPlay supports `setExternalSubtitlePath()` and SAMI/SMPTE-TT subtitles natively, passing external WebVTT or SRT to AVPlay has had historical container/encoding quirks between Tizen minor versions.
-- **Architectural Advantage:** filelist-streaming-service renders WebVTT cues directly in the HTML/CSS DOM synchronized with `oncurrentplaytime` or periodic polling of `webapis.avplay.getCurrentTime()`. This bypasses all TV firmware subtitle parser discrepancies and guarantees identical subtitle rendering across Tizen 5.0 through 8.x.
+- **Architectural Advantage:** torrent-tv renders WebVTT cues directly in the HTML/CSS DOM synchronized with `oncurrentplaytime` or periodic polling of `webapis.avplay.getCurrentTime()`. This bypasses all TV firmware subtitle parser discrepancies and guarantees identical subtitle rendering across Tizen 5.0 through 8.x.
 
 ### 6. Streaming Recovery on Network Drops
 - AVPlay does not auto-recover from dropped HTTP/TCP sockets or long server stalls.

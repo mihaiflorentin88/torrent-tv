@@ -142,7 +142,7 @@ var (
 	xdgDataHome   = func() string { return os.Getenv("XDG_DATA_HOME") }
 )
 
-const varLibDir = "/var/lib/filelist-streaming-service"
+const varLibDir = "/var/lib/torrent-tv"
 
 func defaultVarLibProbe(dir string) (bool, error) {
 	fi, err := os.Stat(dir)
@@ -204,12 +204,12 @@ func platformDefaultConfig() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "FileList Streaming"), nil
+	return filepath.Join(base, "Torrent TV"), nil
 }
 
-// platformDefaultLinux prefers /var/lib/filelist-streaming-service when it
+// platformDefaultLinux prefers /var/lib/torrent-tv when it
 // already exists and is writable (admin-created, shared use), else
-// $XDG_DATA_HOME/filelist-streaming (default ~/.local/share/...).
+// $XDG_DATA_HOME/torrent-tv (default ~/.local/share/...).
 func platformDefaultLinux() (string, error) {
 	if ok, err := varLibProbe(varLibDir); err == nil && ok {
 		return varLibDir, nil
@@ -222,7 +222,7 @@ func platformDefaultLinux() (string, error) {
 		}
 		base = filepath.Join(home, ".local", "share")
 	}
-	return filepath.Join(base, "filelist-streaming"), nil
+	return filepath.Join(base, "torrent-tv"), nil
 }
 
 // Resolve resolves with the serve fallback (BinaryAdjacent) and is

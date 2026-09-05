@@ -1,5 +1,5 @@
 {
-  "name": "@filelist/desktop",
+  "name": "@torrent-tv/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
     "postbuild": "node -e \"require('fs').writeFileSync('../internal/gui/static/.gitkeep', '')\""
   },
   "dependencies": {
-    "@filelist/shared": "0.1.0",
-    "@filelist/web": "0.1.0",
+    "@torrent-tv/shared": "0.1.0",
+    "@torrent-tv/web": "0.1.0",
     "@wailsio/runtime": "latest",
     "preact": "10.29.8"
   },

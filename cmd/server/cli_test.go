@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/updates"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/updates"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 )
 
 var (
@@ -149,7 +149,7 @@ func TestApplyUpdateBeforeServingReleasesFlushBarrier(t *testing.T) {
 		},
 		Sink:             func(string, any) {},
 		InstallDir:       dir,
-		Executable:       filepath.Join(dir, "filelist-streaming"),
+		Executable:       filepath.Join(dir, "torrent-tv"),
 		Exit:             func(int) {},
 		FlushWait:        5 * time.Second,
 		OperationTimeout: 30 * time.Second,
@@ -170,13 +170,13 @@ type stubSource struct{}
 func (stubSource) LatestRelease(context.Context) (updates.Release, error) {
 	tag := "v0.4.0"
 	url := func(name string) string {
-		return "https://github.com/mihaiflorentin88/filelist-streaming-service/releases/download/" + tag + "/" + name
+		return "https://github.com/mihaiflorentin88/torrent-tv/releases/download/" + tag + "/" + name
 	}
 	return updates.Release{
 		Tag: tag,
-		URL: "https://github.com/mihaiflorentin88/filelist-streaming-service/releases/tag/" + tag,
+		URL: "https://github.com/mihaiflorentin88/torrent-tv/releases/tag/" + tag,
 		Assets: []updates.Asset{
-			{Name: "filelist-streaming-0.4.0-darwin-arm64.tar.gz", URL: url("filelist-streaming-0.4.0-darwin-arm64.tar.gz")},
+			{Name: "torrent-tv-0.4.0-darwin-arm64.tar.gz", URL: url("torrent-tv-0.4.0-darwin-arm64.tar.gz")},
 			{Name: "SHA256SUMS", URL: url("SHA256SUMS")},
 		},
 	}, nil
@@ -184,5 +184,5 @@ func (stubSource) LatestRelease(context.Context) (updates.Release, error) {
 
 func (stubSource) ChecksumManifest(_ context.Context, _ string) (string, error) {
 	sum := sha256.Sum256([]byte("irrelevant"))
-	return hex.EncodeToString(sum[:]) + "  filelist-streaming-0.4.0-darwin-arm64.tar.gz\n", nil
+	return hex.EncodeToString(sum[:]) + "  torrent-tv-0.4.0-darwin-arm64.tar.gz\n", nil
 }

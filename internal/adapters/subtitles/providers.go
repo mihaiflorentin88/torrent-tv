@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/outbound"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/outbound"
 )
 
 const maxResponse = 12 << 20
@@ -290,7 +290,7 @@ func (p *SubDL) get(ctx context.Context, path string, values url.Values) ([]byte
 			req.Header.Set("Authorization", "Bearer "+v.SubDLAPIKey)
 			req.Header.Set("X-API-Key", v.SubDLAPIKey)
 			req.Header.Set("Accept", "application/json, text/plain, */*")
-			req.Header.Set("User-Agent", "FileList-Streaming/0.3")
+			req.Header.Set("User-Agent", "TorrentTV/0.3")
 		}
 		return req, e
 	}, outbound.Policy{Provider: "SubDL", Attempts: 3, MaxInlineDelay: 15 * time.Second})

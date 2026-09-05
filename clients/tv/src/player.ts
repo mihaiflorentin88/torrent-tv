@@ -1,4 +1,4 @@
-import {canonicalLanguage, languageDisplayName, type Download} from '@filelist/shared';
+import {canonicalLanguage, languageDisplayName, type Download} from '@torrent-tv/shared';
 
 export type PlayerAction = 'left'|'right'|'up'|'down'|'enter'|'back'|'play'|'pause'|'play-pause'|'stop'|'rewind'|'fast-forward'|'previous'|'next'|null;
 

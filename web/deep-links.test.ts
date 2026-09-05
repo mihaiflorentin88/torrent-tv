@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildPath, parsePath } from '@filelist/shared';
-import type { Download } from '@filelist/shared';
+import { buildPath, parsePath } from '@torrent-tv/shared';
+import type { Download } from '@torrent-tv/shared';
 import { watchRoute } from './src';
 
 const download: Download = {

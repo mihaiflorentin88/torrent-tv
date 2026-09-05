@@ -4,7 +4,7 @@
 // binding without importing the web app. Remote text renders as text nodes
 // — never HTML.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { API, PortalPromotion, PortalState, PortalUser, PortalSessionStorage, UpdateStatus, clearPortalSession, loadPortalSession, promotionScreenTimeMs, savePortalSession, updateApplyOutcome } from '@filelist/shared';
+import { API, PortalPromotion, PortalState, PortalUser, PortalSessionStorage, UpdateStatus, clearPortalSession, loadPortalSession, promotionScreenTimeMs, savePortalSession, updateApplyOutcome } from '@torrent-tv/shared';
 import { Icon } from './icons';
 
 export function openExternalURL(url: string): void { window.open(url, '_blank', 'noopener,noreferrer') }

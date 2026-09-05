@@ -13,10 +13,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/httpapi"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/autostart"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/httpapi"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/autostart"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 )
 
 // dynamicCanStart mirrors the runner's CanStart: required settings missing is
@@ -171,7 +171,7 @@ func TestSaveSettingsMirrorsHTTPContract(t *testing.T) {
 
 func TestAutostartBindingBuildsMinimizedDataDirEntry(t *testing.T) {
 	b := &Bindings{dataDir: "/opt/fs/data"}
-	b.exePathFn = func() (string, error) { return "/opt/fs/filelist-streaming", nil }
+	b.exePathFn = func() (string, error) { return "/opt/fs/torrent-tv", nil }
 	var captured autostart.Options
 	b.autostartEnable = func(opts autostart.Options) error { captured = opts; return nil }
 	disables := 0
@@ -180,7 +180,7 @@ func TestAutostartBindingBuildsMinimizedDataDirEntry(t *testing.T) {
 	if err := b.EnableAutostart(); err != nil {
 		t.Fatal(err)
 	}
-	if captured.ExePath != "/opt/fs/filelist-streaming" {
+	if captured.ExePath != "/opt/fs/torrent-tv" {
 		t.Fatalf("autostart exe = %q", captured.ExePath)
 	}
 	want := []string{"--minimized", "--data-dir", "/opt/fs/data"}

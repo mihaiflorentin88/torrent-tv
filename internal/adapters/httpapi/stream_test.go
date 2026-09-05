@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/sqlite"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/sqlite"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 )
 
 // streamEngine fakes the torrent engine boundary for progressive-stream

@@ -33,18 +33,18 @@ const (
 
 	// payloadBaseName is the executable name inside every file-flavor release
 	// archive, before the Windows ".exe" suffix.
-	payloadBaseName = "filelist-streaming"
+	payloadBaseName = "torrent-tv"
 
 	// bundleSuffix marks a macOS .app payload directory.
 	bundleSuffix = ".app"
 
 	// bundleIdentifier is the fixed CFBundleIdentifier of the macOS bundle
 	// release asset (build/darwin/Info.plist).
-	bundleIdentifier = "com.filelist-streaming.app"
+	bundleIdentifier = "com.torrenttv.app"
 
 	// compositionPath is the package carrying the linker-injected version in
 	// release builds (-X .../internal/composition.Version=<version>).
-	compositionPath = "github.com/mihaiflorentin88/filelist-streaming-service/internal/composition"
+	compositionPath = "github.com/mihaiflorentin88/torrent-tv/internal/composition"
 )
 
 // Staging and verification failure classes. Callers classify with errors.Is.

@@ -158,7 +158,7 @@ func TestPlatformDefaultDarwinUsesAppSupportWithSpace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platformDefaultConfig: %v", err)
 	}
-	want := filepath.Join(root, "AppSupport", "FileList Streaming")
+	want := filepath.Join(root, "AppSupport", "Torrent TV")
 	if dir != want {
 		t.Fatalf("darwin default: got %q want %q", dir, want)
 	}
@@ -173,7 +173,7 @@ func TestPlatformDefaultWindowsUsesAppDataWithSpace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platformDefaultConfig: %v", err)
 	}
-	want := filepath.Join(root, "AppData", "Roaming", "FileList Streaming")
+	want := filepath.Join(root, "AppData", "Roaming", "Torrent TV")
 	if dir != want {
 		t.Fatalf("windows default: got %q want %q", dir, want)
 	}
@@ -187,10 +187,10 @@ func TestPlatformDefaultLinuxVarLibWhenWritable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platformDefaultLinux: %v", err)
 	}
-	if probed != "/var/lib/filelist-streaming-service" {
+	if probed != "/var/lib/torrent-tv" {
 		t.Fatalf("probe must target /var/lib path, probed %q", probed)
 	}
-	if dir != "/var/lib/filelist-streaming-service" {
+	if dir != "/var/lib/torrent-tv" {
 		t.Fatalf("writable var-lib must be used, got %q", dir)
 	}
 }
@@ -204,7 +204,7 @@ func TestPlatformDefaultLinuxFallsBackToXDGWhenVarLibMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platformDefaultLinux: %v", err)
 	}
-	want := filepath.Join(root, "xdg-data", "filelist-streaming")
+	want := filepath.Join(root, "xdg-data", "torrent-tv")
 	if dir != want {
 		t.Fatalf("XDG default: got %q want %q", dir, want)
 	}
@@ -218,7 +218,7 @@ func TestPlatformDefaultLinuxXDGDefaultsToHomeLocalShare(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platformDefaultLinux: %v", err)
 	}
-	want := filepath.Join(root, ".local", "share", "filelist-streaming")
+	want := filepath.Join(root, ".local", "share", "torrent-tv")
 	if dir != want {
 		t.Fatalf("XDG fallback to ~/.local/share: got %q want %q", dir, want)
 	}

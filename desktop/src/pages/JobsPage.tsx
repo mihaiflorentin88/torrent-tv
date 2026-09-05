@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Jobs } from '@filelist/web/jobs';
+import { Jobs } from '@torrent-tv/web/jobs';
 import { useServerState } from '../lib/state';
 
 // Jobs over the shared self-fetching view. The open/close detail callbacks

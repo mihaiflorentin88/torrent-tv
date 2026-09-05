@@ -30,7 +30,7 @@ export default defineConfig({
     cssMinify: false,
     lib: {
       entry: resolve(root, 'src/main.tsx'),
-      name: 'FileListTV',
+      name: 'TorrentTV',
       formats: ['iife'],
       fileName: () => 'app.js',
       cssFileName: 'app',

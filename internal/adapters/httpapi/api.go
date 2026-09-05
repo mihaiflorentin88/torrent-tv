@@ -21,11 +21,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/sqlite"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/portal"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/sqlite"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/portal"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 )
 
 //go:embed static/*
@@ -152,7 +152,7 @@ func appShell(web fs.FS) http.Handler {
 
 func (a *API) info(w http.ResponseWriter, r *http.Request) {
 	settings := a.settings.Get()
-	write(w, 200, map[string]any{"name": "FileList Streaming", "instanceName": settings.InstanceName, "version": a.version, "apiVersion": "v1", "configured": configured(settings), "capabilities": []string{"catalog", "canonicalCatalog", "metadata", "artworkProxy", "qbittorrent", "rangeStreaming", "mediaInfo", "audioAnchor", "settingsFile", "householdState", "canonicalFavorites", "persistentJobs", "subtitles", "serverDiscovery", "browserAudioTranscode"}})
+	write(w, 200, map[string]any{"name": "Torrent TV", "instanceName": settings.InstanceName, "version": a.version, "apiVersion": "v1", "configured": configured(settings), "capabilities": []string{"catalog", "canonicalCatalog", "metadata", "artworkProxy", "qbittorrent", "rangeStreaming", "mediaInfo", "audioAnchor", "settingsFile", "householdState", "canonicalFavorites", "persistentJobs", "subtitles", "serverDiscovery", "browserAudioTranscode"}})
 }
 
 func (a *API) clientDiagnostic(w http.ResponseWriter, r *http.Request) {

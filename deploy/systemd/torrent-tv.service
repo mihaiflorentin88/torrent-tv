@@ -1,15 +1,15 @@
 [Unit]
-Description=FileList Streaming Service
+Description=Torrent TV
 After=network-online.target qbittorrent-nox.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=filelist-streaming
-Group=filelist-streaming
+User=torrent-tv
+Group=torrent-tv
 SupplementaryGroups=qbittorrent
-WorkingDirectory=/var/lib/filelist-streaming
-ExecStart=/var/lib/filelist-streaming/bin/filelist-streaming serve --data-dir /var/lib/filelist-streaming/data
+WorkingDirectory=/var/lib/torrent-tv
+ExecStart=/var/lib/torrent-tv/bin/torrent-tv serve --data-dir /var/lib/torrent-tv/data
 Restart=always
 RestartSec=10
 TimeoutStopSec=20
@@ -23,10 +23,10 @@ ProtectHome=true
 # allow it. The leading dash tolerates a not-yet-created path. Never list the
 # download root (or any writable path) below: systemd applies these lines in
 # order, and a later mention re-mutes an earlier grant. The application
-# binary lives in /var/lib/filelist-streaming/bin, owned by the service
+# binary lives in /var/lib/torrent-tv/bin, owned by the service
 # user, so the in-application updater stages and swaps it inside the
 # ReadWritePaths grant above without a privilege escalation.
-ReadWritePaths=/var/lib/filelist-streaming -@DOWNLOAD_ROOT@
+ReadWritePaths=/var/lib/torrent-tv -@DOWNLOAD_ROOT@
 ReadOnlyPaths=-/var/lib/qbittorrent/qBittorrent/downloads
 MemoryHigh=1536M
 MemoryMax=2G

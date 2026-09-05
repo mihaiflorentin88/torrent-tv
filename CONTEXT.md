@@ -1,4 +1,4 @@
-# FileList Streaming
+# Torrent TV
 
 Turns a private-tracker (FileList) catalog into a browsable, streamable home library for a single household on the home LAN, served by a low-power always-on box.
 

@@ -1,13 +1,13 @@
 import { useState } from 'preact/hooks';
-import { PortalAccountDialog, PortalSidebarDock, UpdateNotice, useUpdateController, type UpdateController } from '@filelist/web/portal';
-import { sharedApi } from '@filelist/web/shared-api';
+import { PortalAccountDialog, PortalSidebarDock, UpdateNotice, useUpdateController, type UpdateController } from '@torrent-tv/web/portal';
+import { sharedApi } from '@torrent-tv/web/shared-api';
 import { openExternal, pushUpdateStatus, sessionStore, setPortalIdentity, sharedOrigin, usePortal, useServerState } from './lib/state';
 import { DownloadsPage } from './pages/DownloadsPage';
 import { JobsPage } from './pages/JobsPage';
 import { ServerPage } from './pages/ServerPage';
 import { SettingsPage } from './pages/SettingsPage';
 import './shell.css';
-import '@filelist/web/style.css';
+import '@torrent-tv/web/style.css';
 
 // Task 10 appended Server and Settings: one View member, one sections
 // entry, and one render line each.
@@ -42,7 +42,7 @@ export function App() {
       </nav>
       <div class="shell-main">
         <header class="shell-header">
-          <h1>FileList Streaming</h1>
+          <h1>Torrent TV</h1>
           <span class={`pill pill-${server.state}`}>
             <span class={`dot dot-${server.state}`} aria-hidden="true" />
             {server.state === 'running' ? `Running${server.address ? ` · ${server.address}` : ''}`

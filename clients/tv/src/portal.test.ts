@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { UpdateStatus } from '@filelist/shared';
+import type { UpdateStatus } from '@torrent-tv/shared';
 import {
   PROJECTS_DIALOG_REGION,
   UPDATE_APPLY_ROW,

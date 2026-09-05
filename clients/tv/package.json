@@ -1,5 +1,5 @@
 {
-  "name": "@filelist/tv",
+  "name": "@torrent-tv/tv",
   "version": "0.3.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "build": "npm run test && tsc --noEmit && vite build"
   },
   "dependencies": {
-    "@filelist/shared": "0.1.0",
+    "@torrent-tv/shared": "0.1.0",
     "preact": "10.29.8"
   },
   "devDependencies": {

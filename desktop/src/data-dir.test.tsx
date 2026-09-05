@@ -19,7 +19,7 @@ const fakeBindings = vi.hoisted(() => ({
   changeDataDir: vi.fn(),
 }));
 
-vi.mock('./bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings', () => ({
+vi.mock('./bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings', () => ({
   AutostartStatus: fakeBindings.autostartStatus,
   ChangeDataDir: fakeBindings.changeDataDir,
   DataDirInfo: fakeBindings.dataDirInfo,
@@ -44,7 +44,7 @@ const fakeApi = vi.hoisted(() => ({
   portalMe: vi.fn(),
 }));
 
-vi.mock('@filelist/web/shared-api', () => ({
+vi.mock('@torrent-tv/web/shared-api', () => ({
   configureSharedApi: () => { },
   sharedApi: () => fakeApi,
 }));

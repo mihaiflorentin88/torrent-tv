@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ControlsVisibility } from '@filelist/shared';
-import type { ControlsVisibilityPolicy } from '@filelist/shared';
+import { ControlsVisibility } from '@torrent-tv/shared';
+import type { ControlsVisibilityPolicy } from '@torrent-tv/shared';
 
 type Harness = { controls: ControlsVisibility; changes: boolean[] };
 

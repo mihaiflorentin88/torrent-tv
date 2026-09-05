@@ -45,7 +45,7 @@ val syncWebApp = tasks.register<Copy>("syncWebApp") {
     // bundle must be built before this task runs.
     doFirst {
         if (!file("../../tv/dist/app.js").exists()) {
-            throw GradleException("clients/tv/dist is missing — run 'npm run build -w @filelist/tv' first")
+            throw GradleException("clients/tv/dist is missing — run 'npm run build -w @torrent-tv/tv' first")
         }
     }
     from("../../tv/dist") { exclude("index.html") }

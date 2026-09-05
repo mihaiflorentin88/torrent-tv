@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/outbound"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/outbound"
 )
 
 type Client struct {
@@ -163,7 +163,7 @@ func (c *Client) Add(ctx context.Context, reader io.Reader, savePath string) (st
 	part, _ := w.CreateFormFile("torrents", "filelist.torrent")
 	part.Write(data)
 	w.WriteField("savepath", savePath)
-	w.WriteField("category", "filelist-streaming")
+	w.WriteField("category", "torrent-tv")
 	w.WriteField("sequentialDownload", "true")
 	w.WriteField("firstLastPiecePrio", "true")
 	w.Close()

@@ -57,9 +57,9 @@ jobs:
         run: npm ci
       - name: Client unit tests
         run: npm run test:clients
-      # Desktop GUI suite (vitest, @filelist/desktop workspace).
+      # Desktop GUI suite (vitest, @torrent-tv/desktop workspace).
       - name: Desktop unit tests
-        run: npm run test -w @filelist/desktop
+        run: npm run test -w @torrent-tv/desktop
       - name: Test and build browser and TV clients
         run: npm run build
       - name: Package and validate unsigned Apps2Samsung WGT
@@ -107,7 +107,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Build the shared TV web app
-        run: npm run build -w @filelist/tv
+        run: npm run build -w @torrent-tv/tv
       - name: Sync web app into the APK assets
         run: cd clients/android-tv && ./gradlew :app:syncWebApp
       - name: Same-bundle check (Parity contract rule 1)

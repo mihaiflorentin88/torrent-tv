@@ -11,7 +11,7 @@ import (
 
 const (
 	runKeyPath = `Software\Microsoft\Windows\CurrentVersion\Run`
-	valueName  = "FileList Streaming"
+	valueName  = "Torrent TV"
 )
 
 func platformEnable(opts Options) error {

@@ -12,7 +12,7 @@ One household uses the browser and a Samsung Tizen television from the sofa to d
 
 ## Product Purpose
 
-FileList Streaming turns tracker releases into a browsable media library, sends chosen sources to the household qBittorrent instance, and plays completed or progressively available media through the browser and television. Success means reaching the desired movie or episode quickly with a remote, understanding source quality before downloading, and resuming playback reliably.
+Torrent TV turns tracker releases into a browsable media library, sends chosen sources to the household qBittorrent instance, and plays completed or progressively available media through the browser and television. Success means reaching the desired movie or episode quickly with a remote, understanding source quality before downloading, and resuming playback reliably.
 
 ## Positioning
 
@@ -34,7 +34,7 @@ The server runs on a Raspberry Pi on the private LAN alongside qBittorrent. The 
 
 ## Brand Commitments
 
-- Product name: FileList Streaming; television label: FileList TV.
+- Product name: Torrent TV; television label: Torrent TV.
 - Original dark charcoal identity with restrained emerald/teal accents.
 - Plex is the primary information-architecture and media-library reference. Netflix is secondary inspiration for cinematic discovery, artwork-led rails, and an expanding navigation rail.
 - The result must be recognizably original rather than a trademark or palette imitation.

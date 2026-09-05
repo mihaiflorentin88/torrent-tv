@@ -2,7 +2,7 @@
 
 Configuration is managed in the browser and persisted to `data/settings.json`. A terminal first run asks for the required settings; headless starts continue unconfigured so the first-run settings page is always available. The page is tabbed — Tracker, Storage, Playback, Server, Maintenance, and Test — with the active tab encoded in the URL hash (for example `/settings#playback`; an unknown hash reopens Tracker). One **Save changes** button on the sticky bar at the bottom of the page saves the whole settings object.
 
-Every JSON setting can also be supplied as an uppercase `FILELIST_STREAMING_...` environment variable; camel-case boundaries become underscores (for example, `instanceName` becomes `FILELIST_STREAMING_INSTANCE_NAME`). `FILELIST_STREAMING_SETTINGS_PATH` selects the settings file itself. Environment values are authoritative, are marked read-only in browser Settings, and are never copied back into that file.
+Every JSON setting can also be supplied as an uppercase `TORRENT_TV_...` environment variable; camel-case boundaries become underscores (for example, `instanceName` becomes `TORRENT_TV_INSTANCE_NAME`). `TORRENT_TV_SETTINGS_PATH` selects the settings file itself. Environment values are authoritative, are marked read-only in browser Settings, and are never copied back into that file.
 
 ## Data directory
 
@@ -10,14 +10,14 @@ The data directory holds `settings.json`, the SQLite database, `logs/`, the artw
 
 1. The `--data-dir` flag (absolute or relative to the working directory).
 2. A `data.location` pointer file next to the executable (written only after a GUI relocation).
-   - **Desktop app:** Linux uses `/var/lib/filelist-streaming-service` when it exists and is writable, otherwise `~/.local/share/filelist-streaming`; Windows uses `%APPDATA%\FileList Streaming`; macOS uses `~/Library/Application Support/FileList Streaming`.
+   - **Desktop app:** Linux uses `/var/lib/torrent-tv` when it exists and is writable, otherwise `~/.local/share/torrent-tv`; Windows uses `%APPDATA%\Torrent TV`; macOS uses `~/Library/Application Support/Torrent TV`.
    - **`serve`:** `data/` next to the executable (not the working directory).
 
 The `serve` fallback moved in this release: earlier builds resolved the default `data/` relative to the working directory, so launching from a different directory silently created a second, empty data directory. Data from an older deployment is not lost — keep using it by launching with `--data-dir /old/path/data`, or write that path into the `data.location` pointer file next to the executable (the GUI's relocation writes the same file).
 
 Change the location from the desktop app's Server page (data folder → **Change…**). The change requires the server stopped — a running server is stopped first and restarted afterwards — and the target directory must not exist or must be empty; a non-empty target is refused and directories are never merged. All contents move (same volume: atomic rename; cross volume: copy, verify each file's size and SHA-256, then delete the source), the pointer file is written atomically, and any failure rolls back leaving the original data untouched.
 
-`FILELIST_STREAMING_SETTINGS_PATH` keeps its existing precedence: when set it selects the settings file itself regardless of the data directory above. Systemd deployments pin `--data-dir /var/lib/filelist-streaming/data` in the unit, so the platform defaults never apply to them.
+`TORRENT_TV_SETTINGS_PATH` keeps its existing precedence: when set it selects the settings file itself regardless of the data directory above. Systemd deployments pin `--data-dir /var/lib/torrent-tv/data` in the unit, so the platform defaults never apply to them.
 
 ## Required dependencies
 
@@ -56,7 +56,7 @@ The sanitized qBittorrent template enables its incomplete directory, disables pr
 | FileList concurrent requests | 1 |
 | Title refresh active timeout | 30 minutes |
 
-Buffer values are limited to 2 GiB. Allocation and free-space reserve are configured in binary gigabytes (GiB) and accept fractional values; 0 disables each check. An hourly retention job enforces them: it evicts one torrent at a time through the manual-delete path (season-pack siblings included) until the allocation holds and the reserve is met, then publishes a `downloads.evicted` event (reason `cap` or `reserve`) for each eviction. Eviction order follows the configured rule list (`evictionRules`; default `oldest-completed`; atoms: `oldest-completed`, `newest-completed`, `least-recently-played`, `most-recently-played`, `watched-first`, `never-watched-first`, `largest`, `smallest`). Protection toggles (`protectIncomplete`, `protectLeased`, `protectFavorites`, `protectNeverWatched`) default to on/on/off/off. Downloads that cannot fit after evicting everything unprotected are refused. Browser settings expose the rules and toggles; every key also works as an environment variable (`FILELIST_STREAMING_EVICTION_RULES`, `FILELIST_STREAMING_PROTECT_INCOMPLETE`, `FILELIST_STREAMING_PROTECT_LEASED`, `FILELIST_STREAMING_PROTECT_FAVORITES`, `FILELIST_STREAMING_PROTECT_NEVER_WATCHED`).
+Buffer values are limited to 2 GiB. Allocation and free-space reserve are configured in binary gigabytes (GiB) and accept fractional values; 0 disables each check. An hourly retention job enforces them: it evicts one torrent at a time through the manual-delete path (season-pack siblings included) until the allocation holds and the reserve is met, then publishes a `downloads.evicted` event (reason `cap` or `reserve`) for each eviction. Eviction order follows the configured rule list (`evictionRules`; default `oldest-completed`; atoms: `oldest-completed`, `newest-completed`, `least-recently-played`, `most-recently-played`, `watched-first`, `never-watched-first`, `largest`, `smallest`). Protection toggles (`protectIncomplete`, `protectLeased`, `protectFavorites`, `protectNeverWatched`) default to on/on/off/off. Downloads that cannot fit after evicting everything unprotected are refused. Browser settings expose the rules and toggles; every key also works as an environment variable (`TORRENT_TV_EVICTION_RULES`, `TORRENT_TV_PROTECT_INCOMPLETE`, `TORRENT_TV_PROTECT_LEASED`, `TORRENT_TV_PROTECT_FAVORITES`, `TORRENT_TV_PROTECT_NEVER_WATCHED`).
 
 The global job limit and title-refresh timeout are browser-configurable and require a service restart. Queue and rate-limit waiting do not consume the title-refresh execution timeout. FileList stays serialized even when metadata jobs use the other worker slots.
 
@@ -72,4 +72,4 @@ The initial listener is `:8097`; requests are accepted only from loopback and RF
 
 ## Logs
 
-Structured logs are written to stdout/journald and `data/logs/server.log`. On an interactive terminal the console renders human-readable colored lines; piped output and the log file stay plain JSON, so machine readers are unaffected. Raspberry Pi deployment installs `/etc/logrotate.d/filelist-streaming`: rotate daily or at 10 MiB, retain 14 archives, compress, and use `copytruncate` so the daemon does not need to reopen the file.
+Structured logs are written to stdout/journald and `data/logs/server.log`. On an interactive terminal the console renders human-readable colored lines; piped output and the log file stay plain JSON, so machine readers are unaffected. Raspberry Pi deployment installs `/etc/logrotate.d/torrent-tv`: rotate daily or at 10 MiB, retain 14 archives, compress, and use `copytruncate` so the daemon does not need to reopen the file.

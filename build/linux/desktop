@@ -1,10 +1,10 @@
 [Desktop Entry]
 Version=1.0
-Name=FileList Streaming
-Comment=Torrent-powered FileList streaming media server
-Exec=/usr/local/bin/filelist-streaming %u
+Name=Torrent TV
+Comment=Torrent TV media server
+Exec=/usr/local/bin/torrent-tv %u
 Terminal=false
 Type=Application
-Icon=filelist-streaming
+Icon=torrent-tv
 Categories=Network;AudioVideo;
-StartupWMClass=filelist-streaming
+StartupWMClass=torrent-tv

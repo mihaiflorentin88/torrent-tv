@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Download, DownloadTransferAction } from '@filelist/shared';
-import { Downloads, captureDownloadAnchor, reconcileDownloads, restoreDownloadAnchor } from '@filelist/web/downloads';
-import { sharedApi } from '@filelist/web/shared-api';
-import { OpenURL } from '../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings';
+import { Download, DownloadTransferAction } from '@torrent-tv/shared';
+import { Downloads, captureDownloadAnchor, reconcileDownloads, restoreDownloadAnchor } from '@torrent-tv/web/downloads';
+import { sharedApi } from '@torrent-tv/web/shared-api';
+import { OpenURL } from '../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings';
 import { useServerState } from '../lib/state';
 
 // watchURL builds the web player's deep link for a download: Play in the
@@ -14,7 +14,7 @@ function watchURL(address: string | undefined, id: string): string {
 
 // Downloads over the shared web view: this page owns only the data loop
 // (poll, reconcile, scroll anchor) and the not-running gate; toolbar,
-// cards, and the removal confirm come from @filelist/web/downloads.
+// cards, and the removal confirm come from @torrent-tv/web/downloads.
 export function DownloadsPage() {
   const server = useServerState();
   const [items, setItems] = useState<Download[]>([]);

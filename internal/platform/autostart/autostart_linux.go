@@ -19,7 +19,7 @@ func defaultLinuxAutostartDir() string {
 	return filepath.Join(base, "autostart")
 }
 
-func entryPath() string { return filepath.Join(LinuxAutostartDir(), "filelist-streaming.desktop") }
+func entryPath() string { return filepath.Join(LinuxAutostartDir(), "torrent-tv.desktop") }
 
 // quoteExec quotes every argument, escaping embedded double quotes per the
 // XDG desktop entry Exec spec.
@@ -35,7 +35,7 @@ func platformEnable(opts Options) error {
 	if err := os.MkdirAll(LinuxAutostartDir(), 0o755); err != nil {
 		return err
 	}
-	content := "[Desktop Entry]\nType=Application\nName=FileList Streaming\nExec=" +
+	content := "[Desktop Entry]\nType=Application\nName=Torrent TV\nExec=" +
 		quoteExec(append([]string{opts.ExePath}, opts.Args...)) +
 		"\nTerminal=false\nX-GNOME-Autostart-enabled=true\nCategories=Network;AudioVideo;\n"
 	return os.WriteFile(entryPath(), []byte(content), 0o644)

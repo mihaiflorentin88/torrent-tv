@@ -1,5 +1,5 @@
 {
-  "name": "filelist-streaming",
+  "name": "torrent-tv",
   "private": true,
   "workspaces": [
     "web",
@@ -8,11 +8,11 @@
     "desktop"
   ],
   "scripts": {
-    "build": "npm run build -w @filelist/web && npm run build -w @filelist/tv",
-    "build:web": "npm run build -w @filelist/web",
-    "build:tv": "npm run build -w @filelist/tv",
-    "build:desktop": "npm run build -w @filelist/desktop",
-    "test:clients": "npm run test -w @filelist/shared && npm run test -w @filelist/web && npm run test -w @filelist/tv"
+    "build": "npm run build -w @torrent-tv/web && npm run build -w @torrent-tv/tv",
+    "build:web": "npm run build -w @torrent-tv/web",
+    "build:tv": "npm run build -w @torrent-tv/tv",
+    "build:desktop": "npm run build -w @torrent-tv/desktop",
+    "test:clients": "npm run test -w @torrent-tv/shared && npm run test -w @torrent-tv/web && npm run test -w @torrent-tv/tv"
   },
   "engines": {
     "node": ">=24"

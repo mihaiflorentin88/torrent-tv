@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {CatalogFacets, HouseholdItem, HouseholdState} from '@filelist/shared';
+import {CatalogFacets, HouseholdItem, HouseholdState} from '@torrent-tv/shared';
 import {householdSections,trackerCategories} from './catalog-data';
 
 const empty={favorites:[],continueWatching:[],recent:[],watched:[]} as HouseholdState;

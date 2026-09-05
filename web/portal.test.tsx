@@ -3,7 +3,7 @@ import type { ComponentChild } from 'preact';
 import { act } from 'preact/test-utils';
 import { useEffect, useState } from 'preact/hooks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { API, portalSessionKey, type PortalSession, type PortalState, type PortalUser, type UpdateStatus } from '@filelist/shared';
+import { API, portalSessionKey, type PortalSession, type PortalState, type PortalUser, type UpdateStatus } from '@torrent-tv/shared';
 import { App } from './src';
 import { PortalAccountDialog, PortalPromotionSlot, UpdateApplyConfirm, UpdateSection, useUpdateController } from './portal';
 

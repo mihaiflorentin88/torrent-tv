@@ -3,7 +3,7 @@
   // Android shell glue for the shared TV web app. This file, plus the page
   // above, are the only Android-specific bytes in the package; app.js/app.css
   // ship byte-identical to the Tizen WGT (spec: Parity contract rule 1).
-  window.FileListTVIdentity = { name: 'TorrentTV', monogram: 'TT' };
+  window.FileListTVIdentity = { name: 'Torrent TV', monogram: 'TT' };
 
   var native = window.FileListTVNative || null;
   var listener = null;

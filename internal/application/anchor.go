@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
 // AudioHeaderBytes mirrors the web decoder's container-head length: the

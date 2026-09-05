@@ -19,7 +19,7 @@ This replaces the withdrawn draft, including its invalid code and unsupported se
 - JWT identity and server-stored supporter key are independent. Secrets are redacted from HTTP and native settings responses, SSE, errors, and diagnostics.
 - Endpoint failures remove only their corresponding surface; public-settings failure removes accounts and promotions. Recovery restores capabilities. Donor expiry takes effect on time.
 - Startup applies automatically after readiness and fails open. Hourly jittered checks only notify. `--update` is update-and-serve. There is no auto-update disable preference.
-- Every update notice says server-only, warns that TV applications update manually, and links to https://github.com/mihaiflorentin88/filelist-streaming-service/releases. Explicit apply warns about playback interruption.
+- Every update notice says server-only, warns that TV applications update manually, and links to https://github.com/mihaiflorentin88/torrent-tv/releases. Explicit apply warns about playback interruption.
 - Only repository release artifacts are accepted, with mandatory matching `SHA256SUMS` from the same release. No provenance-verification service is required.
 - Select OS, architecture, version, and GUI/headless/bundle flavor. Add the Linux ARM64 headless release asset. Full macOS bundle replacement is required; binary-only bundle mutation and local re-signing are prohibited.
 - Keep the last working installation until the replacement confirms healthy startup. Native handoff and rollback require native runtime evidence.

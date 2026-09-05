@@ -14,15 +14,15 @@ func TestLinuxEnableDisableRoundTrip(t *testing.T) {
 	LinuxAutostartDir = func() string { return dir }
 	defer func() { LinuxAutostartDir = defaultLinuxAutostartDir }()
 
-	if err := Enable(Options{ExePath: "/opt/fs/filelist-streaming", Args: []string{"--minimized", "--data-dir", "/opt/fs/data"}}); err != nil {
+	if err := Enable(Options{ExePath: "/opt/fs/torrent-tv", Args: []string{"--minimized", "--data-dir", "/opt/fs/data"}}); err != nil {
 		t.Fatalf("Enable: %v", err)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "filelist-streaming.desktop"))
+	b, err := os.ReadFile(filepath.Join(dir, "torrent-tv.desktop"))
 	if err != nil {
 		t.Fatalf("desktop entry: %v", err)
 	}
 	text := string(b)
-	for _, want := range []string{"[Desktop Entry]", `Exec="/opt/fs/filelist-streaming" --minimized --data-dir "/opt/fs/data"`, "Type=Application"} {
+	for _, want := range []string{"[Desktop Entry]", `Exec="/opt/fs/torrent-tv" --minimized --data-dir "/opt/fs/data"`, "Type=Application"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("desktop entry missing %q in:\n%s", want, text)
 		}

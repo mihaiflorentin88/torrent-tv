@@ -58,7 +58,7 @@ describe('server discovery without AbortController', () => {
 
   it('clears the timeout timer and reports the server when the legacy probe succeeds early', async () => {
     vi.useFakeTimers();
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ name: 'FileList Streaming', version: '0.1.0', configured: true }) })));
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ name: 'Torrent TV', version: '0.1.0', configured: true }) })));
     const pending = discoverServers('192.168.1.2', '255.255.255.252', [8097], undefined, { supportsAbortController: false });
     await vi.advanceTimersByTimeAsync(0);
     const servers = await pending;
@@ -86,7 +86,7 @@ describe('server discovery progress reporting', () => {
 
   it('reports completed counts after each host probe', async () => {
     const progress: Array<[number, number]> = [];
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ name: 'FileList Streaming', version: '0.1.0', configured: true }) })));
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ name: 'Torrent TV', version: '0.1.0', configured: true }) })));
     const servers = await discoverServers('192.168.1.2', '255.255.255.252', [8097, 8098], (completed, total) => progress.push([completed, total]), { supportsAbortController: true });
     expect(progress).toEqual([[1, 2], [2, 2]]);
     expect(servers).toHaveLength(2);
@@ -103,7 +103,7 @@ describe('server discovery with AbortController', () => {
     const inits: Array<RequestInit | undefined> = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
       inits.push(init);
-      return { ok: true, json: async () => ({ name: 'FileList Streaming', version: '0.1.0', configured: true }) };
+      return { ok: true, json: async () => ({ name: 'Torrent TV', version: '0.1.0', configured: true }) };
     }));
     const servers = await discoverServers('192.168.1.2', '255.255.255.252', [8097], undefined, { supportsAbortController: true });
     expect(servers.map(server => server.url)).toEqual(['http://192.168.1.1:8097']);
@@ -133,7 +133,7 @@ describe('server discovery with AbortController', () => {
     const inits: Array<RequestInit | undefined> = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
       inits.push(init);
-      return { ok: true, json: async () => ({ name: 'FileList Streaming', version: '0.1.0', configured: true }) };
+      return { ok: true, json: async () => ({ name: 'Torrent TV', version: '0.1.0', configured: true }) };
     }));
     const servers = await discoverServers('192.168.1.2', '255.255.255.252');
     expect(servers.map(server => server.url)).toEqual(['http://192.168.1.1:8097']);

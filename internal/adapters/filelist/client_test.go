@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
 func newTestClient(t *testing.T, handler http.HandlerFunc) *Client {

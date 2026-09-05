@@ -14,42 +14,42 @@ The server listens on `8097` (web) and `42069` (torrent peers). Both are configu
 
 ## Download
 
-Prebuilt archives for every supported platform are on the [releases page](https://github.com/mihaiflorentin88/filelist-streaming-service/releases), named `filelist-streaming-<version>-<target>.zip` (Windows) or `.tar.gz` (everything else). Each archive contains the binary plus a `README.md`.
+Prebuilt archives for every supported platform are on the [releases page](https://github.com/mihaiflorentin88/torrent-tv/releases), named `torrent-tv-<version>-<target>.zip` (Windows) or `.tar.gz` (everything else). Each archive contains the binary plus a `README.md`.
 
 | Release asset | What it is | Use it when |
 | --- | --- | --- |
-| `filelist-streaming-<version>-darwin-universal.zip` | The universal **FileList Streaming.app** (Apple Silicon + Intel), zipped with `ditto` so the ad-hoc signature survives | **Recommended download on macOS.** Unzip and drag the app to Applications — you get the desktop app and the `serve` server in one bundle. |
-| `filelist-streaming-<version>-darwin-arm64.tar.gz` | Raw `filelist-streaming-darwin-arm64` binary | macOS CLI / `serve` setups on Apple Silicon without the .app bundle. |
-| `filelist-streaming-<version>-darwin-amd64.tar.gz` | Raw `filelist-streaming-darwin-amd64` binary | macOS CLI / `serve` setups on Intel Macs. |
-| `filelist-streaming-<version>-linux-amd64.tar.gz` | `filelist-streaming-linux-amd64` with desktop app + server | 64-bit x86 Linux desktops/servers with WebKitGTK 4.1 installed (see [Linux runtime packages](#linux-runtime-packages)). |
-| `filelist-streaming-<version>-linux-arm64.tar.gz` | `filelist-streaming-linux-arm64` with desktop app + server | 64-bit ARM desktop distros (Raspberry Pi OS Bookworm, Ubuntu 24.04) with WebKitGTK 4.1 — GUI-capable. |
-| `filelist-streaming-<version>-linux-armv7.tar.gz` | Pure headless `filelist-streaming-linux-armv7` (GUI excluded at build time) | Older 32-bit ARM boards (e.g. Raspberry Pi 2/3 on 32-bit OS). Server only. |
-| `filelist-streaming-<version>-linux-amd64-headless.tar.gz` | Pure static `filelist-streaming-linux-amd64-headless` (GUI excluded at build time via `-tags headless`) | 64-bit x86 servers without WebKitGTK. Server only. |
-| `filelist-streaming-<version>-linux-arm64-headless.tar.gz` | Pure static `filelist-streaming-linux-arm64-headless` (GUI excluded at build time via `-tags headless`) | 64-bit ARM servers without WebKitGTK (e.g. Raspberry Pi 4/5 on a minimal distro). Server only. |
-| `filelist-streaming-<version>-windows-amd64.zip` | `filelist-streaming-windows-amd64.exe` with desktop app + server | 64-bit x86 Windows. SmartScreen warns on first run — choose **More info → Run anyway**. |
-| `filelist-streaming-<version>-windows-arm64.zip` | `filelist-streaming-windows-arm64.exe` with desktop app + server | Windows on ARM (e.g. Snapdragon laptops). |
+| `torrent-tv-<version>-darwin-universal.zip` | The universal **Torrent TV.app** (Apple Silicon + Intel), zipped with `ditto` so the ad-hoc signature survives | **Recommended download on macOS.** Unzip and drag the app to Applications — you get the desktop app and the `serve` server in one bundle. |
+| `torrent-tv-<version>-darwin-arm64.tar.gz` | Raw `torrent-tv-darwin-arm64` binary | macOS CLI / `serve` setups on Apple Silicon without the .app bundle. |
+| `torrent-tv-<version>-darwin-amd64.tar.gz` | Raw `torrent-tv-darwin-amd64` binary | macOS CLI / `serve` setups on Intel Macs. |
+| `torrent-tv-<version>-linux-amd64.tar.gz` | `torrent-tv-linux-amd64` with desktop app + server | 64-bit x86 Linux desktops/servers with WebKitGTK 4.1 installed (see [Linux runtime packages](#linux-runtime-packages)). |
+| `torrent-tv-<version>-linux-arm64.tar.gz` | `torrent-tv-linux-arm64` with desktop app + server | 64-bit ARM desktop distros (Raspberry Pi OS Bookworm, Ubuntu 24.04) with WebKitGTK 4.1 — GUI-capable. |
+| `torrent-tv-<version>-linux-armv7.tar.gz` | Pure headless `torrent-tv-linux-armv7` (GUI excluded at build time) | Older 32-bit ARM boards (e.g. Raspberry Pi 2/3 on 32-bit OS). Server only. |
+| `torrent-tv-<version>-linux-amd64-headless.tar.gz` | Pure static `torrent-tv-linux-amd64-headless` (GUI excluded at build time via `-tags headless`) | 64-bit x86 servers without WebKitGTK. Server only. |
+| `torrent-tv-<version>-linux-arm64-headless.tar.gz` | Pure static `torrent-tv-linux-arm64-headless` (GUI excluded at build time via `-tags headless`) | 64-bit ARM servers without WebKitGTK (e.g. Raspberry Pi 4/5 on a minimal distro). Server only. |
+| `torrent-tv-<version>-windows-amd64.zip` | `torrent-tv-windows-amd64.exe` with desktop app + server | 64-bit x86 Windows. SmartScreen warns on first run — choose **More info → Run anyway**. |
+| `torrent-tv-<version>-windows-arm64.zip` | `torrent-tv-windows-arm64.exe` with desktop app + server | Windows on ARM (e.g. Snapdragon laptops). |
 
 Every release also ships:
 
 - `SHA256SUMS` — verify with `sha256sum -c SHA256SUMS --ignore-missing`.
 - CycloneDX/SPDX SBOMs for the Go and npm dependencies.
-- The unsigned Tizen `FileListTV-<version>.wgt` (see [Samsung Tizen application](#samsung-tizen-application)).
+- The unsigned Tizen `torrent-tv-<version>.wgt` (see [Samsung Tizen application](#samsung-tizen-application)).
 - The sideload `TorrentTV-<version>.apk` with its `.sha256` checksum (see [Android TV application](#android-tv-application-torrenttv)).
 
-Every binary except `filelist-streaming-linux-armv7`, `filelist-streaming-linux-arm64-headless`, and `filelist-streaming-linux-amd64-headless` contains both the desktop app and the headless server; those three are pure headless builds with the GUI excluded at build time (the armv7 build via its architecture constraints, the headless builds via the `headless` build tag). If you build from source instead, `make help` lists every target with the exact artifact it produces.
+Every binary except `torrent-tv-linux-armv7`, `torrent-tv-linux-arm64-headless`, and `torrent-tv-linux-amd64-headless` contains both the desktop app and the headless server; those three are pure headless builds with the GUI excluded at build time (the armv7 build via its architecture constraints, the headless builds via the `headless` build tag). If you build from source instead, `make help` lists every target with the exact artifact it produces.
 
-Headless arm64/amd64 servers whose distro lacks `libwebkit2gtk-4.1` should use the prebuilt `linux-arm64-headless` / `linux-amd64-headless` archives above. To build them from source instead, `make build-arm64-headless` produces `bin/filelist-streaming-linux-arm64-headless` and `make build-amd64-headless` produces `bin/filelist-streaming-linux-amd64-headless`; `make deploy-pi PI_HOST=user@host` builds and stages the arm64 one onto a Raspberry Pi in one step.
+Headless arm64/amd64 servers whose distro lacks `libwebkit2gtk-4.1` should use the prebuilt `linux-arm64-headless` / `linux-amd64-headless` archives above. To build them from source instead, `make build-arm64-headless` produces `bin/torrent-tv-linux-arm64-headless` and `make build-amd64-headless` produces `bin/torrent-tv-linux-amd64-headless`; `make deploy-pi PI_HOST=user@host` builds and stages the arm64 one onto a Raspberry Pi in one step.
 
 ## First run
 
 One binary runs two modes:
 
 - Launch it without arguments (double-click, or run it from a terminal) to open the desktop app: a window plus a system-tray icon. See [Desktop app](#desktop-app) below.
-- Run `filelist-streaming serve` for the headless server. It creates its `data/` folder next to the executable — or wherever `--data-dir` points:
+- Run `torrent-tv serve` for the headless server. It creates its `data/` folder next to the executable — or wherever `--data-dir` points:
 
 ```sh
-./filelist-streaming serve           # Linux / macOS
-.\filelist-streaming.exe serve       # Windows PowerShell
+./torrent-tv serve           # Linux / macOS
+.\torrent-tv.exe serve       # Windows PowerShell
 ```
 
 The first headless start asks three questions:
@@ -68,15 +68,15 @@ Then open `http://localhost:8097`. Press `Ctrl+C` to stop the server.
 
 ### Platform notes
 
-**Linux (amd64, arm64, armv7).** Headless services without a terminal skip the prompts: set `FILELIST_STREAMING_DOWNLOAD_ROOT`, `FILELIST_STREAMING_FILE_LIST_USERNAME`, and `FILELIST_STREAMING_FILE_LIST_PASSKEY` instead.
+**Linux (amd64, arm64, armv7).** Headless services without a terminal skip the prompts: set `TORRENT_TV_DOWNLOAD_ROOT`, `TORRENT_TV_FILE_LIST_USERNAME`, and `TORRENT_TV_FILE_LIST_PASSKEY` instead.
 
-**macOS (Apple Silicon, Intel).** If a browser downloaded the binary, macOS may block it once. Remove the quarantine with `xattr -d com.apple.quarantine filelist-streaming-darwin-*` or allow it under System Settings → Privacy & Security.
+**macOS (Apple Silicon, Intel).** If a browser downloaded the binary, macOS may block it once. Remove the quarantine with `xattr -d com.apple.quarantine torrent-tv-darwin-*` or allow it under System Settings → Privacy & Security.
 
 **Windows (amd64).** SmartScreen warns about the unsigned binary on first run: choose **More info → Run anyway**.
 
 ## Desktop app
 
-Every binary except `filelist-streaming-linux-armv7` includes the desktop app: a native window plus a system-tray icon, with the HTTP server running inside the same process. Launch the binary without arguments to open it.
+Every binary except `torrent-tv-linux-armv7` includes the desktop app: a native window plus a system-tray icon, with the HTTP server running inside the same process. Launch the binary without arguments to open it.
 
 ### First launch
 
@@ -88,9 +88,9 @@ Toggle **Start at login** on the GUI's Server page. It starts minimized to the t
 
 | OS | Entry |
 | --- | --- |
-| Windows | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `FileList Streaming` |
-| macOS | `~/Library/LaunchAgents/com.filelist-streaming.plist` |
-| Linux | `~/.config/autostart/filelist-streaming.desktop` (XDG autostart) |
+| Windows | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `Torrent TV` |
+| macOS | `~/Library/LaunchAgents/com.torrent-tv.plist` |
+| Linux | `~/.config/autostart/torrent-tv.desktop` (XDG autostart) |
 
 The OS artifact is the source of truth: removing it disables autostart, and the toggle always reflects the actual OS state.
 
@@ -100,9 +100,9 @@ The desktop app does not use `data/` next to the binary. Defaults:
 
 | OS | Default data directory |
 | --- | --- |
-| Linux | `/var/lib/filelist-streaming-service` when it exists and is writable, otherwise `~/.local/share/filelist-streaming` |
-| Windows | `%APPDATA%\FileList Streaming` |
-| macOS | `~/Library/Application Support/FileList Streaming` |
+| Linux | `/var/lib/torrent-tv` when it exists and is writable, otherwise `~/.local/share/torrent-tv` |
+| Windows | `%APPDATA%\Torrent TV` |
+| macOS | `~/Library/Application Support/Torrent TV` |
 
 Change the location from the GUI (Server page → data folder → *Change…*); the contents move and the new path is recorded in a `data.location` pointer file next to the executable. See [CONFIGURATION.md](CONFIGURATION.md) for the full resolution order and relocation rules.
 
@@ -123,7 +123,7 @@ The Linux binaries are dynamically linked against GTK 3 and WebKitGTK 4.1 and ne
 
 The app bundles are ad-hoc signed but not notarized, so both operating systems warn once:
 
-- **macOS:** if opening the app is blocked, either clear the quarantine flag once (`xattr -cr "/Applications/FileList Streaming.app"`) or right-click the app and choose **Open**, then confirm in the dialog.
+- **macOS:** if opening the app is blocked, either clear the quarantine flag once (`xattr -cr "/Applications/Torrent TV.app"`) or right-click the app and choose **Open**, then confirm in the dialog.
 - **Windows:** SmartScreen shows **Windows protected your PC** on first run — choose **More info → Run anyway**.
 
 The desktop app renders through the platform webview: WKWebView on macOS, WebView2 on Windows (preinstalled on Windows 11 and current Windows 10; on older systems install the [Evergreen WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)), WebKitGTK on Linux.
@@ -133,35 +133,35 @@ The desktop app renders through the platform webview: WKWebView on macOS, WebVie
 For an always-on server, install the reviewed systemd and logrotate files from `deploy/systemd/`:
 
 ```bash
-sudo useradd --system --home-dir /var/lib/filelist-streaming --no-create-home --shell /usr/sbin/nologin filelist-streaming
-sudo install -d -m 0755 -o filelist-streaming -g filelist-streaming /var/lib/filelist-streaming/bin
-sudo install -m 0755 -o filelist-streaming -g filelist-streaming filelist-streaming /var/lib/filelist-streaming/bin/filelist-streaming
-sudo install -m 0644 deploy/systemd/filelist-streaming.service /etc/systemd/system/
-sudo install -m 0644 deploy/systemd/filelist-streaming.logrotate /etc/logrotate.d/filelist-streaming
+sudo useradd --system --home-dir /var/lib/torrent-tv --no-create-home --shell /usr/sbin/nologin torrent-tv
+sudo install -d -m 0755 -o torrent-tv -g torrent-tv /var/lib/torrent-tv/bin
+sudo install -m 0755 -o torrent-tv -g torrent-tv torrent-tv /var/lib/torrent-tv/bin/torrent-tv
+sudo install -m 0644 deploy/systemd/torrent-tv.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/torrent-tv.logrotate /etc/logrotate.d/torrent-tv
 sudo systemctl daemon-reload
-sudo systemctl enable --now filelist-streaming.service
+sudo systemctl enable --now torrent-tv.service
 ```
 
-Adjust the download root in the unit file first if it is not `/srv/filelist-downloads`. The unit runs the binary in headless mode — `filelist-streaming serve --data-dir /var/lib/filelist-streaming/data` — from the service-owned `/var/lib/filelist-streaming/bin/filelist-streaming` path, so the service can update its own binary and a bare launch on the server never opens a GUI. Because services run without a terminal, provide the required settings through environment variables (see the headless note above) or a prepared settings file.
+Adjust the download root in the unit file first if it is not `/srv/filelist-downloads`. The unit runs the binary in headless mode — `torrent-tv serve --data-dir /var/lib/torrent-tv/data` — from the service-owned `/var/lib/torrent-tv/bin/torrent-tv` path, so the service can update its own binary and a bare launch on the server never opens a GUI. Because services run without a terminal, provide the required settings through environment variables (see the headless note above) or a prepared settings file.
 
 ### Upgrading
 
-Older service files ran a bare `ExecStart=/usr/local/bin/filelist-streaming` (with or without the `serve` argument). Re-run `make deploy-pi` once: it stages the corrected unit and migrates the binary from `/usr/local/bin` to the service-owned `/var/lib/filelist-streaming/bin/filelist-streaming`, which `Restart=always` keeps alive and the in-application updater can replace without root. To fix the unit by hand instead:
+Older service files ran a bare `ExecStart=/usr/local/bin/torrent-tv` (with or without the `serve` argument). Re-run `make deploy-pi` once: it stages the corrected unit and migrates the binary from `/usr/local/bin` to the service-owned `/var/lib/torrent-tv/bin/torrent-tv`, which `Restart=always` keeps alive and the in-application updater can replace without root. To fix the unit by hand instead:
 
 ```bash
-sudo systemctl edit --full filelist-streaming.service
-# ExecStart=/var/lib/filelist-streaming/bin/filelist-streaming serve --data-dir /var/lib/filelist-streaming/data
+sudo systemctl edit --full torrent-tv.service
+# ExecStart=/var/lib/torrent-tv/bin/torrent-tv serve --data-dir /var/lib/torrent-tv/data
 sudo systemctl daemon-reload
-sudo systemctl restart filelist-streaming
+sudo systemctl restart torrent-tv
 ```
 
 ### Fresh-server bootstrap
 
-On a new dedicated Linux server, `deploy/bootstrap-server.sh` installs packages, creates service users, verifies and installs the exact Go toolchain, builds the versioned headless server (`-tags headless`, `composition.Version` from `VERSION`), installs it under the service-owned `/var/lib/filelist-streaming/bin` directory, and enables the services:
+On a new dedicated Linux server, `deploy/bootstrap-server.sh` installs packages, creates service users, verifies and installs the exact Go toolchain, builds the versioned headless server (`-tags headless`, `composition.Version` from `VERSION`), installs it under the service-owned `/var/lib/torrent-tv/bin` directory, and enables the services:
 
 ```bash
-git clone https://github.com/mihaiflorentin88/filelist-streaming-service.git
-cd filelist-streaming-service
+git clone https://github.com/mihaiflorentin88/torrent-tv.git
+cd torrent-tv
 sudo sh deploy/bootstrap-server.sh --confirm-server-install --download-root=/mnt/sda1/torrent
 ```
 
@@ -175,7 +175,7 @@ To update an existing ARM64 Raspberry Pi from a development machine:
 make deploy-pi PI_HOST=user@server.lan
 ```
 
-The command cross-compiles the headless server, stages binary and service files, creates protected configuration backups, and rolls back automatically if startup fails. Installs that still live in `/usr/local/bin` migrate to the service-owned `/var/lib/filelist-streaming/bin/filelist-streaming` so the in-application updater works without root; an explicitly configured custom path is kept, and reported as manual-update-only when its directory cannot be owned by the service user. Answers are remembered in ignored `deploy/.deploy.local.conf`.
+The command cross-compiles the headless server, stages binary and service files, creates protected configuration backups, and rolls back automatically if startup fails. Installs that still live in `/usr/local/bin` migrate to the service-owned `/var/lib/torrent-tv/bin/torrent-tv` so the in-application updater works without root; an explicitly configured custom path is kept, and reported as manual-update-only when its directory cannot be owned by the service user. Answers are remembered in ignored `deploy/.deploy.local.conf`.
 
 ## qBittorrent engine (optional)
 
@@ -196,9 +196,21 @@ Back up before upgrading:
 
 Replace the binary and restart; settings and catalog survive. On a Raspberry Pi, `make deploy-pi` rolls back automatically when startup fails.
 
+## Migrating from filelist-streaming-service (pre-rename installs)
+
+The project was renamed from `filelist-streaming-service` to **Torrent TV** (`torrent-tv`). Installations of version 0.3.0 or older keep working, but they carry the old names. A one-time move brings them onto the new identity:
+
+1. **Binary and release assets.** New releases ship `torrent-tv-<version>-<target>` archives (and a `torrent-tv-<version>.wgt` / `.apk`), so the old self-updater stops finding assets — download the new archive from the [releases page](https://github.com/mihaiflorentin88/torrent-tv/releases) or redeploy with `make deploy-pi` once and upgrade in place afterwards.
+2. **Linux data directory.** The default data location is now `/var/lib/torrent-tv` (was `/var/lib/filelist-streaming-service` or `/var/lib/filelist-streaming`) and XDG installs move from `~/.local/share/filelist-streaming` to `~/.local/share/torrent-tv`. Stop the server, move the directory, and update any `--data-dir` pointer or systemd override.
+3. **systemd service.** The unit is now `torrent-tv.service` running as the `torrent-tv` user (`deploy/systemd/torrent-tv.service`; `make deploy-pi` installs it). Disable and remove the old `filelist-streaming.service` after the new one is up.
+4. **macOS/Windows app data.** The desktop GUI now stores its data under `Application Support/Torrent TV` (macOS) or `%APPDATA%\Torrent TV` (Windows); move the old `FileList Streaming` folder if you want to keep settings and catalog.
+5. **TV clients.** The server's discovery identity is now `Torrent TV`. Tizen TV clients updated together with the server pair up as before; a WGT installed before the rename must be reinstalled to rediscover the renamed server. The Android TV client is unaffected (`com.torrenttv.app`).
+
+The Filelist tracker settings (username, passkey) are untouched by the rename.
+
 ## Samsung Tizen application
 
-Use the unsigned `FileListTV-<version>.wgt` from a tagged release, or build it with `make frontend` and `make validate-tizen-wgt`. The TV client runs on Samsung Tizen 5.0 and newer. See [TIZEN.md](TIZEN.md) for Developer Mode, TV pairing, and Apps2Samsung installation. The TV and server must share the same private LAN.
+Use the unsigned `torrent-tv-<version>.wgt` from a tagged release, or build it with `make frontend` and `make validate-tizen-wgt`. The TV client runs on Samsung Tizen 5.0 and newer. See [TIZEN.md](TIZEN.md) for Developer Mode, TV pairing, and Apps2Samsung installation. The TV and server must share the same private LAN.
 
 ## Android TV application (TorrentTV)
 

@@ -12,7 +12,7 @@ Accounts exist on web and desktop only. JWT identity is separate from the server
 
 The updater runs one asynchronous automatic attempt after readiness, checks hourly with jitter for notification only, and supports explicit apply on all clients. Headless `--update` means update-and-serve. Already-current is a successful no-op. Applying interrupts playback and restarts the whole desktop process when the server is embedded. Every notice explains that TV applications update manually and links to the repository releases page.
 
-Only release assets from `mihaiflorentin88/filelist-streaming-service` are trusted. Matching entries in the same release's `SHA256SUMS` are mandatory. Missing or mismatched verification data aborts installation. Published provenance attestations are not required by this policy.
+Only release assets from `mihaiflorentin88/torrent-tv` are trusted. Matching entries in the same release's `SHA256SUMS` are mandatory. Missing or mismatched verification data aborts installation. Published provenance attestations are not required by this policy.
 
 Build identity includes version, OS, architecture, and flavor. Add a Linux ARM64 headless release artifact so Pi servers cannot receive a GUI binary. macOS `.app` installs replace the complete signed bundle through a helper, not just its executable. Use staged, validated, recoverable platform-specific installation and process handoff. Keep the previous installation until new-process health is confirmed. Never restart synchronously inside the apply HTTP handler.
 

@@ -62,7 +62,7 @@ func TestTrayMenuModelStates(t *testing.T) {
 		for _, on := range []bool{false, true} {
 			got := model(t, s, on, nil)
 			want := []wantItem{
-				{label: "Open FileList Streaming", action: trayActionOpen},
+				{label: "Open Torrent TV", action: trayActionOpen},
 				{label: "Open web UI", action: trayActionOpenWebUI},
 				{label: "Start at login", action: trayActionToggleAutostart, checkbox: true, checked: on},
 				{label: "Quit", action: trayActionQuit},

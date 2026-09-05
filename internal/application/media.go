@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
 // MediaInfo probes the original selected file. Completed media is cached by

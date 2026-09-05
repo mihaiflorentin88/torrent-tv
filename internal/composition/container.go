@@ -17,19 +17,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/filelist"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/httpapi"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/mediaprobe"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/nativetorrent"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/portalclient"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/qbittorrent"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/sqlite"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/subtitles"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/adapters/tmdb"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/portal"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/application/updates"
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/platform/config"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/filelist"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/httpapi"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/mediaprobe"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/nativetorrent"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/portalclient"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/qbittorrent"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/sqlite"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/subtitles"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/tmdb"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/portal"
+	"github.com/mihaiflorentin88/torrent-tv/internal/application/updates"
+	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 	"golang.org/x/term"
 )
 
@@ -70,7 +70,7 @@ type App struct {
 
 // NewAt assembles the application against an explicit settings file path;
 // the data-dir layer resolves that path before calling (env
-// FILELIST_STREAMING_SETTINGS_PATH wins only because callers pass
+// TORRENT_TV_SETTINGS_PATH wins only because callers pass
 // env-if-set-else-resolved). Both the headless server and the GUI
 // supervisor build through this constructor so there is exactly one
 // settings store per process.
@@ -381,7 +381,7 @@ func portalHTTPClient() *http.Client {
 type releaseFeed struct{}
 
 const (
-	releaseFeedURL       = "https://api.github.com/repos/mihaiflorentin88/filelist-streaming-service/releases/latest"
+	releaseFeedURL       = "https://api.github.com/repos/mihaiflorentin88/torrent-tv/releases/latest"
 	releaseFeedReadLimit = 4 << 20
 	manifestReadLimit    = 1 << 20
 )

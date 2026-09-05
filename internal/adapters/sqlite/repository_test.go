@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mihaiflorentin88/filelist-streaming-service/internal/domain"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
 func TestCatalogPaginationAndDownloadPersistence(t *testing.T) {

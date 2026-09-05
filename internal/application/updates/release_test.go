@@ -38,16 +38,16 @@ func matrixAsset(t *testing.T, version, goos, goarch, flavor string) string {
 func stableRelease(version string) Release {
 	tag := "v" + version
 	names := []string{
-		fmt.Sprintf("filelist-streaming-%s-linux-amd64.tar.gz", version),
-		fmt.Sprintf("filelist-streaming-%s-linux-arm64.tar.gz", version),
-		fmt.Sprintf("filelist-streaming-%s-linux-amd64-headless.tar.gz", version),
-		fmt.Sprintf("filelist-streaming-%s-linux-arm64-headless.tar.gz", version),
-		fmt.Sprintf("filelist-streaming-%s-linux-armv7.tar.gz", version),
-		fmt.Sprintf("filelist-streaming-%s-windows-amd64.zip", version),
-		fmt.Sprintf("filelist-streaming-%s-windows-arm64.zip", version),
-		fmt.Sprintf("filelist-streaming-%s-darwin-amd64.tar.gz", version),
-		fmt.Sprintf("filelist-streaming-%s-darwin-arm64.tar.gz", version),
-		fmt.Sprintf("filelist-streaming-%s-darwin-universal.zip", version),
+		fmt.Sprintf("torrent-tv-%s-linux-amd64.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-linux-arm64.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-linux-amd64-headless.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-linux-arm64-headless.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-linux-armv7.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-windows-amd64.zip", version),
+		fmt.Sprintf("torrent-tv-%s-windows-arm64.zip", version),
+		fmt.Sprintf("torrent-tv-%s-darwin-amd64.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-darwin-arm64.tar.gz", version),
+		fmt.Sprintf("torrent-tv-%s-darwin-universal.zip", version),
 	}
 	release := Release{Tag: tag, Notes: "release notes", Draft: false, Prerelease: false, PublishedAt: testPublishedAt}
 	release.URL = fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s", releaseOwner, releaseRepo, tag)
@@ -322,7 +322,7 @@ func TestReleaseResolutionRejectsWrongRepository(t *testing.T) {
 			func(r *Release) {
 				for i, asset := range r.Assets {
 					if asset.Name == "SHA256SUMS" {
-						r.Assets[i].URL = "http://github.com/mihaiflorentin88/filelist-streaming-service/releases/download/v" + testVersion + "/SHA256SUMS"
+						r.Assets[i].URL = "http://github.com/mihaiflorentin88/torrent-tv/releases/download/v" + testVersion + "/SHA256SUMS"
 					}
 				}
 			},
@@ -332,7 +332,7 @@ func TestReleaseResolutionRejectsWrongRepository(t *testing.T) {
 			func(r *Release) {
 				for i, asset := range r.Assets {
 					if asset.Name == "SHA256SUMS" {
-						r.Assets[i].URL = "https://user:secret@github.com/mihaiflorentin88/filelist-streaming-service/releases/download/v" + testVersion + "/SHA256SUMS"
+						r.Assets[i].URL = "https://user:secret@github.com/mihaiflorentin88/torrent-tv/releases/download/v" + testVersion + "/SHA256SUMS"
 					}
 				}
 			},
@@ -485,7 +485,7 @@ func TestReleaseResolutionDevIdentityIsManualOnly(t *testing.T) {
 }
 
 func TestReleasePageConstantMatchesRepository(t *testing.T) {
-	if want := "https://github.com/mihaiflorentin88/filelist-streaming-service/releases"; ReleasesURL != want {
+	if want := "https://github.com/mihaiflorentin88/torrent-tv/releases"; ReleasesURL != want {
 		t.Fatalf("ReleasesURL = %q, want %q", ReleasesURL, want)
 	}
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Download, downloadTransferActions } from '@filelist/shared';
+import { type Download, downloadTransferActions } from '@torrent-tv/shared';
 
 const row = (state: string, error?: string): Pick<Download, 'state' | 'error'> => ({ state, error });
 const actions = (state: string, error?: string) => downloadTransferActions(row(state, error)).map(item => item.action);

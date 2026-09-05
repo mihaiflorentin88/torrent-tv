@@ -74,7 +74,7 @@ func DetectSupervision() Supervision {
 // FILELIST_UPDATE_* namespace so the helper's environment scrub keeps it
 // intact for the launched process; the entry point consumes it once and
 // strips it, so it is the only update marker that survives a handoff.
-const RelaunchArgsEnv = "FILELIST_STREAMING_RELAUNCH_ARGS"
+const RelaunchArgsEnv = "TORRENT_TV_RELAUNCH_ARGS"
 
 // SetRelaunchArgs records the invocation a relaunched installation must
 // resume. The coordinator calls it before a helper handoff so arguments

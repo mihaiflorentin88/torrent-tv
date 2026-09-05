@@ -2,8 +2,8 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
-import { configureSharedApi } from '@filelist/web/shared-api';
-import { portalSessionKey, savePortalSession, type PortalState, type UpdateStatus } from '@filelist/shared';
+import { configureSharedApi } from '@torrent-tv/web/shared-api';
+import { portalSessionKey, savePortalSession, type PortalState, type UpdateStatus } from '@torrent-tv/shared';
 import { resetPortal, seedServerState, setServerOrigin, sharedOrigin, usePortal, useServerState } from './state';
 
 // The Wails runtime is mocked at the module boundary: the fake records
@@ -39,7 +39,7 @@ const fakeBindings = vi.hoisted(() => ({
   openURL: vi.fn(),
 }));
 
-vi.mock('../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings', () => ({
+vi.mock('../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings', () => ({
   AutostartStatus: vi.fn().mockResolvedValue(false),
   DataDirInfo: vi.fn().mockResolvedValue(['', '']),
   DisableAutostart: vi.fn(),
@@ -69,7 +69,7 @@ const fakeApi = vi.hoisted(() => ({
   portalSession: vi.fn(),
 }));
 
-vi.mock('@filelist/web/shared-api', () => ({
+vi.mock('@torrent-tv/web/shared-api', () => ({
   configureSharedApi: vi.fn(),
   sharedApi: () => fakeApi,
 }));

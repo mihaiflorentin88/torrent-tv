@@ -11,7 +11,7 @@ version: '3'
 # build/appicon.png automatically on every build.
 
 vars:
-  APP_NAME: filelist-streaming
+  APP_NAME: torrent-tv
   BIN_DIR: bin
   # Target OS for build/package. Defaults to the host OS; `wails3 build` /
   # `wails3 package` dispatch through these root tasks with GOOS/ARCH passed

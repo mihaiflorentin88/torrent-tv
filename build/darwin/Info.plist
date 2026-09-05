@@ -5,13 +5,13 @@
         <key>CFBundlePackageType</key>
         <string>APPL</string>
         <key>CFBundleName</key>
-        <string>FileList Streaming</string>
+        <string>Torrent TV</string>
         <key>CFBundleDisplayName</key>
-        <string>FileList Streaming</string>
+        <string>Torrent TV</string>
         <key>CFBundleExecutable</key>
-        <string>filelist-streaming</string>
+        <string>torrent-tv</string>
         <key>CFBundleIdentifier</key>
-        <string>com.filelist-streaming.app</string>
+        <string>com.torrenttv.app</string>
         <key>CFBundleVersion</key>
         <string>0.3.0</string>
         <key>CFBundleShortVersionString</key>
@@ -23,6 +23,6 @@
         <key>NSHighResolutionCapable</key>
         <true/>
         <key>NSHumanReadableCopyright</key>
-        <string>© 2026 FileList Streaming</string>
+        <string>© 2026 Torrent TV</string>
     </dict>
 </plist>

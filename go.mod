@@ -1,4 +1,4 @@
-module github.com/mihaiflorentin88/filelist-streaming-service
+module github.com/mihaiflorentin88/torrent-tv
 
 go 1.26.0
 

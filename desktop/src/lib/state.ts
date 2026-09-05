@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Events } from '@wailsio/runtime';
-import { configureSharedApi, sharedApi } from '@filelist/web/shared-api';
+import { configureSharedApi, sharedApi } from '@torrent-tv/web/shared-api';
 import {
   PortalState,
   PortalSync,
@@ -10,8 +10,8 @@ import {
   eventPayload,
   loadPortalSession,
   type PortalSessionStorage,
-} from '@filelist/shared';
-import { OpenURL } from '../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings';
+} from '@torrent-tv/shared';
+import { OpenURL } from '../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings';
 
 export type ServerState = 'stopped' | 'starting' | 'running' | 'stopping' | 'failed';
 

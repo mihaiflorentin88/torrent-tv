@@ -12,7 +12,7 @@ import {
   StartServer,
   StopServer,
   Version,
-} from '../bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings';
+} from '../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings';
 
 import { usePortal, useServerState } from '../lib/state';
 
@@ -231,7 +231,7 @@ export function ServerPage() {
             onInput={() => void toggleAutostart()}
           />
           <span class="switch-track" aria-hidden="true"><span class="switch-knob" /></span>
-          <span class="switch-copy">Start FileList Streaming when you log in</span>
+          <span class="switch-copy">Start Torrent TV when you log in</span>
         </label>
         <p class="supporting">Starts minimized to the tray. The switch always reflects the operating system's launch-on-boot entry.</p>
       </fieldset>

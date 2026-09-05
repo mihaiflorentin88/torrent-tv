@@ -5,11 +5,11 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.3.0",
-			"CompanyName": "FileList Streaming",
-			"FileDescription": "FileList Streaming media server",
-			"LegalCopyright": "© 2026 FileList Streaming",
-			"ProductName": "FileList Streaming",
-			"Comments": "Torrent-powered FileList streaming desktop app"
+			"CompanyName": "Torrent TV",
+			"FileDescription": "Torrent TV media server",
+			"LegalCopyright": "© 2026 Torrent TV",
+			"ProductName": "Torrent TV",
+			"Comments": "Torrent TV desktop app"
 		}
 	}
 }

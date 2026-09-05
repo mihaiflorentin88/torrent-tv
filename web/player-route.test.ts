@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { browserPlaybackURL } from './src';
-import type { Download } from '@filelist/shared';
+import type { Download } from '@torrent-tv/shared';
 
 const streamDownload: Download = {
   id: 'abc', releaseId: 'r', engineId: 'qb:x', fileIndex: 0, filePath: 'a.mkv',

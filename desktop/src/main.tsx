@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { Events } from '@wailsio/runtime';
 import { App } from './App';
-import { ServerState } from './bindings/github.com/mihaiflorentin88/filelist-streaming-service/internal/gui/bindings';
+import { ServerState } from './bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings';
 import { isStateEvent, seedServerState, setServerOrigin } from './lib/state';
 
 // All view traffic stays same-origin: the shared API points at the app's

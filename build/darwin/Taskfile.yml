@@ -35,7 +35,7 @@ tasks:
       MACOSX_DEPLOYMENT_TARGET: '{{.MACOS_MIN}}'
 
   package:
-    summary: Builds the host-arch GUI binary and bundles FileList Streaming.app
+    summary: Builds the host-arch GUI binary and bundles Torrent TV.app
     deps:
       - task: build
     cmds:

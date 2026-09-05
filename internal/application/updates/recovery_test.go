@@ -23,9 +23,9 @@ func hostFixture(t *testing.T, version string) string {
 func fileAssetName(version string) string {
 	arch := runtime.GOARCH
 	if runtime.GOOS == "linux" {
-		return "filelist-streaming-" + version + "-linux-" + arch + ".tar.gz"
+		return "torrent-tv-" + version + "-linux-" + arch + ".tar.gz"
 	}
-	return "filelist-streaming-" + version + "-" + runtime.GOOS + "-" + arch + ".tar.gz"
+	return "torrent-tv-" + version + "-" + runtime.GOOS + "-" + arch + ".tar.gz"
 }
 
 func journalPath(installDir string) string {
@@ -161,7 +161,7 @@ func runApplyProcess(t *testing.T, installDir string, archive []byte, sel Select
 
 func writeLiveExecutable(t *testing.T, installDir string, fixturePath string) string {
 	t.Helper()
-	livePath := filepath.Join(installDir, "filelist-streaming")
+	livePath := filepath.Join(installDir, "torrent-tv")
 	if err := os.WriteFile(livePath, fileBytes(t, fixturePath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -665,7 +665,7 @@ func TestFileInstallRollsBackOnAcknowledgementTimeout(t *testing.T) {
 	if op.FailedError != "" {
 		t.Errorf("unexpected failure evidence: %q", op.FailedError)
 	}
-	livePath := filepath.Join(installDir, "filelist-streaming")
+	livePath := filepath.Join(installDir, "torrent-tv")
 	waitForContent(t, livePath, func(string) bool { return true }, 5*time.Second)
 	if !equalDigests(mustDigest(t, livePath), mustDigest(t, hostFixture(t, "0.3.0"))) {
 		t.Error("timeout did not restore the previous installation")
@@ -705,7 +705,7 @@ func TestFileInstallRollsBackOnEarlyDeath(t *testing.T) {
 	if op.Phase != PhaseRolledBack || !op.SuppressNext {
 		t.Fatalf("journal after early death = %+v, want rolled-back with suppression", op)
 	}
-	livePath := filepath.Join(installDir, "filelist-streaming")
+	livePath := filepath.Join(installDir, "torrent-tv")
 	waitForContent(t, livePath, func(string) bool { return true }, 5*time.Second)
 	if !equalDigests(mustDigest(t, livePath), mustDigest(t, hostFixture(t, "0.3.0"))) {
 		t.Error("early death did not restore the previous installation")
@@ -764,8 +764,8 @@ func TestFileInstallRollbackFailureKeepsEvidenceAndLivePath(t *testing.T) {
 func TestBundleExchangeActivatesAndRollsBackAtomically(t *testing.T) {
 	bundleTestCapable(t)
 	installDir := t.TempDir()
-	liveBundle := filepath.Join(installDir, "FileList Streaming.app")
-	stagedBundle := filepath.Join(installDir, ".filelist-extract-staged", "FileList Streaming.app")
+	liveBundle := filepath.Join(installDir, "Torrent TV.app")
+	stagedBundle := filepath.Join(installDir, ".filelist-extract-staged", "Torrent TV.app")
 	writeBundleTree(t, liveBundle, "0.3.0")
 	writeBundleTree(t, stagedBundle, "0.4.0")
 
@@ -775,7 +775,7 @@ func TestBundleExchangeActivatesAndRollsBackAtomically(t *testing.T) {
 	}
 	defer journal.Close()
 	installer := NewInstaller(journal, PayloadBundle,
-		filepath.Join(liveBundle, "Contents", "MacOS", "filelist-streaming"), liveBundle,
+		filepath.Join(liveBundle, "Contents", "MacOS", "torrent-tv"), liveBundle,
 		DefaultHealthTimeout)
 	op := newOperation(installDir, Selection{Version: "0.4.0"}, bundleTarget(), filepath.Dir(stagedBundle))
 	op.Backup = stagedBundle // the exchange counterpart is recorded up front
@@ -815,7 +815,7 @@ func writeBundleTree(t *testing.T, appDir, version string) {
 	}
 	plist := fmt.Sprintf(`<?xml version="1.0"?><plist><dict>
 		<key>CFBundleIdentifier</key><string>%s</string>
-		<key>CFBundleExecutable</key><string>filelist-streaming</string>
+		<key>CFBundleExecutable</key><string>torrent-tv</string>
 		<key>CFBundleShortVersionString</key><string>%s</string>
 		<key>CFBundleVersion</key><string>%s</string>
 	</dict></plist>`, bundleIdentifier, version, version)
@@ -826,7 +826,7 @@ func writeBundleTree(t *testing.T, appDir, version string) {
 	if version == "0.3.0" {
 		inner = hostFixture(t, "0.3.0")
 	}
-	if err := os.WriteFile(filepath.Join(macOS, "filelist-streaming"), fileBytes(t, inner), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(macOS, "torrent-tv"), fileBytes(t, inner), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -837,9 +837,9 @@ func TestBundleHelperInstallsConfirmsAndCleans(t *testing.T) {
 	sel := bundleSelection(archive)
 
 	installDir := t.TempDir()
-	liveBundle := filepath.Join(installDir, "FileList Streaming.app")
+	liveBundle := filepath.Join(installDir, "Torrent TV.app")
 	writeBundleTree(t, liveBundle, "0.3.0")
-	liveExecutable := filepath.Join(liveBundle, "Contents", "MacOS", "filelist-streaming")
+	liveExecutable := filepath.Join(liveBundle, "Contents", "MacOS", "torrent-tv")
 	cleanupLiveProcesses(t, liveExecutable)
 
 	tmp := t.TempDir()

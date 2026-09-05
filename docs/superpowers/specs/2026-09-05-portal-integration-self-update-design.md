@@ -19,7 +19,7 @@ This revision preserves the previously approved product behavior and records the
 - Promotions occupy a compact area near the bottom of the left navigation. Their delivery remains live because delivery records an upstream impression. No background prefetching of unseen creatives. TV promotions are display-only.
 - Other Projects contains the ordered public links. Web and desktop can open safe external destinations; TV opens a remote-navigable URL dialog with reliable Back/focus restoration, not an assumption that text selection works on a television.
 - Feature failure is endpoint-specific: failed public settings disables accounts and promotions; failed links removes project links; failed update fetch clears update availability; failed promotion delivery removes the promotion surface. Failures produce no global warning or reserved empty panel. Subsequent successful probes restore the relevant capability.
-- Every update notice includes version, release notes, the server-only warning, and https://github.com/mihaiflorentin88/filelist-streaming-service/releases for manual TV-client updates. Updates interrupt active playback; explicit apply requires a warning/confirmation. Controls cover checking, current, available, applying, reconnecting, failed, and manual-only states.
+- Every update notice includes version, release notes, the server-only warning, and https://github.com/mihaiflorentin88/torrent-tv/releases for manual TV-client updates. Updates interrupt active playback; explicit apply requires a warning/confirmation. Controls cover checking, current, available, applying, reconnecting, failed, and manual-only states.
 
 ## Architecture and ownership
 
@@ -45,7 +45,7 @@ The headless `--update` flow is update-and-serve: perform the blocking check/ins
 
 The user selected repository releases only. The external feed announces the version; it does not gain permission to choose arbitrary executable code.
 
-Accept update artifacts only from the GitHub releases of `mihaiflorentin88/filelist-streaming-service`. Require the exact selected asset to have a valid entry in the same release's `SHA256SUMS`, and verify its bytes before extraction or installation. A missing manifest, missing entry, wrong repository/tag, malformed hash, or mismatch fails closed. HTTPS alone and a locally computed hash without an expected value are not verification. Build-provenance attestations are published by the existing workflow but are not required by the selected policy.
+Accept update artifacts only from the GitHub releases of `mihaiflorentin88/torrent-tv`. Require the exact selected asset to have a valid entry in the same release's `SHA256SUMS`, and verify its bytes before extraction or installation. A missing manifest, missing entry, wrong repository/tag, malformed hash, or mismatch fails closed. HTTPS alone and a locally computed hash without an expected value are not verification. Build-provenance attestations are published by the existing workflow but are not required by the selected policy.
 
 Normalize valid release tags consistently and use proper semantic-version precedence. Do not strip prerelease suffixes to compare version triples. Unversioned development builds cannot safely auto-install based on a working-directory VERSION file.
 
