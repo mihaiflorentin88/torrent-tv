@@ -102,6 +102,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Ensure Android SDK platform 35
+        run: sdkmanager --install "platforms;android-35" >/dev/null 2>&1 || true
       - name: Install locked dependencies
         run: npm ci
       - name: Build the shared TV web app

@@ -17,11 +17,15 @@ make validate-tizen-wgt TIZEN_TARGET=5.0
 
 ### Headless old-engine boot smoke (Tizen 5.0 floor)
 
-`make smoke-tizen-engine` boots the real built `clients/tizen/dist` in the pinned oldest reliably obtainable old Chromium: [`selenoid/chrome:63.0`](https://hub.docker.com/r/selenoid/chrome), which carries **Google Chrome 63.0.3239.84** — exactly the “Tizen 5.0-era Chromium 63” floor named in `clients/tizen/vite.config.ts`. Selenoid (Aerokube) is a reputable, widely used source of historical official-Chrome images, and the tag remains pullable; nothing older than Chrome 63 is covered, so the pin is the guarantee's ceiling. The smoke needs Docker and Node ≥ 22 (CI provides Node 24), uses no npm dependencies (raw CDP over native WebSocket), and binds everything to loopback via `--network host`. A tiny built-in server stands in for the TV-only `$WEBAPIS/webapis/webapis.js` and records client-diagnostics POSTs. It runs three cases and fails on any other outcome:
+`make smoke-tizen-engine` boots the real built `clients/tv/dist` in the pinned oldest reliably obtainable old Chromium: [`selenoid/chrome:63.0`](https://hub.docker.com/r/selenoid/chrome), which carries **Google Chrome 63.0.3239.84** — exactly the “Tizen 5.0-era Chromium 63” floor named in `clients/tv/vite.config.ts`. Selenoid (Aerokube) is a reputable, widely used source of historical official-Chrome images, and the tag remains pullable; nothing older than Chrome 63 is covered, so the pin is the guarantee's ceiling. The smoke needs Docker and Node ≥ 22 (CI provides Node 24), uses no npm dependencies (raw CDP over native WebSocket), and binds everything to loopback via `--network host`. A tiny built-in server stands in for the TV-only `$WEBAPIS/webapis/webapis.js` and records client-diagnostics POSTs. It runs three cases and fails on any other outcome:
 
 1. **Clean boot** — zero uncaught page errors and zero console errors (warnings tolerated), and the startup handoff completes: `window.FileListBoot.ready()` removes `#startup` right after the app bundle's first successful render.
 2. **Injected error** — an uncaught error is thrown through CDP after boot; the `#fatal-error` panel must appear, be visible with `role="alert"`, and its diagnostics POST must reach the recorder.
 3. **Broken bundle** — a fixture copy of `dist` with a syntax error appended to `app.js` must make the smoke exit non-zero (exit 3); the target fails unless that detection is proven.
+
+### TorrentTV (Android TV) build and boot smoke
+
+`make torrenttv-apk` builds the Android TV client: it requires `clients/tv/dist` to exist (build it with `npm run build -w @filelist/tv`; the Gradle sync fails loudly when it is missing), syncs it into the APK assets with the Android page variant, runs the Kotlin unit tests, and produces `clients/android-tv/.build/artifacts/TorrentTV-<version>.apk` plus its checksum. CI's `android-tv` job adds the same-bundle check — the packaged `app.js`/`app.css` must be byte-identical to the Tizen bundle (the spec's Parity contract) — and boots the real APK on the API 26 Android TV emulator, the 2018 support floor, asserting the TorrentTV setup screen renders. See [ANDROIDTV.md](ANDROIDTV.md).
 
 ## Server builds and Raspberry Pi deployment
 
@@ -72,7 +76,7 @@ make build-all      # all seven release binaries + universal macOS .app (Docker;
 
 The dependency direction is domain → application ports → adapters, with concrete wiring only in composition. SQLite uses WAL and pure Go. Runtime settings live in an atomically replaced `0600` JSON file; never make runtime behavior depend on `.env`.
 
-Keep [OpenAPI](../api/openapi.yaml), shared TypeScript models, [API documentation](API.md), [architecture](ARCHITECTURE.md), [Known issues](KNOWN_ISSUES.md), and the [Tizen physical-TV log](TIZEN.md) synchronized with behavior. Any confirmed TV result belongs in the log immediately.
+Keep [OpenAPI](../api/openapi.yaml), shared TypeScript models, [API documentation](API.md), [architecture](ARCHITECTURE.md), [Known issues](KNOWN_ISSUES.md), the [Tizen physical-TV log](TIZEN.md), and the [Android TV verification log](ANDROIDTV.md) synchronized with behavior. Any confirmed TV result belongs in its log immediately.
 
 The durable environment, provider, cache, TV-focus, and release invariants are in [maintainer and agent notes](MAINTAINER_NOTES.md). Read them before changing or deploying the project. Most importantly: never install tools on a workstation without explicit permission; use the pinned Docker frontend build instead.
 

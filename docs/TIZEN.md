@@ -19,7 +19,7 @@ clients/tizen/.build/artifacts/FileListTV-0.3.0.wgt.sha256
 
 The WGT is deliberately unsigned. Apps2Samsung accepts a custom `.wgt`, obtains or reuses a Samsung certificate, and re-signs the package for the selected TV during installation. Signature files from an old build are excluded to prevent a mismatched certificate from leaking into the artifact. No certificate, password, or TV DUID is stored in this repository.
 
-To rebuild only the WGT from an existing `clients/tizen/dist`, or validate an existing generated package:
+To rebuild only the WGT from an existing `clients/tv/dist`, or validate an existing generated package:
 
 ```sh
 make tizen-wgt

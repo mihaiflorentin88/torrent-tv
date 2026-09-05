@@ -44,7 +44,7 @@ The README uses 360 px WebP thumbnails and optimized WebP full views so the gall
 
 | Guide | Contents |
 | --- | --- |
-| [Installation and upgrades](docs/INSTALLATION.md) | Requirements and where to get them, per-OS install and run instructions, credential/API-key acquisition, automated and manual installs, GitHub release artifacts, Raspberry Pi deployment, backup, rollback, and Tizen installation. |
+| [Installation and upgrades](docs/INSTALLATION.md) | Requirements and where to get them, per-OS install and run instructions, credential/API-key acquisition, automated and manual installs, GitHub release artifacts, Raspberry Pi deployment, backup, rollback, and Tizen and Android TV installation. |
 | [User guide](docs/USER_GUIDE.md) | Browsing, season packs, downloads, playback, resume, subtitles, TV operation, and troubleshooting. |
 | [Configuration reference](docs/CONFIGURATION.md) | Settings, paths, limits, language preferences, and provider configuration. |
 | [Tizen guide](docs/TIZEN.md) | Build, signing, Developer Mode, Apps2Samsung installation, D-pad behavior, and physical-TV verification. |
@@ -84,7 +84,7 @@ The default trusted networks are loopback and RFC1918 private address ranges. Na
 | --- | --- | --- |
 | Linux with systemd | Daemon isolation and restart | Raspberry Pi OS/Debian/Ubuntu, Fedora/RHEL/Rocky/Alma, Arch, and openSUSE package families are supported. |
 | qBittorrent-nox (optional) | Alternative download engine | Skip it unless you switch the download engine to qBittorrent in Settings. Fresh setup binds the Web UI to `127.0.0.1:8080` and uses `/srv/filelist-downloads`. |
-| FFmpeg and ffprobe | Embedded subtitle probing/extraction and browser audio compatibility | Video is never transcoded. Desktop-browser fallback converts incompatible audio to AAC; Tizen stays direct-play. Paths are browser-configurable. |
+| FFmpeg and ffprobe | Embedded subtitle probing/extraction and browser audio compatibility | Video is never transcoded. Desktop-browser fallback converts incompatible audio to AAC; Tizen and TorrentTV stay direct-play. Paths are browser-configurable. |
 | SQLite | Catalog, jobs, playback, ratings, subtitle associations | Embedded through the pure-Go driver; no system SQLite package is required. |
 | Exact Go version in `go.mod` | Fresh-clone server build | Installed as a private verified toolchain; system Go is not replaced. |
 | CA certificates, curl, tar | Verified toolchain download | Used only for setup/build and HTTPS trust. |

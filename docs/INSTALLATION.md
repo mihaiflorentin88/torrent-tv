@@ -34,6 +34,7 @@ Every release also ships:
 - `SHA256SUMS` — verify with `sha256sum -c SHA256SUMS --ignore-missing`.
 - CycloneDX/SPDX SBOMs for the Go and npm dependencies.
 - The unsigned Tizen `FileListTV-<version>.wgt` (see [Samsung Tizen application](#samsung-tizen-application)).
+- The sideload `TorrentTV-<version>.apk` with its `.sha256` checksum (see [Android TV application](#android-tv-application-torrenttv)).
 
 Every binary except `filelist-streaming-linux-armv7`, `filelist-streaming-linux-arm64-headless`, and `filelist-streaming-linux-amd64-headless` contains both the desktop app and the headless server; those three are pure headless builds with the GUI excluded at build time (the armv7 build via its architecture constraints, the headless builds via the `headless` build tag). If you build from source instead, `make help` lists every target with the exact artifact it produces.
 
@@ -198,3 +199,7 @@ Replace the binary and restart; settings and catalog survive. On a Raspberry Pi,
 ## Samsung Tizen application
 
 Use the unsigned `FileListTV-<version>.wgt` from a tagged release, or build it with `make frontend` and `make validate-tizen-wgt`. The TV client runs on Samsung Tizen 5.0 and newer. See [TIZEN.md](TIZEN.md) for Developer Mode, TV pairing, and Apps2Samsung installation. The TV and server must share the same private LAN.
+
+## Android TV application (TorrentTV)
+
+Use the `TorrentTV-<version>.apk` from a tagged release, or build it with `make torrenttv-apk`. The app runs on Android TV 8.0 (API 26, the 2018 Android TV baseline) and newer, installs by sideload (`adb install`, or a file manager after allowing unknown sources per device), and updates by installing the newer APK over the old one. The app displays as TorrentTV and runs the same screens and design as the Tizen client (see [ANDROIDTV.md](ANDROIDTV.md) and [ADR-0009](adr/0009-android-tv-client-torrenttv.md)). The TV and server must share the same private LAN.
