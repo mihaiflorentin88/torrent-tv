@@ -6,7 +6,9 @@ import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
+import android.view.SurfaceView
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -15,6 +17,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
+import com.torrenttv.app.avplay.AvPlayBridge
 
 class MainActivity : Activity() {
     private lateinit var webView: WebView
@@ -23,10 +26,11 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val surface = SurfaceView(this)
         webView = WebView(this)
         // Transparent wherever the page is transparent: the video surface
-        // (added with the player bridge) shows through the player shell
-        // exactly like Tizen's AVPlay plane shows through the object element.
+        // below shows through the player shell exactly like Tizen's AVPlay
+        // plane shows through the object element.
         webView.setBackgroundColor(Color.TRANSPARENT)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -53,8 +57,16 @@ class MainActivity : Activity() {
                 return true
             }
         }
-        webView.addJavascriptInterface(Bridge(this, LinkNetworkInfo(this)), "FileListTVNative")
-        setContentView(webView)
+        val avplayBridge = AvPlayBridge(surface) { script ->
+            runOnUiThread { webView.evaluateJavascript(script, null) }
+        }
+        webView.addJavascriptInterface(Bridge(this, LinkNetworkInfo(this), avplayBridge), "FileListTVNative")
+        val layout = FrameLayout(this)
+        layout.addView(surface, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        layout.addView(webView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        setContentView(layout)
         webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
     }
 
