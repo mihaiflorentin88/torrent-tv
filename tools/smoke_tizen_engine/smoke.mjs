@@ -7,18 +7,18 @@
  * Selenoid (Aerokube) publishes historical official-Chrome images from a
  * reputable, widely used project; tag `63.0` is still pullable from Docker Hub
  * and is the oldest reliably obtainable engine at the Tizen 5.0 floor
- * (`clients/tizen/vite.config.ts` calls that floor "Tizen 5.0-era Chromium 63").
+ * (`clients/tv/vite.config.ts` calls that floor "Tizen 5.0-era Chromium 63").
  * The pin defines the guarantee's ceiling: engines older than Chrome 63 are
  * outside this smoke's claim.
  *
  * Three cases, one Make target (`make smoke-tizen-engine`):
- *   1. clean boot      — the real clients/tizen/dist boots with zero uncaught
+ *   1. clean boot      — the real clients/tv/dist boots with zero uncaught
  *                        page errors and zero console errors (warnings are
  *                        tolerated), and the startup handoff completes:
  *                        #startup is removed from the DOM by
- *                        window.FileListBoot.ready() (clients/tizen/startup.js),
+ *                        window.FileListBoot.ready() (clients/tv/startup.js),
  *                        which the app bundle calls right after the first
- *                        successful Preact render (clients/tizen/src/main.tsx).
+ *                        successful Preact render (clients/tv/src/main.tsx).
  *   2. injected error  — after boot, an async uncaught error is thrown via
  *                        Runtime.evaluate; the #fatal-error panel (ticket #80)
  *                        must exist, be visible, carry role="alert", and its
@@ -64,7 +64,7 @@ const MIME = {
 };
 
 // Boot only requires window.webapis to exist; these members mirror the subset
-// the client uses (clients/tizen/src/discovery.ts network, player avplay).
+// the client uses (clients/tv/src/discovery.ts network, player avplay).
 const WEBAPIS_STUB = `/* Served by tools/smoke_tizen_engine for dist/index.html's $WEBAPIS script tag. */
 window.webapis = {
   avplay: {
@@ -95,7 +95,7 @@ class SmokeFailure extends Error {
 }
 
 function parseArgs(argv) {
- const state = { cases: ['clean', 'fatal'], image: DEFAULT_IMAGE, dist: 'clients/tizen/dist' };
+ const state = { cases: ['clean', 'fatal'], image: DEFAULT_IMAGE, dist: 'clients/tv/dist' };
  for (let i = 0; i < argv.length; i++) {
   const name = argv[i];
   const value = argv[i + 1];

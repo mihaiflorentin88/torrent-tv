@@ -40,7 +40,7 @@ build: web desktop-assets
 ## desktop-assets: build the desktop GUI frontend -> internal/gui/static (Docker required)
 desktop-assets:
 	docker build -f deploy/docker/Dockerfile.frontend -t filelist-frontend-build .
-	docker run --rm --user "$(shell id -u):$(shell id -g)" -v "$(CURDIR):/src" -v /src/node_modules -v /src/clients/tizen/node_modules filelist-frontend-build npm run build:desktop
+	docker run --rm --user "$(shell id -u):$(shell id -g)" -v "$(CURDIR):/src" -v /src/node_modules -v /src/clients/tv/node_modules filelist-frontend-build npm run build:desktop
 
 # macOS .app bundle (make build-all first => universal arm64+amd64 via lipo).
 # With only one slice present it rebuilds and bundles the host-arch binary.
@@ -147,18 +147,18 @@ build-all: web desktop-assets | wails-cross
 ## web: build the browser UI -> internal/adapters/httpapi/static (Docker required)
 web:
 	docker build -f deploy/docker/Dockerfile.frontend -t filelist-frontend-build .
-	docker run --rm --user "$(shell id -u):$(shell id -g)" -v "$(CURDIR):/src" -v /src/node_modules -v /src/clients/tizen/node_modules filelist-frontend-build npm run build:web
+	docker run --rm --user "$(shell id -u):$(shell id -g)" -v "$(CURDIR):/src" -v /src/node_modules -v /src/clients/tv/node_modules filelist-frontend-build npm run build:web
 
 ## frontend: build browser + Tizen clients, then pack the WGT (Docker required)
 frontend:
 	docker build -f deploy/docker/Dockerfile.frontend -t filelist-frontend-build .
-	docker run --rm --user "$(shell id -u):$(shell id -g)" -v "$(CURDIR):/src" -v /src/node_modules -v /src/clients/tizen/node_modules filelist-frontend-build
+	docker run --rm --user "$(shell id -u):$(shell id -g)" -v "$(CURDIR):/src" -v /src/node_modules -v /src/clients/tv/node_modules filelist-frontend-build
 	$(MAKE) tizen-wgt
 
 ## tizen-wgt: pack the unsigned Tizen TV app -> clients/tizen/.build/artifacts/FileListTV-$(TIZEN_VERSION).wgt
 tizen-wgt:
 	python3 tools/tizen_wgt.py pack \
-		--source clients/tizen/dist \
+		--source clients/tv/dist \
 		--config clients/tizen/config.xml \
 		--icon clients/tizen/icon.png \
 		--output "$(TIZEN_WGT)" \
@@ -171,9 +171,9 @@ validate-tizen-wgt:
 		--target-tizen "$(TIZEN_TARGET)"
 
 # Headless old-engine boot smoke (ticket #84, parent #79): boots the real
-# clients/tizen/dist in the pinned oldest reliably obtainable old Chromium,
+# clients/tv/dist in the pinned oldest reliably obtainable old Chromium,
 # selenoid/chrome:63.0 = Google Chrome 63.0.3239.84 — the Tizen 5.0-era engine
-# floor ("Tizen 5.0-era Chromium 63", clients/tizen/vite.config.ts). Selenoid
+# floor ("Tizen 5.0-era Chromium 63", clients/tv/vite.config.ts). Selenoid
 # (Aerokube) still publishes the tag on Docker Hub. The pin is the guarantee's
 # ceiling: nothing older than Chrome 63 is covered. Requires Docker and
 # Node >= 22 (CI provides Node 24); uses --network host, so no ports are

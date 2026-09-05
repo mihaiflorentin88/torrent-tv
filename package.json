@@ -4,15 +4,15 @@
   "workspaces": [
     "web",
     "clients/shared",
-    "clients/tizen",
+    "clients/tv",
     "desktop"
   ],
   "scripts": {
-    "build": "npm run build -w @filelist/web && npm run build -w @filelist/tizen",
+    "build": "npm run build -w @filelist/web && npm run build -w @filelist/tv",
     "build:web": "npm run build -w @filelist/web",
-    "build:tizen": "npm run build -w @filelist/tizen",
+    "build:tv": "npm run build -w @filelist/tv",
     "build:desktop": "npm run build -w @filelist/desktop",
-    "test:clients": "npm run test -w @filelist/shared && npm run test -w @filelist/web && npm run test -w @filelist/tizen"
+    "test:clients": "npm run test -w @filelist/shared && npm run test -w @filelist/web && npm run test -w @filelist/tv"
   },
   "engines": {
     "node": ">=24"

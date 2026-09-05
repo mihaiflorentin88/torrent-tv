@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
-          test "$version" = "$(node -p "require('./clients/tizen/package.json').version")"
+          test "$version" = "$(node -p "require('./clients/tv/package.json').version")"
           python3 - "$version" <<'PY'
           import sys
           import xml.etree.ElementTree as ET
