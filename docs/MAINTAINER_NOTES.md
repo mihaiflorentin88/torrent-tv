@@ -42,12 +42,12 @@ This file records constraints and invariants that must survive context resets an
 - A tagged release additionally notifies the update feed service: the
   `notify-update-feed` job runs `scripts/notify-release.mjs` after a
   successful `publish` (GitHub environment `prod`, secret `FL_ADS_APIKEY` —
-  already configured by the user; never query or overwrite it). A failed
+  already configured by the user; never query or overwrite it). The feed
+  service authenticates the notification against its own API-key system:
+  `FL_ADS_APIKEY` must hold an admin account's API key. A failed
   notification must never delete or recreate the release or rerun
   `gh release create`; the service's five-minute reconciliation is the
-  automatic recovery. The matching receiver credential and endpoint
-  deployment on the update-feed service are still pending, and `prod`
-  environment approvals can delay the notification push.
+  automatic recovery.
 
 ## Next verification/implementation checkpoints
 
