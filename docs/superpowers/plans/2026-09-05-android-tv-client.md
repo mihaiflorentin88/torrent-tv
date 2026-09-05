@@ -1110,7 +1110,7 @@ class Bridge(private val activity: MainActivity) {
 ```bash
 cd clients/android-tv
 ./gradlew :app:syncWebApp :app:testDebugUnitTest :app:assembleDebug
-cmp ../../tv/dist/app.js app/src/main/assets/www/app.js && echo "bundle identical"
+cmp ../tv/dist/app.js app/src/main/assets/www/app.js && echo "bundle identical"
 grep -c "webapis" app/src/main/assets/www/index.html || true   # 0: Android page has no $WEBAPIS
 grep -q "TorrentTV" app/src/main/assets/www/index.html && echo "branded"
 ```
