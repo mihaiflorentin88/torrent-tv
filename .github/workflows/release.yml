@@ -18,10 +18,10 @@ jobs:
     name: Client release assets
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           package-manager-cache: false
@@ -48,7 +48,7 @@ jobs:
       - name: Validate the same WGT against the Tizen 5.0 support floor
         run: make validate-tizen-wgt TIZEN_TARGET=5.0
       - name: Set up JDK 17 for the TorrentTV shell
-        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: 17
@@ -56,19 +56,19 @@ jobs:
         run: sdkmanager --install "platforms;android-35" >/dev/null 2>&1 || true
       - name: Package TorrentTV APK
         run: make torrenttv-apk
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-torrenttv
           path: clients/android-tv/.build/artifacts/*
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: web-static
           path: internal/adapters/httpapi/static/
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-tizen
           path: clients/tizen/.build/artifacts/*.wgt
@@ -167,14 +167,14 @@ jobs:
             runner: macos-latest
             method: darwin-native
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: web-static
           path: internal/adapters/httpapi/static
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
@@ -185,7 +185,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
       # QEMU/binfmt for the arm64 wails-cross image on the amd64 ubuntu runner
       # (the Makefile ran these on an arm64 host; CI hosts are amd64).
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
         if: matrix.method == 'docker-cross' && matrix.goarch == 'arm64'
       # Desktop GUI assets -> internal/gui/static, embedded into every GUI
       # binary (Makefile desktop-assets prerequisite of build/build-all).
@@ -195,7 +195,7 @@ jobs:
       # GitHub macOS runners have no Docker, so build the desktop GUI assets
       # directly with the same npm script the dockerized desktop-assets target
       # runs (npm run build:desktop -> internal/gui/static).
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: matrix.method == 'darwin-native'
         with:
           node-version: 24
@@ -302,7 +302,7 @@ jobs:
           else
             tar -C staging -czf "${base}.tar.gz" .
           fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-${{ matrix.target }}
           path: filelist-streaming-*
@@ -318,20 +318,20 @@ jobs:
     needs: servers
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
       - name: Install wails3
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-darwin-arm64
           path: release-arm64
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-darwin-amd64
           path: release-amd64
@@ -357,7 +357,7 @@ jobs:
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
           ditto -c -k --keepParent "bin/FileList Streaming.app" "filelist-streaming-${version}-darwin-universal.zip"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-darwin-universal
           path: filelist-streaming-*
@@ -374,18 +374,18 @@ jobs:
       id-token: write # Request the OIDC identity used for provenance.
       attestations: write # Persist build provenance attestations.
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           package-manager-cache: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: release-*
           path: release
@@ -396,7 +396,7 @@ jobs:
           cyclonedx-gomod app -json -licenses -main cmd/server -output release/sbom-go.cdx.json .
           npm ci
           npm exec --yes --package=@cyclonedx/cyclonedx-npm@4.1.1 -- cyclonedx-npm --output-file release/sbom-npm.cdx.json --output-format JSON --omit dev
-      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+      - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           path: release
           format: spdx-json
@@ -435,7 +435,7 @@ jobs:
             case " ${payload[*]} " in *" ${f#./} "*) ;; *) rm -f "$f" ;; esac
           done
           sha256sum "${payload[@]}" > SHA256SUMS
-      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: release/*
       - name: Publish GitHub release
@@ -452,10 +452,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24
           package-manager-cache: false
