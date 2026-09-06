@@ -530,7 +530,82 @@ func fetchReleaseAsset(ctx context.Context, sel updates.Selection) (io.ReadClose
 		response.Body.Close()
 		return nil, fmt.Errorf("release asset %q responded %d", sel.AssetName, response.StatusCode)
 	}
+	if response.ContentLength <= 0 {
+		return response.Body, nil
+	}
+	// The release CDN occasionally closes the body a couple of hundred
+	// bytes before Content-Length with a clean EOF; hand back a reader
+	// that completes such tails with a ranged request instead of staging
+	// a truncated archive.
+	return &completingAssetBody{
+		ctx:    ctx,
+		client: client,
+		url:    response.Request.URL.String(),
+		length: response.ContentLength,
+		body:   response.Body,
+	}, nil
+}
+
+// maxAssetTailResumes bounds how often one body completes a short read
+// from the release CDN before giving the rest to the caller as-is.
+const maxAssetTailResumes = 5
+
+// completingAssetBody serves an asset body and, when the connection ends
+// cleanly before Content-Length bytes arrived, transparently resumes from
+// the missing offset with a ranged request against the same URL.
+type completingAssetBody struct {
+	ctx    context.Context
+	client *http.Client
+	url    string
+	length int64
+	body   io.ReadCloser
+	read   int64
+	resume int
+}
+
+func (b *completingAssetBody) Read(p []byte) (int, error) {
+	n, err := b.body.Read(p)
+	b.read += int64(n)
+	if err == nil {
+		return n, nil
+	}
+	// The tail arrives as a clean EOF when the transfer ended with its own
+	// terminal chunk, and as an unexpected EOF when the server advertised
+	// more Content-Length than it sent; both mean the connection ended
+	// before the asset was complete. Complete the tail while bytes are
+	// missing and the CDN still answers ranged requests.
+	short := errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+	if !short || b.read >= b.length || b.resume >= maxAssetTailResumes {
+		return n, err
+	}
+	b.resume++
+	resume, rerr := b.fetchRange(b.read)
+	if rerr != nil {
+		return n, err
+	}
+	b.body = resume
+	return n, nil
+}
+
+func (b *completingAssetBody) fetchRange(offset int64) (io.ReadCloser, error) {
+	request, err := http.NewRequestWithContext(b.ctx, http.MethodGet, b.url, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
+	response, err := b.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusPartialContent {
+		response.Body.Close()
+		return nil, fmt.Errorf("release asset resume responded %d", response.StatusCode)
+	}
 	return response.Body, nil
+}
+
+func (b *completingAssetBody) Close() error {
+	return b.body.Close()
 }
 
 // jitterInterval returns a bounded, always-positive offset in [5%, 15%)

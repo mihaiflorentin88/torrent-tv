@@ -1,9 +1,11 @@
 package composition
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -11,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -294,4 +297,79 @@ func TestNewReleaseFeedRequestCarriesOptionalGitHubToken(t *testing.T) {
 	if got := convention.Header.Get("Authorization"); got != "Bearer gh-convention-token" {
 		t.Fatalf("Authorization = %q, want the GH_TOKEN fallback", got)
 	}
+}
+
+// The release CDN occasionally closes the asset body a couple of hundred
+// bytes before Content-Length (observed deterministically from a Raspberry
+// Pi while curl on the same box receives the full file). The asset source
+// completes the tail with a ranged request instead of handing the updater
+// a truncated archive.
+func TestAssetBodyCompletesShortTail(t *testing.T) {
+	payload := bytes.Repeat([]byte("torrent-tv-update-payload-"), 400) // ~10KiB
+	total := int64(len(payload))
+	shortAt := total - 200
+
+	mux := http.NewServeMux()
+	served := map[string]int{}
+	mux.HandleFunc("/asset", func(w http.ResponseWriter, r *http.Request) {
+		served[r.Header.Get("Range")]++
+		body := payload
+		if fl := r.Header.Get("Range"); fl != "" {
+			start, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(fl, "bytes="), "-"), 10, 64)
+			if err != nil || start > total {
+				http.Error(w, "bad range", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+			body = payload[start:]
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, total-1, total))
+			w.WriteHeader(http.StatusPartialContent)
+		} else {
+			// The CDN advertises the full length but the connection dies
+			// before the tail: the header lies, the body ends early.
+			w.Header().Set("Content-Length", strconv.FormatInt(total, 10))
+			body = payload[:shortAt]
+		}
+		_, _ = w.Write(body)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/asset", nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	body := &completingAssetBody{ctx: context.Background(), client: client, url: srv.URL + "/asset",
+		length: res.ContentLength, body: res.Body, read: 0}
+
+	got, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if int64(len(got)) != total {
+		t.Fatalf("completed body = %d bytes, want %d", len(got), total)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatal("completed body content mismatch")
+	}
+	if served[""] != 1 {
+		t.Fatalf("initial requests = %d, want 1", served[""])
+	}
+	if served["bytes=0-"] != 0 && len(rangesSeen(served)) == 0 {
+		t.Fatal("no ranged resume request was made")
+	}
+}
+
+func rangesSeen(served map[string]int) []string {
+	out := []string{}
+	for k := range served {
+		if k != "" {
+			out = append(out, k)
+		}
+	}
+	return out
 }
