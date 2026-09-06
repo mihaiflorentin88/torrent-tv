@@ -138,13 +138,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The 2018 ATV floor and the newest bootable image: the same APK
-          # must boot and answer the d-pad across the supported range. TV
-          # images ship as x86 only (x86_64 exists for API 36, whose
-          # emulator does not boot on hosted runners).
+          # The 2018 ATV floor plus one newer image: the same APK must
+          # boot and answer the d-pad across the supported range. TV
+          # images ship as x86 only, and images above API 30 currently
+          # fail to boot on hosted runners (device offline for the whole
+          # boot window — the app is not involved).
           - api: 26
             arch: x86
-          - api: 34
+          - api: 30
             arch: x86
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
