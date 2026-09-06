@@ -78,7 +78,7 @@ jobs:
   servers:
     name: Server ${{ matrix.target }}
     needs: clients
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
