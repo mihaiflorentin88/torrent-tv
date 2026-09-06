@@ -128,15 +128,7 @@ jobs:
           api-level: 26
           target: android-tv
           arch: x86
-          script: |
-            adb wait-for-device
-            adb install -r clients/android-tv/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am start -n com.torrenttv.app/.MainActivity
-            ready=0; for i in $(seq 1 120); do if adb logcat -d -s TorrentTV 2>/dev/null | grep -q "ready"; then ready=1; break; fi; sleep 5; done
-            if [ "$ready" != "1" ]; then adb logcat -d | tail -2000 > torrenttv-logcat.txt; adb exec-out screencap -p > torrenttv-failure.png; exit 1; fi
-            dumped=0; for i in $(seq 1 20); do if adb shell uiautomator dump /sdcard/torrenttv.xml && adb pull /sdcard/torrenttv.xml torrenttv-smoke.xml; then dumped=1; break; fi; sleep 6; done
-            if [ "$dumped" != "1" ]; then adb logcat -d | tail -2000 > torrenttv-logcat.txt; adb exec-out screencap -p > torrenttv-failure.png; exit 1; fi
-            grep -q "TorrentTV" torrenttv-smoke.xml || (adb exec-out screencap -p > torrenttv-failure.png && exit 1)
+          script: bash clients/android-tv/scripts/boot_smoke.sh
       - name: Upload smoke evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

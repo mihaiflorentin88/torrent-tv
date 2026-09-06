@@ -236,7 +236,9 @@ jobs:
         if: matrix.method == 'darwin-native'
         env:
           CGO_FLAGS_X: ${{ matrix.cgo_flags }}
+          CC: /usr/bin/clang
         run: |
+          clang --version | head -1
           version="$(tr -d '[:space:]' < VERSION)"
           mkdir -p staging
           args=(darwin:build "ARCH=${{ matrix.goarch }}" "OUTPUT=staging/torrent-tv" "GO_LDFLAGS=-s -w -X github.com/mihaiflorentin88/torrent-tv/internal/composition.Version=${version}")
@@ -252,7 +254,10 @@ jobs:
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
           mkdir -p staging
-          read -ra mounts <<<"$(wails3 tool docker-mounts)"
+          # docker-mounts quotes each path; CI paths carry no spaces, so the
+          # embedded quotes would reach docker as part of the volume spec.
+          mounts_raw=$(wails3 tool docker-mounts | tr -d '"')
+          read -ra mounts <<<"$mounts_raw"
           docker_opts=(--rm)
           image='wails-cross'
           if [[ "${{ matrix.goarch }}" == "amd64" ]]; then
