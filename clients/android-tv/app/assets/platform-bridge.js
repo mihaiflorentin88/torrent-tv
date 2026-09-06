@@ -88,17 +88,21 @@
   else document.addEventListener('DOMContentLoaded', watchPlayerMode);
 
   // D-pad evidence for the CI boot smoke: the page's focus engine moves
-  // focus inside the WebView, which the Android view hierarchy cannot see.
-  // The focused control's data-focus-key goes to logcat through the native
-  // bridge when present — WebView console forwarding is not guaranteed on
-  // every ATV image — with the console line as a fallback. focusin
-  // bubbles, so one document listener covers it.
-  document.addEventListener('focusin', function(event) {
-    var target = event.target;
+  // focus inside the WebView, which the Android view hierarchy cannot
+  // see. A poll reports the focused control's data-focus-key to logcat
+  // through the native bridge whenever it changes — event delivery proved
+  // unreliable on the CI emulator, so the poll reads
+  // document.activeElement directly instead of trusting focusin.
+  var lastFocusKey = null;
+  function reportFocus() {
+    var target = document.activeElement;
     var key = target && target.getAttribute ? target.getAttribute('data-focus-key') : null;
-    if (!key) return;
+    if (!key || key === lastFocusKey) return;
+    lastFocusKey = key;
     var line = 'TVFOCUS ' + key;
     try { if (native && typeof native.log === 'function') native.log(line); } catch (error) { }
     console.log(line);
-  });
+  }
+  document.addEventListener('focusin', reportFocus);
+  window.setInterval(reportFocus, 300);
 }());

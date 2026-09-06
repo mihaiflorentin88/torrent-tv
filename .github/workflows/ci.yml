@@ -139,10 +139,11 @@ jobs:
       matrix:
         include:
           # The 2018 ATV floor and a current image: the same APK must boot
-          # and answer the d-pad across the supported range.
+          # and answer the d-pad across the supported range. (API 33's TV
+          # image no longer ships in the SDK repository.)
           - api: 26
             arch: x86
-          - api: 33
+          - api: 34
             arch: x86_64
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
