@@ -83,9 +83,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux GUI cross-builds: verbatim wails-cross docker invocation from
-          # the Makefile (build-arm64 / build-all linux lines,
-          # build/docker/Dockerfile.cross, -tags production,gtk3).
+          # Linux GUI builds: the wails-cross container keeps the shipped
+          # binaries on the Debian bookworm glibc the Makefile targets. Each
+          # slice runs on a matching-architecture runner (no QEMU), and the
+          # image layers are cached in the Actions cache.
           - target: linux-amd64-desktop
             goos: linux
             goarch: amd64
@@ -98,7 +99,7 @@ jobs:
             goarch: arm64
             suffix: ''
             format: tar
-            runner: ubuntu-latest
+            runner: ubuntu-24.04-arm
             method: docker-cross
           # Pure headless (Makefile build-all last line): CGO_ENABLED=0,
           # internal/gui compiles to the ErrNoDisplay fallback via build tags.
@@ -177,16 +178,16 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
       # wails3 (v3.0.0-beta.16, matches go.mod) drives the windows/darwin
       # task builds and the linux docker-mounts; Makefile WAILS3 var.
       - name: Install wails3
         if: matrix.method != 'pure'
         run: CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
-      # QEMU/binfmt for the arm64 wails-cross image on the amd64 ubuntu runner
-      # (the Makefile ran these on an arm64 host; CI hosts are amd64).
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
-        if: matrix.method == 'docker-cross' && matrix.goarch == 'arm64'
+      # Buildx + Actions-cache the wails-cross image layers (the apt/GTK
+      # toolchain install dominates the image build otherwise).
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        if: matrix.method == 'docker-cross'
       # Desktop GUI assets -> internal/gui/static, embedded into every GUI
       # binary (Makefile desktop-assets prerequisite of build/build-all).
       - name: Build desktop GUI assets (make desktop-assets)
@@ -205,20 +206,18 @@ jobs:
         run: |
           npm ci
           npm run build:desktop
-      # wails-cross image (make wails-cross: `wails3 task setup:docker` plus,
-      # for the amd64 slice, the `wails-cross:amd64` variant image). On this
-      # amd64 CI host the arm64 image is built (and later run) under emulation
-      # with --platform linux/arm64 — same shape as the Makefile's own
-      # `--platform linux/amd64` line for the amd64 image on arm64 hosts.
+      # wails-cross image (make wails-cross): the runner architecture
+      # matches the target platform, so the toolchain layers build natively
+      # (no QEMU) and restore from the Actions cache on every later run.
       - name: Build wails-cross image (make wails-cross)
         if: matrix.method == 'docker-cross'
         run: |
-          if [[ "${{ matrix.goarch }}" == "arm64" ]]; then
-            docker build --platform linux/arm64 -t wails-cross -f build/docker/Dockerfile.cross build/docker/
-          else
-            wails3 task setup:docker
-            docker build --platform linux/amd64 -t wails-cross:amd64 -f build/docker/Dockerfile.cross build/docker/
-          fi
+          tag="wails-cross"
+          if [[ "${{ matrix.goarch }}" == "amd64" ]]; then tag="wails-cross:amd64"; fi
+          docker buildx build --load --platform "linux/${{ matrix.goarch }}" \
+            --cache-from "type=gha,scope=wails-cross-${{ matrix.goarch }}" \
+            --cache-to "type=gha,scope=wails-cross-${{ matrix.goarch }},mode=max" \
+            -t "$tag" -f build/docker/Dockerfile.cross build/docker/
       # Windows: verbatim `wails3 task windows:build` from the Makefile
       # build-all windows lines. The task (build/windows/Taskfile.yml) is
       # cgo-free (CGO_ENABLED=0) and adds the icon/version .syso plus the
@@ -329,7 +328,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
       - name: Install wails3
         run: CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -385,7 +384,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
