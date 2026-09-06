@@ -395,12 +395,36 @@ const (
 	manifestReadLimit    = 1 << 20
 )
 
-func (releaseFeed) LatestRelease(ctx context.Context) (updates.Release, error) {
+// releaseFeedToken returns the optional GitHub API token for the release
+// feed: unauthenticated api.github.com requests share a 60-per-hour budget
+// per egress IP that hosted boxes exhaust quickly. Precedence: the
+// app-specific variable, then the two GitHub convention names.
+func releaseFeedToken() string {
+	for _, key := range []string{"TORRENT_TV_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"} {
+		if token := strings.TrimSpace(os.Getenv(key)); token != "" {
+			return token
+		}
+	}
+	return ""
+}
+
+func newReleaseFeedRequest(ctx context.Context) (*http.Request, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, releaseFeedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Accept", "application/vnd.github+json")
+	if token := releaseFeedToken(); token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	return request, nil
+}
+
+func (releaseFeed) LatestRelease(ctx context.Context) (updates.Release, error) {
+	request, err := newReleaseFeedRequest(ctx)
 	if err != nil {
 		return updates.Release{}, err
 	}
-	request.Header.Set("Accept", "application/vnd.github+json")
 	response, err := portalHTTPClient().Do(request)
 	if err != nil {
 		return updates.Release{}, err

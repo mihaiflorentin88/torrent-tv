@@ -263,3 +263,35 @@ func waitFor(t *testing.T, timeout time.Duration, what string, condition func() 
 	}
 	t.Fatalf("%s never happened within %s", what, timeout)
 }
+
+func TestNewReleaseFeedRequestCarriesOptionalGitHubToken(t *testing.T) {
+	t.Setenv("TORRENT_TV_GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	anonymous, err := newReleaseFeedRequest(context.Background())
+	if err != nil {
+		t.Fatalf("anonymous request: %v", err)
+	}
+	if anonymous.Header.Get("Authorization") != "" {
+		t.Fatalf("anonymous request carried Authorization %q", anonymous.Header.Get("Authorization"))
+	}
+
+	t.Setenv("TORRENT_TV_GITHUB_TOKEN", "app-specific-token")
+	appSpecific, err := newReleaseFeedRequest(context.Background())
+	if err != nil {
+		t.Fatalf("app-specific request: %v", err)
+	}
+	if got := appSpecific.Header.Get("Authorization"); got != "Bearer app-specific-token" {
+		t.Fatalf("Authorization = %q, want the app-specific token", got)
+	}
+
+	t.Setenv("TORRENT_TV_GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "gh-convention-token")
+	convention, err := newReleaseFeedRequest(context.Background())
+	if err != nil {
+		t.Fatalf("convention request: %v", err)
+	}
+	if got := convention.Header.Get("Authorization"); got != "Bearer gh-convention-token" {
+		t.Fatalf("Authorization = %q, want the GH_TOKEN fallback", got)
+	}
+}
