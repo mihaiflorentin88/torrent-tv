@@ -22,7 +22,8 @@ func TestLinuxEnableDisableRoundTrip(t *testing.T) {
 		t.Fatalf("desktop entry: %v", err)
 	}
 	text := string(b)
-	for _, want := range []string{"[Desktop Entry]", `Exec="/opt/fs/torrent-tv" --minimized --data-dir "/opt/fs/data"`, "Type=Application"} {
+	// quoteExec quotes every argument (XDG desktop entry Exec spec).
+	for _, want := range []string{"[Desktop Entry]", `Exec="/opt/fs/torrent-tv" "--minimized" "--data-dir" "/opt/fs/data"`, "Type=Application"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("desktop entry missing %q in:\n%s", want, text)
 		}

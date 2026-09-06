@@ -3,7 +3,7 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 COPY web/package.json web/package.json
 COPY clients/shared/package.json clients/shared/package.json
-COPY clients/tizen/package.json clients/tizen/package.json
+COPY clients/tv/package.json clients/tv/package.json
 COPY desktop/package.json desktop/package.json
 RUN npm ci
 RUN chmod -R a+rwX /src/node_modules
