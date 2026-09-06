@@ -189,11 +189,11 @@ type boundedReader struct {
 }
 
 func (b *boundedReader) Read(p []byte) (int, error) {
-	if b.remaining < 0 {
+	if b.remaining <= 0 {
 		return 0, errOverLimit
 	}
 	if int64(len(p)) > b.remaining {
-		p = p[:b.remaining+1]
+		p = p[:b.remaining]
 	}
 	n, err := b.r.Read(p)
 	b.remaining -= int64(n)

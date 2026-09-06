@@ -501,15 +501,31 @@ func (m *Manager) install(ctx context.Context, cancel context.CancelFunc, sel Se
 			return
 		}
 	}
-	body, err := m.deps.Assets(ctx, sel)
-	if err != nil {
-		failure = fmt.Errorf("download release asset: %w", err)
-		return
+	// A release download occasionally truncates mid-stream (observed as a
+	// fixed short body from the release CDN); the digest check catches it,
+	// so retry the whole download a bounded number of times before giving
+	// the operation up.
+	var staged *Staged
+	for attempt := 1; ; attempt++ {
+		body, err := m.deps.Assets(ctx, sel)
+		if err != nil {
+			failure = fmt.Errorf("download release asset: %w", err)
+			return
+		}
+		staged, err = StageArchive(m.deps.InstallDir, sel, body, DefaultLimits())
+		body.Close()
+		if err == nil || !errors.Is(err, ErrChecksumMismatch) || attempt >= 3 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			failure = fmt.Errorf("download release asset: %w", ctx.Err())
+			return
+		case <-time.After(time.Duration(attempt) * 3 * time.Second):
+		}
 	}
-	defer body.Close()
-	staged, err := StageArchive(m.deps.InstallDir, sel, body, DefaultLimits())
-	if err != nil {
-		failure = fmt.Errorf("stage release asset: %w", err)
+	if staged == nil {
+		failure = fmt.Errorf("stage release asset: %w", ErrChecksumMismatch)
 		return
 	}
 	payload, err := staged.Extract(m.deps.InstallDir, m.deps.Identity.Target(), DefaultLimits())
