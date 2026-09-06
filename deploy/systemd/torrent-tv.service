@@ -12,6 +12,10 @@ WorkingDirectory=/var/lib/torrent-tv
 ExecStart=/var/lib/torrent-tv/bin/torrent-tv serve --data-dir /var/lib/torrent-tv/data
 Restart=always
 RestartSec=10
+# Self-update handoffs spawn a detached helper before the main process
+# exits; control-group cleanup would kill it mid-swap, so only the main
+# process is ever signalled.
+KillMode=process
 TimeoutStopSec=20
 UMask=0027
 NoNewPrivileges=true
