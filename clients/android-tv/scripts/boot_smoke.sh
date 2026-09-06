@@ -42,9 +42,10 @@ until adb shell uiautomator dump /sdcard/torrenttv.xml >/dev/null 2>&1 \
 done
 
 # D-pad probe: platform-bridge.js mirrors the page's focused control into
-# logcat (console), so remote navigation is provable from adb without
-# seeing inside the WebView. DPAD_DOWN must move focus; DPAD_UP must move
-# it again.
+# logcat (native bridge), so remote navigation is provable from adb without
+# seeing inside the WebView. The first press also primes the probe: the
+# page's engine focuses a control in response, the poll reports it, and
+# every later press must move that focus.
 focus_key() {
   adb logcat -d 2>/dev/null | grep -o 'TVFOCUS [A-Za-z0-9_-]*' | tail -1 | cut -d' ' -f2
 }
@@ -55,12 +56,13 @@ fail_with_evidence() {
   exit 1
 }
 
+adb shell input keyevent KEYCODE_DPAD_DOWN
 deadline=$(( $(date +%s) + 60 ))
 base=""
 while [ -z "$base" ]; do
   base="$(focus_key)"
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "page never reported a focused control" >&2
+    echo "d-pad press never focused a page control" >&2
     fail_with_evidence
   fi
   sleep 2

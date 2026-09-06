@@ -138,12 +138,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The 2018 ATV floor and a current image: the same APK must boot
-          # and answer the d-pad across the supported range. (API 33's TV
-          # image no longer ships in the SDK repository.)
+          # The 2018 ATV floor and the newest image: the same APK must boot
+          # and answer the d-pad across the supported range. TV images ship
+          # as x86 below API 36; x86_64 exists only for API 36.
           - api: 26
             arch: x86
-          - api: 34
+          - api: 36
             arch: x86_64
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

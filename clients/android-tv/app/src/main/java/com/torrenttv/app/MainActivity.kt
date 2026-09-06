@@ -75,12 +75,25 @@ class MainActivity : Activity() {
             if (event?.repeatCount == 0) webView.evaluateJavascript(BackKeys.downScript(), null)
             return true
         }
+        // DPAD and ENTER feed the page's focus engine as synthetic DOM key
+        // events (DpadKeys) — the same contract Tizen delivers — and the
+        // native key is consumed so the WebView's own focus search can
+        // never move focus a second time. Key repeats forward too: held
+        // arrows keep scrolling.
+        DpadKeys.downScript(keyCode)?.let { script ->
+            webView.evaluateJavascript(script, null)
+            return true
+        }
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             webView.evaluateJavascript(BackKeys.upScript(), null)
+            return true
+        }
+        DpadKeys.upScript(keyCode)?.let { script ->
+            webView.evaluateJavascript(script, null)
             return true
         }
         return super.onKeyUp(keyCode, event)
