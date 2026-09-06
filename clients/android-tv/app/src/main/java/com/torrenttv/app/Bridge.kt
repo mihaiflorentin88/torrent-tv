@@ -3,6 +3,7 @@ package com.torrenttv.app
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.webkit.JavascriptInterface
 import com.torrenttv.app.avplay.AvPlayBridge
 
@@ -33,6 +34,14 @@ class Bridge(
         true
     } catch (error: ActivityNotFoundException) {
         false
+    }
+
+    // Direct logcat writes for the CI boot smoke: WebView console messages
+    // do not reach logcat on every ATV image, so the D-pad evidence must
+    // not depend on console forwarding.
+    @JavascriptInterface
+    fun log(message: String) {
+        Log.i("TVFOCUS", message)
     }
 
     // AVPlay-shaped player commands; see avplay/AvPlayBridge.kt.

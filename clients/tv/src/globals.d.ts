@@ -14,6 +14,7 @@ interface Window {
     getSubnetMask(): string;
     open(url: string): void;
     openExternal(url: string): boolean;
+    log(message: string): void;
     setDisplayRect(x: number, y: number, width: number, height: number): void;
     setDisplayMethod(mode: string): void;
     prepareAsync(successToken: string, errorToken: string): void;

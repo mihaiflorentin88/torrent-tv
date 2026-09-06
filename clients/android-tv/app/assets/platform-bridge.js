@@ -89,12 +89,16 @@
 
   // D-pad evidence for the CI boot smoke: the page's focus engine moves
   // focus inside the WebView, which the Android view hierarchy cannot see.
-  // Mirroring the focused control's data-focus-key through the console (the
-  // WebView relays console messages to logcat) makes remote navigation
-  // provable from adb. focusin bubbles, so one document listener covers it.
+  // The focused control's data-focus-key goes to logcat through the native
+  // bridge when present — WebView console forwarding is not guaranteed on
+  // every ATV image — with the console line as a fallback. focusin
+  // bubbles, so one document listener covers it.
   document.addEventListener('focusin', function(event) {
     var target = event.target;
     var key = target && target.getAttribute ? target.getAttribute('data-focus-key') : null;
-    if (key) console.log('TVFOCUS ' + key);
+    if (!key) return;
+    var line = 'TVFOCUS ' + key;
+    try { if (native && typeof native.log === 'function') native.log(line); } catch (error) { }
+    console.log(line);
   });
 }());

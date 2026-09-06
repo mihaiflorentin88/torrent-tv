@@ -152,6 +152,11 @@ jobs:
         with:
           name: torrenttv-apk-ci
           path: clients/android-tv/app/build/outputs/apk/debug
+      # The runner installs this again inside the emulator step with the
+      # output discarded; installing it here keeps a real error message
+      # visible when an image download fails.
+      - name: Install the ATV system image (API ${{ matrix.api }})
+        run: sdkmanager --install "system-images;android-${{ matrix.api }};android-tv;${{ matrix.arch }}"
       - name: Boot smoke and d-pad probe
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
