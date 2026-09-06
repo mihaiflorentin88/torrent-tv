@@ -60,13 +60,36 @@ const (
 )
 
 // DetectSupervision reports the process supervision from the environment:
-// a NOTIFY_SOCKET is the sd_notify convention that marks a systemd
-// service. Everything else uses the update-helper relaunch.
+// a NOTIFY_SOCKET is the sd_notify convention that marks a systemd service,
+// and a cgroup path ending in a .service unit marks a real systemd service
+// of any type — Type=simple units never receive NOTIFY_SOCKET, and the
+// update-helper relaunch dies with the service cgroup under systemd's
+// default KillMode. Everything else uses the update-helper relaunch.
 func DetectSupervision() Supervision {
 	if os.Getenv("NOTIFY_SOCKET") != "" {
 		return SupervisionSystemd
 	}
+	if cg, err := os.ReadFile("/proc/self/cgroup"); err == nil &&
+		cgroupIndicatesSystemdService(string(cg)) {
+		return SupervisionSystemd
+	}
 	return SupervisionPlain
+}
+
+// cgroupIndicatesSystemdService reports whether a /proc/self/cgroup payload
+// places the process inside a systemd-managed .service unit — any path
+// element ending in .service counts (user services nest deeper, e.g.
+// user@1000.service/app.slice/...). Containers, Kubernetes pods, and the
+// root cgroup stay unsupervised.
+func cgroupIndicatesSystemdService(cgroup string) bool {
+	for _, line := range strings.Split(cgroup, "\n") {
+		for _, element := range strings.Split(strings.TrimSpace(line), "/") {
+			if strings.HasSuffix(element, ".service") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // RelaunchArgsEnv carries the JSON-encoded arguments a helper-relaunched

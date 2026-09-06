@@ -901,3 +901,22 @@ func readEventFailures(t *testing.T, path string) []string {
 
 // compile-time proof the coordinator satisfies the S4 API contract.
 var _ API = (*Manager)(nil)
+
+func TestCgroupIndicatesSystemdService(t *testing.T) {
+	cases := map[string]bool{
+		"0::/system.slice/torrent-tv.service\n":                    true,  // cgroup v2 system service
+		"12:pids:/system.slice/torrent-tv.service\n":               true,  // cgroup v1 system service
+		"0::/user.slice/user-1000.slice/user@1000.service/app\n":   true,  // user service
+		"0::/docker/4f1d0f2c1e9b\n":                                false, // container
+		"0::/kubepods/burstable/podabc\n":                          false, // kubernetes
+		"0::/\n":                                                   false, // root cgroup
+	}
+	for cgroup, want := range cases {
+		if got := cgroupIndicatesSystemdService(cgroup); got != want {
+			t.Errorf("cgroupIndicatesSystemdService(%q) = %v, want %v", cgroup, got, want)
+		}
+	}
+	if cgroupIndicatesSystemdService("") {
+		t.Error("empty cgroup content must not indicate systemd supervision")
+	}
+}
