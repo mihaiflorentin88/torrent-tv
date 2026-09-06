@@ -234,12 +234,16 @@ func TestAssembledAppServesPortalAndUpdateRoutes(t *testing.T) {
 	}
 }
 
-// newTestApp assembles an app against a temporary settings file.
+// newTestApp assembles an app against a temporary settings file. The peer
+// port pins to 0 (the engine's documented OS-assigned mode): the 42069
+// default binds a global fixed port and collides across parallel test
+// binaries and packages.
 func newTestApp(t *testing.T) *App {
 	t.Helper()
 	dir := t.TempDir()
 	settingsPath := filepath.Join(dir, "settings.json")
 	body := `{"listenAddress": "127.0.0.1:0",` +
+		` "torrentPeerPort": 0,` +
 		` "databasePath": "` + filepath.Join(dir, "test.db") + `",` +
 		` "torrentSessionDir": "` + filepath.Join(dir, "torrent") + `",` +
 		` "artworkCachePath": "` + filepath.Join(dir, "artwork") + `",` +
@@ -343,8 +347,10 @@ func TestAssetBodyCompletesShortTail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	body := &completingAssetBody{ctx: context.Background(), client: client, url: srv.URL + "/asset",
-		length: res.ContentLength, body: res.Body, read: 0}
+	body := &completingAssetBody{
+		ctx: context.Background(), client: client, url: srv.URL + "/asset",
+		length: res.ContentLength, body: res.Body, read: 0,
+	}
 
 	got, err := io.ReadAll(body)
 	if err != nil {
@@ -410,8 +416,10 @@ func TestAssetBodyCompletesChunkedShortTail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("do: %v", err)
 	}
-	body := &completingAssetBody{ctx: context.Background(), client: client, url: srv.URL + "/chunked",
-		length: total, body: res.Body, read: 0}
+	body := &completingAssetBody{
+		ctx: context.Background(), client: client, url: srv.URL + "/chunked",
+		length: total, body: res.Body, read: 0,
+	}
 
 	got, err := io.ReadAll(body)
 	if err != nil {

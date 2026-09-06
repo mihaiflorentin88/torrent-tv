@@ -66,11 +66,18 @@ const (
 // update-helper relaunch dies with the service cgroup under systemd's
 // default KillMode. Everything else uses the update-helper relaunch.
 func DetectSupervision() Supervision {
-	if os.Getenv("NOTIFY_SOCKET") != "" {
+	cg, _ := os.ReadFile("/proc/self/cgroup")
+	return supervisionFromEnvironment(os.Getenv("NOTIFY_SOCKET"), string(cg))
+}
+
+// supervisionFromEnvironment is DetectSupervision's decision table over the
+// raw inputs, pure so the test suite can pin every branch without assuming
+// the host it runs on.
+func supervisionFromEnvironment(notifySocket, cgroup string) Supervision {
+	if notifySocket != "" {
 		return SupervisionSystemd
 	}
-	if cg, err := os.ReadFile("/proc/self/cgroup"); err == nil &&
-		cgroupIndicatesSystemdService(string(cg)) {
+	if cgroupIndicatesSystemdService(cgroup) {
 		return SupervisionSystemd
 	}
 	return SupervisionPlain

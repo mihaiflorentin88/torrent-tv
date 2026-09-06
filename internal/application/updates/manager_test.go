@@ -685,8 +685,30 @@ func TestHandoffSelectionBySupervision(t *testing.T) {
 			t.Fatalf("DetectSupervision with NOTIFY_SOCKET = %q", got)
 		}
 		t.Setenv("NOTIFY_SOCKET", "")
-		if got := DetectSupervision(); got != SupervisionPlain {
-			t.Fatalf("DetectSupervision without NOTIFY_SOCKET = %q", got)
+		// The wrapper reads the live cgroup, and CI frequently runs inside a
+		// systemd user .service slice: the plain-expectation belongs to the
+		// pure decision table below, not to whatever host executes it.
+		if cg, err := os.ReadFile("/proc/self/cgroup"); err != nil || !cgroupIndicatesSystemdService(string(cg)) {
+			if got := DetectSupervision(); got != SupervisionPlain {
+				t.Fatalf("DetectSupervision without NOTIFY_SOCKET = %q", got)
+			}
+		}
+		for _, tc := range []struct {
+			name         string
+			notifySocket string
+			cgroup       string
+			want         Supervision
+		}{
+			{"socket marks systemd on any cgroup", "/run/systemd/notify", "0::/", SupervisionSystemd},
+			{"service cgroup marks systemd without a socket", "", "12:pids:/user.slice/user-1000.slice/user@1000.service/app.slice/run-rkida.service", SupervisionSystemd},
+			{"plain cgroup stays unsupervised", "", "0::/", SupervisionPlain},
+			{"container cgroup stays unsupervised", "", "9:cpuset:/docker/a1b2c3", SupervisionPlain},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				if got := supervisionFromEnvironment(tc.notifySocket, tc.cgroup); got != tc.want {
+					t.Fatalf("supervisionFromEnvironment(%q, %q) = %q, want %q", tc.notifySocket, tc.cgroup, got, tc.want)
+				}
+			})
 		}
 	})
 }
@@ -904,12 +926,12 @@ var _ API = (*Manager)(nil)
 
 func TestCgroupIndicatesSystemdService(t *testing.T) {
 	cases := map[string]bool{
-		"0::/system.slice/torrent-tv.service\n":                    true,  // cgroup v2 system service
-		"12:pids:/system.slice/torrent-tv.service\n":               true,  // cgroup v1 system service
-		"0::/user.slice/user-1000.slice/user@1000.service/app\n":   true,  // user service
-		"0::/docker/4f1d0f2c1e9b\n":                                false, // container
-		"0::/kubepods/burstable/podabc\n":                          false, // kubernetes
-		"0::/\n":                                                   false, // root cgroup
+		"0::/system.slice/torrent-tv.service\n":                  true,  // cgroup v2 system service
+		"12:pids:/system.slice/torrent-tv.service\n":             true,  // cgroup v1 system service
+		"0::/user.slice/user-1000.slice/user@1000.service/app\n": true,  // user service
+		"0::/docker/4f1d0f2c1e9b\n":                              false, // container
+		"0::/kubepods/burstable/podabc\n":                        false, // kubernetes
+		"0::/\n":                                                 false, // root cgroup
 	}
 	for cgroup, want := range cases {
 		if got := cgroupIndicatesSystemdService(cgroup); got != want {
