@@ -3,9 +3,9 @@
 # own ready log (onPageFinished), and capture the UI hierarchy. Every stage
 # carries an explicit deadline so a slow emulator fails loudly with evidence
 # instead of hanging or racing a fixed sleep.
+# Runs from the repository root (the CI workflow's working directory).
 set -u
 
-cd "$(dirname "$0")/../.." || exit 1
 APK="clients/android-tv/app/build/outputs/apk/debug/app-debug.apk"
 READY_BUDGET=${READY_BUDGET:-600}
 DUMP_BUDGET=${DUMP_BUDGET:-180}
