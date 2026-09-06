@@ -56,7 +56,7 @@ fail_with_evidence() {
   exit 1
 }
 
-adb shell input keyevent KEYCODE_DPAD_DOWN
+adb shell input keyevent KEYCODE_DPAD_RIGHT
 deadline=$(( $(date +%s) + 60 ))
 base=""
 while [ -z "$base" ]; do
@@ -85,8 +85,10 @@ wait_focus_change() {
   done
 }
 
-adb shell input keyevent KEYCODE_DPAD_DOWN
-down_target="$(wait_focus_change "$base")"
-adb shell input keyevent KEYCODE_DPAD_UP
-wait_focus_change "$down_target" >/dev/null
-echo "d-pad navigation verified: ${base} -> ${down_target} -> $(focus_key)"
+# RIGHT primed the focus onto a control; LEFT and RIGHT must walk it back
+# and forth (adjacent columns exist on every screen, including Setup).
+adb shell input keyevent KEYCODE_DPAD_LEFT
+left_target="$(wait_focus_change "$base")"
+adb shell input keyevent KEYCODE_DPAD_RIGHT
+wait_focus_change "$left_target" >/dev/null
+echo "d-pad navigation verified: ${base} -> ${left_target} -> $(focus_key)"

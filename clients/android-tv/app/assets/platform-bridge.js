@@ -104,8 +104,20 @@
   console.log(line);
  }
  document.addEventListener('focusin', reportFocus);
- window.setInterval(reportFocus, 300);
-
+ var ticks = 0;
+ window.setInterval(function() {
+  ticks += 1;
+  // Bounded status heartbeat: if focus never lands on a control, these
+  // lines say whether activeElement stays body — the smoke's logcat
+  // evidence then answers why without another guessing round.
+  if (ticks % 10 === 0 && ticks <= 100) {
+   var active = document.activeElement;
+   var tag = active && active.tagName ? active.tagName : 'none';
+   var activeKey = active && active.getAttribute ? active.getAttribute('data-focus-key') : null;
+   try { if (native && typeof native.log === 'function') native.log('TVBOOT tick ' + ticks + ' active=' + tag + ' key=' + activeKey); } catch (error) { }
+  }
+  reportFocus();
+ }, 300);
  try { if (native && typeof native.log === 'function') native.log('TVBOOT bridge attached'); } catch (error) { }
  console.log('TVBOOT bridge attached');
 }());

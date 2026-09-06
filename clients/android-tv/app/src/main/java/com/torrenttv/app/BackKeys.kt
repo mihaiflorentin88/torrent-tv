@@ -11,6 +11,14 @@ object BackKeys {
     fun upScript(): String = keyScript("keyup")
 
     private fun keyScript(type: String): String =
-        "(function(){document.dispatchEvent(new KeyboardEvent('$type'," +
-            "{key:'XF86Back',keyCode:10009,which:10009,bubbles:true,cancelable:true}));})();"
+        // Same forced-property pattern as DpadKeys: old TV WebViews ignore
+        // KeyboardEvent init-dict fields, and the page matches on either
+        // key or keyCode.
+        "(function(){" +
+            "var e=document.createEvent('KeyboardEvent');" +
+            "e.initKeyboardEvent('$type',true,true,window,'XF86Back',0,'',false,'');" +
+            "Object.defineProperty(e,'key',{get:function(){return 'XF86Back'}});" +
+            "Object.defineProperty(e,'keyCode',{get:function(){return 10009}});" +
+            "Object.defineProperty(e,'which',{get:function(){return 10009}});" +
+            "document.dispatchEvent(e);})();"
 }

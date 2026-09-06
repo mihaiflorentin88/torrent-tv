@@ -20,8 +20,16 @@ object DpadKeys {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> "Enter" to 13
             else -> return null
         }
-        return "(function(){document.dispatchEvent(new KeyboardEvent('$type'," +
-            "{key:'$name',keyCode:$code,which:$code,bubbles:true,cancelable:true}));})();"
+        // Old TV WebViews ignore parts of the KeyboardEvent init dict, so
+        // key/keyCode/which are forced with defineProperty after init: the
+        // page's remoteAction matches on either field.
+        return "(function(){" +
+            "var e=document.createEvent('KeyboardEvent');" +
+            "e.initKeyboardEvent('$type',true,true,window,'$name',0,'',false,'');" +
+            "Object.defineProperty(e,'key',{get:function(){return '$name'}});" +
+            "Object.defineProperty(e,'keyCode',{get:function(){return $code}});" +
+            "Object.defineProperty(e,'which',{get:function(){return $code}});" +
+            "document.dispatchEvent(e);})();"
     }
 
     private object KeyEvent {
