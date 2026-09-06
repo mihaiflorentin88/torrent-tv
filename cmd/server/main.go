@@ -156,6 +156,21 @@ func runServe(dataDir string, update bool, log logger) error {
 		log.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
+	// The listener also closes when the startup auto-apply drains serving
+	// to stage and swap an update. Falling through to the deferred Close
+	// would kill the process mid-operation — every restart would then
+	// re-apply and exit the same way, an update that never lands. Hold the
+	// process until the operation ends: on success the handoff exits the
+	// process from inside the apply, and a failed or absent operation
+	// releases the wait for the normal shutdown path. Bounded so a wedged
+	// operation can still be stopped by the supervisor.
+	if app.Updates != nil {
+		waitCtx, cancelWait := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancelWait()
+		if err := app.Updates.WaitIdle(waitCtx); err != nil {
+			log.Warn("update operation still running at shutdown", "error", err)
+		}
+	}
 	return nil
 }
 
