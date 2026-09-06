@@ -122,18 +122,48 @@ jobs:
         run: cd clients/android-tv && ./gradlew :app:testDebugUnitTest
       - name: Build the APK
         run: cd clients/android-tv && ./gradlew :app:assembleDebug
-      - name: Boot smoke on the API 26 ATV emulator (the 2018 floor)
+      - name: Upload smoke-tested APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: torrenttv-apk-ci
+          path: clients/android-tv/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  android-tv-smoke:
+    name: ATV boot smoke (API ${{ matrix.api }})
+    needs: android-tv
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The 2018 ATV floor and a current image: the same APK must boot
+          # and answer the d-pad across the supported range.
+          - api: 26
+            arch: x86
+          - api: 33
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: torrenttv-apk-ci
+          path: clients/android-tv/app/build/outputs/apk/debug
+      - name: Boot smoke and d-pad probe
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
-          api-level: 26
+          api-level: ${{ matrix.api }}
           target: android-tv
-          arch: x86
+          arch: ${{ matrix.arch }}
           script: bash clients/android-tv/scripts/boot_smoke.sh
       - name: Upload smoke evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: torrenttv-smoke
+          name: torrenttv-smoke-api${{ matrix.api }}
           path: |
             torrenttv-smoke.xml
             torrenttv-failure.png

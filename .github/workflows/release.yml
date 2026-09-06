@@ -175,10 +175,13 @@ jobs:
         with:
           name: web-static
           path: internal/adapters/httpapi/static
+      # cache: false — zizmor cache-poisoning: release artifacts must never
+      # come from a build cache an attacker could poison. Release builds are
+      # rare enough to pay the cold build.
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
       # wails3 (v3.0.0-beta.16, matches go.mod) drives the windows/darwin
       # task builds and the linux docker-mounts; Makefile WAILS3 var.
       - name: Install wails3
@@ -328,7 +331,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
       - name: Install wails3
         run: CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -384,7 +387,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
