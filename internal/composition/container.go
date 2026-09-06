@@ -454,6 +454,7 @@ func (releaseFeed) LatestRelease(ctx context.Context) (updates.Release, error) {
 		Assets      []struct {
 			Name               string `json:"name"`
 			BrowserDownloadURL string `json:"browser_download_url"`
+			Size               int64  `json:"size"`
 		} `json:"assets"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, releaseFeedReadLimit)).Decode(&body); err != nil {
@@ -468,7 +469,7 @@ func (releaseFeed) LatestRelease(ctx context.Context) (updates.Release, error) {
 		PublishedAt: body.PublishedAt,
 	}
 	for _, asset := range body.Assets {
-		release.Assets = append(release.Assets, updates.Asset{Name: asset.Name, URL: asset.BrowserDownloadURL})
+		release.Assets = append(release.Assets, updates.Asset{Name: asset.Name, URL: asset.BrowserDownloadURL, Size: asset.Size})
 	}
 	return release, nil
 }
@@ -530,7 +531,13 @@ func fetchReleaseAsset(ctx context.Context, sel updates.Selection) (io.ReadClose
 		response.Body.Close()
 		return nil, fmt.Errorf("release asset %q responded %d", sel.AssetName, response.StatusCode)
 	}
-	if response.ContentLength <= 0 {
+	length := response.ContentLength
+	if length <= 0 {
+		// Chunked responses carry no length; the release metadata's
+		// published asset size is the completeness yardstick instead.
+		length = sel.AssetSize
+	}
+	if length <= 0 {
 		return response.Body, nil
 	}
 	// The release CDN occasionally closes the body a couple of hundred
@@ -541,7 +548,7 @@ func fetchReleaseAsset(ctx context.Context, sel updates.Selection) (io.ReadClose
 		ctx:    ctx,
 		client: client,
 		url:    response.Request.URL.String(),
-		length: response.ContentLength,
+		length: length,
 		body:   response.Body,
 	}, nil
 }

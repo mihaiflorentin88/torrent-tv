@@ -373,3 +373,54 @@ func rangesSeen(served map[string]int) []string {
 	}
 	return out
 }
+
+// Chunked CDN responses carry no Content-Length; the published asset size
+// from the release metadata then drives the tail completion.
+func TestAssetBodyCompletesChunkedShortTail(t *testing.T) {
+	payload := bytes.Repeat([]byte("chunked-updater-payload-"), 400) // ~9600 bytes
+	total := int64(len(payload))
+	shortAt := total - 150
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/chunked", func(w http.ResponseWriter, r *http.Request) {
+		if fl := r.Header.Get("Range"); fl != "" {
+			start, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(fl, "bytes="), "-"), 10, 64)
+			if err != nil || start > total {
+				http.Error(w, "bad range", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write(payload[start:])
+			return
+		}
+		// Chunked transfer, early clean close, no Content-Length at all.
+		_, _ = w.Write(payload[:shortAt])
+		// Closing the handler ends the chunked body with its terminal
+		// chunk (a clean EOF for the client) before the full length.
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/chunked", nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	body := &completingAssetBody{ctx: context.Background(), client: client, url: srv.URL + "/chunked",
+		length: total, body: res.Body, read: 0}
+
+	got, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if int64(len(got)) != total {
+		t.Fatalf("completed body = %d bytes, want %d", len(got), total)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatal("chunked completion content mismatch")
+	}
+}

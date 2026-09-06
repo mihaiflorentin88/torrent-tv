@@ -52,6 +52,10 @@ var (
 type Asset struct {
 	Name string
 	URL  string
+	// Size is the published byte size of the asset; the downloader uses it
+	// to detect and complete truncated transfers when the CDN serves the
+	// body without a Content-Length.
+	Size int64
 }
 
 // Release is the repository metadata for one release.
@@ -87,6 +91,8 @@ type Selection struct {
 	AssetName   string
 	AssetURL    string
 	SHA256      string
+	// AssetSize is the published byte size of the selected asset.
+	AssetSize int64
 }
 
 // Resolver turns the public announcement hint into an exact repository
@@ -180,6 +186,7 @@ func (r *Resolver) Resolve(ctx context.Context, hint string) (Selection, error) 
 		AssetName:   name,
 		AssetURL:    asset.URL,
 		SHA256:      digest,
+		AssetSize:   asset.Size,
 	}, nil
 }
 
