@@ -182,7 +182,7 @@ jobs:
       # task builds and the linux docker-mounts; Makefile WAILS3 var.
       - name: Install wails3
         if: matrix.method != 'pure'
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
+        run: CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
       # QEMU/binfmt for the arm64 wails-cross image on the amd64 ubuntu runner
       # (the Makefile ran these on an arm64 host; CI hosts are amd64).
       - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
@@ -326,7 +326,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Install wails3
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
+        run: CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-macos-arm64-cli

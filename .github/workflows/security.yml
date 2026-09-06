@@ -35,6 +35,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      # govulncheck type-checks every package in the module graph, including
+      # wails v3's Linux cgo files, whose #cgo pkg-config directives need the
+      # gtk4/webkitgtk-6.0 development headers — the same GUI flavor the
+      # release pipeline actually ships.
+      - name: Install GTK4/WebKitGTK dev packages (wails cgo type-check)
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
       - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1
         with:
           repo-checkout: false

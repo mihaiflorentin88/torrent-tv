@@ -33,8 +33,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       # wails3 (v3.0.0-beta.16, matches go.mod github.com/wailsapp/wails/v3)
       # drives `make build` (icons + wails3 build task); Makefile WAILS3 var.
+      # The CLI itself compiles its Linux desktop-probe package against
+      # gtk4/webkitgtk-6.0 unless cgo is disabled; the CLI only drives builds
+      # (the project's own cgo needs are met by the step above), so a
+      # cgo-free CLI install keeps the runner requirement to the 4.1 set.
       - name: Install wails3
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
+        run: CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
       - name: Unit tests
         run: go test -race ./...
       - name: Vet
@@ -127,10 +131,30 @@ jobs:
           script: |
             adb install -r clients/android-tv/app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -n com.torrenttv.app/.MainActivity
-            sleep 15
-            adb logcat -d | grep -m1 "TorrentTV: ready" || true
-            adb shell uiautomator dump /sdcard/torrenttv.xml
-            adb pull /sdcard/torrenttv.xml torrenttv-smoke.xml
+            # Condition-based wait: the shell logs "ready" when the WebView
+            # finishes loading. Emulator cold starts on hosted runners vary
+            # wildly (a streamed install alone can take minutes), so poll
+            # instead of sleeping a fixed number of seconds.
+            ready=0
+            for i in $(seq 1 60); do
+              if adb logcat -d | grep -q "TorrentTV: ready"; then ready=1; break; fi
+              sleep 3
+            done
+            if [ "$ready" != "1" ]; then
+              echo "app never reported ready; recent logcat:" >&2
+              adb logcat -d | tail -200 >&2
+              adb exec-out screencap -p > torrenttv-failure.png
+              exit 1
+            fi
+            # uiautomator's accessibility bridge is not always up the moment
+            # the page finishes loading: retry the dump before giving up.
+            for i in $(seq 1 10); do
+              if adb shell uiautomator dump /sdcard/torrenttv.xml \
+                 && adb pull /sdcard/torrenttv.xml torrenttv-smoke.xml; then
+                break
+              fi
+              sleep 5
+            done
             grep -q "TorrentTV" torrenttv-smoke.xml || (adb exec-out screencap -p > torrenttv-failure.png && exit 1)
       - name: Upload smoke evidence
         if: always()
