@@ -1488,8 +1488,9 @@ button.primary {
    box-shadow: 0 28px 90px #000d
 }
 
-/* Portal promotions render as a fixed, display-only slot that owns no focus
-   stop and leaves zero trace when delivery stops or the slot is hidden. */
+/* Promotion slot: a focusable button on the home route. OK opens the
+   creative's click URL; the address prints on the tile as the fallback
+   for boxes without a browser. */
 .tv-promo {
    position: fixed;
    right: 36px;
@@ -1500,7 +1501,11 @@ button.primary {
    border: 1px solid var(--line);
    border-radius: 12px;
    background: #0c1216f2;
-   box-shadow: 0 18px 60px #000a
+   box-shadow: 0 18px 60px #000a;
+   color: inherit;
+   font: inherit;
+   text-align: left;
+   cursor: pointer
 }
 
 .tv-promo small {
@@ -1541,30 +1546,34 @@ button.primary {
    overflow-wrap: anywhere
 }
 
-/* Other projects dialog: ordered portal links with fully visible wrapped
-   addresses, one Close stop trapping the D-pad inside the dialog region. */
-.tv-projects-dialog {
-   position: fixed;
-   z-index: 120;
-   top: 110px;
-   left: 50%;
-   width: 1100px;
-   max-width: 1100px;
-   max-height: 860px;
-   margin: 0;
-   overflow-y: auto;
-   transform: translateX(-50%);
-   box-shadow: 0 28px 90px #000d
+
+.tv-promo code {
+   display: block;
+   margin: 10px 0 0;
+   color: #728089;
+   font-size: 15px;
+   line-height: 1.4;
+   word-break: break-all
 }
 
-.tv-projects-dialog h2 {
-   font-size: 34px
+/* Projects page: ordered portal links as one D-pad stop each, with fully
+   visible wrapped addresses; activation hands the URL to the browser. */
+.tv-projects {
+   max-width: 1400px
 }
 
 .tv-project {
+   display: block;
+   width: 100%;
    margin: 24px 0 0;
-   padding-top: 20px;
-   border-top: 1px solid var(--line)
+   padding: 20px 24px;
+   border: 1px solid var(--line);
+   border-radius: 12px;
+   background: #ffffff06;
+   color: inherit;
+   font: inherit;
+   text-align: left;
+   cursor: pointer
 }
 
 .tv-project strong {
@@ -1572,7 +1581,8 @@ button.primary {
 }
 
 .tv-project p {
-   margin: 6px 0 0
+   margin: 6px 0 0;
+   color: var(--muted)
 }
 
 .tv-project code {
@@ -1587,10 +1597,6 @@ button.primary {
    white-space: normal;
    overflow-wrap: break-word;
    overflow-wrap: anywhere
-}
-
-.tv-projects-dialog>button {
-   margin: 26px 0 0
 }
 
 /* Server update controls: the appended rows 16/17 and the interruption

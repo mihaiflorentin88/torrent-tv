@@ -5,14 +5,14 @@
 // functions and identity constants the tests assert against.
 import type { PortalState, UpdateStatus } from '@torrent-tv/shared';
 
-// Sidebar focus row of the Other projects entry. Appended after the fixed
-// menu rows (the last menu row is 32), so portal links appearing or
-// disappearing never renumbers an existing control.
+// Sidebar focus row of the Other projects entry, which opens the projects
+// route page. Appended after the fixed menu rows (the last menu row is 32),
+// so portal links appearing or disappearing never renumbers an existing
+// control.
 export const PROJECTS_MENU_ROW = 33;
 
-// Distinct focus regions for the two modal dialogs; directional movement
+// Focus region of the update confirmation dialog; directional movement
 // never leaves the region of the focused element, which is the trap.
-export const PROJECTS_DIALOG_REGION = 'projects-dialog';
 export const UPDATE_DIALOG_REGION = 'update-dialog';
 
 // TVSettings rows appended after the existing rows 1-15.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { UpdateStatus } from '@torrent-tv/shared';
 import {
-  PROJECTS_DIALOG_REGION,
+  PROJECTS_MENU_ROW,
   UPDATE_APPLY_ROW,
   UPDATE_CHECK_ROW,
   UPDATE_DIALOG_REGION,
@@ -102,10 +102,10 @@ describe('dialog focus restore', () => {
 });
 
 describe('focus identities', () => {
-  it('pins the appended TVSettings rows and dialog regions', () => {
+  it('pins the appended TVSettings rows and the projects menu row', () => {
     expect(UPDATE_CHECK_ROW).toBe(16);
     expect(UPDATE_APPLY_ROW).toBe(17);
-    expect(PROJECTS_DIALOG_REGION).toBe('projects-dialog');
+    expect(PROJECTS_MENU_ROW).toBe(33);
     expect(UPDATE_DIALOG_REGION).toBe('update-dialog');
   });
 });

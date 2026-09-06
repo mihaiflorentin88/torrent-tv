@@ -178,7 +178,7 @@ describe('account capability gating', () => {
     await mountApp();
     await settle();
     expect(document.querySelector('.portal-account')).toBeTruthy();
-    expect(document.querySelector('.portal-projects')!.textContent).toContain('Other tool');
+    expect(document.querySelector('.portal-projects')).toBeNull(); // the dock list became the Projects page
     await act(async () => { (document.querySelector('.portal-account') as HTMLElement).click() });
     expect(document.querySelector('.overlay[aria-label="Account"]')).toBeTruthy();
     portalStateSequence = [disabledSnapshot];
@@ -186,7 +186,6 @@ describe('account capability gating', () => {
     await settle();
     expect(document.querySelector('.overlay[aria-label="Account"]')).toBeNull();
     expect(document.querySelector('.portal-account')).toBeNull();
-    expect(document.querySelector('.portal-projects')).toBeNull();
     await act(async () => { sidebarButton('Settings').click() });
     await settle();
     expect(settingsTabs().map(button => button.textContent)).not.toContain('Account');
@@ -219,6 +218,33 @@ describe('account capability gating', () => {
   });
 });
 
+describe('projects page', () => {
+  it('renders the server-published projects as cards that open through the page opener', async () => {
+    portalStateValue = enabledSnapshot;
+    await mountApp();
+    await settle();
+    await act(async () => { sidebarButton('Projects').click() });
+    await settle();
+    const card = document.querySelector<HTMLAnchorElement>('.project-card')!;
+    expect(card.textContent).toContain('https://example.invalid/tool');
+    const opened: string[] = [];
+    const spy = vi.spyOn(window, 'open').mockImplementation(((url: string) => { opened.push(url); return null }) as typeof window.open);
+    await act(async () => { card.click() });
+    expect(opened).toEqual(['https://example.invalid/tool']);
+    spy.mockRestore();
+  });
+
+  it('an empty link list renders the empty state and never a project card', async () => {
+    portalStateValue = disabledSnapshot;
+    await mountApp();
+    await settle();
+    await act(async () => { sidebarButton('Projects').click() });
+    await settle();
+    expect(document.querySelector('.projects-empty')).toBeTruthy();
+    expect(document.querySelector('.project-card')).toBeNull();
+  });
+});
+
 describe('promotion slot', () => {
   it('a donor snapshot removes the slot entirely and never fetches delivery', async () => {
     const delivery = vi.spyOn(API.prototype, 'portalPromotions').mockResolvedValue([]);
@@ -246,7 +272,9 @@ describe('promotion slot', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(8000) });
     expect(mounted.host.textContent).toContain('Second');
     expect(delivery).toHaveBeenCalledTimes(1);
-    // Clicks go through the local tracking route, never a direct upstream URL.
+    // Clicks go through the local tracking route, never a direct upstream
+    // URL, and the address prints on the tile.
+    expect(mounted.host.querySelector('.portal-promo-url')!.textContent).toContain('/api/v1/portal/promotions/prov/p2/click');
     await act(async () => { (mounted.host.querySelector('.portal-promo a') as HTMLElement).click() });
     expect(opened).toEqual([`${location.origin}/api/v1/portal/promotions/prov/p2/click`]);
     // A hidden document cancels the rotation timer: no advance, no refetch.

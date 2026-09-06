@@ -9,14 +9,14 @@ import { Icon } from './icons';
 
 export function openExternalURL(url: string): void { window.open(url, '_blank', 'noopener,noreferrer') }
 
-// Sidebar bottom dock: compact promotion, ordered other-projects links, then
-// the account entry. Renders nothing while the snapshot is unknown, so a
-// failed optional integration leaves no empty shell and no reserved space.
+// Sidebar bottom dock: compact promotion, then the account entry. The
+// other-projects list moved to the dedicated Projects page in the nav
+// menu. Still renders nothing while the snapshot is unknown, so a failed
+// optional integration leaves no empty shell and no reserved space.
 export function PortalSidebarDock({ snapshot, client, identity, onOpenAccount, openExternal }: { snapshot: PortalState | null; client: API; identity: PortalUser | null; onOpenAccount: () => void; openExternal: (url: string) => void }) {
   if (!snapshot) return null;
   return <div class="portal-dock">
     <PortalPromotionSlot client={client} snapshot={snapshot} openExternal={openExternal} />
-    <PortalProjects links={snapshot.links} openExternal={openExternal} />
     {snapshot.accountsEnabled && <PortalAccountButton identity={identity} onOpen={onOpenAccount} />}
   </div>;
 }
@@ -70,18 +70,9 @@ export function PortalPromotionSlot({ client, snapshot, openExternal, visible = 
       {creative.image ? <img src={creative.image} alt="" loading="lazy" /> : null}
       <strong>{creative.title}</strong>
       <span>{creative.text}</span>
+      <small class="portal-promo-url">{url}</small>
     </a>
   </aside>;
-}
-
-// Other Projects links render in the server-delivered order. They point
-// outside the app, so activation always routes through the injected opener.
-export function PortalProjects({ links, openExternal }: { links: PortalState['links']; openExternal: (url: string) => void }) {
-  if (!links.length) return null;
-  return <nav class="portal-projects" aria-label="Other projects">
-    <p>Other projects</p>
-    {links.map(link => <a key={link.id} href={link.url} title={link.description} rel="noreferrer noopener" onClick={event => { event.preventDefault(); openExternal(link.url) }}>{link.title}</a>)}
-  </nav>;
 }
 
 export function PortalAccountButton({ identity, onOpen }: { identity: PortalUser | null; onOpen: () => void }) {

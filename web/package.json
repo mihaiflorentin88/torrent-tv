@@ -10,6 +10,7 @@
     "./jobs": "./jobs.tsx",
     "./shared-api": "./shared-api.ts",
     "./portal": "./portal.tsx",
+    "./projects": "./projects.tsx",
     "./style.css": "./style.css"
   },
   "scripts": {

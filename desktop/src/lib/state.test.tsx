@@ -210,10 +210,10 @@ describe('shell chrome', () => {
     expect(host.querySelectorAll('.dot-running').length).toBeGreaterThanOrEqual(3);
   });
 
-  it('carries exactly the shipped sections; Server first, Task 10 appended Settings', async () => {
+  it('carries exactly the shipped sections; Server first, then the Projects page, Settings last', async () => {
     const host = await mount(<App />);
     const labels = Array.from(host.querySelectorAll('.shell-nav button')).map(button => button.textContent?.trim());
-    expect(labels).toEqual(['Server', 'Downloads', 'Jobs', 'Settings']);
+    expect(labels).toEqual(['Server', 'Downloads', 'Jobs', 'Projects', 'Settings']);
   });
 });
 
@@ -359,11 +359,15 @@ describe('shell portal surfaces', () => {
     expect(host.querySelector('.update-notice')).toBeNull();
   });
 
-  it('routes other-project links through the native OpenURL binding', async () => {
+  it('routes Projects page cards through the native OpenURL binding', async () => {
     const host = await mount(<App />);
     await settle();
-    const link = host.querySelector<HTMLAnchorElement>('.portal-projects a');
+    const projects = Array.from(host.querySelectorAll<HTMLButtonElement>('.shell-nav button')).find(button => button.textContent === 'Projects')!;
+    await act(async () => { projects.click() });
+    await settle();
+    const link = host.querySelector<HTMLAnchorElement>('.project-card');
     expect(link?.getAttribute('href')).toBe('https://example.invalid/tool');
+    expect(link?.textContent).toContain('https://example.invalid/tool');
     await act(async () => { link!.click() });
     expect(fakeBindings.openURL).toHaveBeenCalledWith('https://example.invalid/tool');
   });

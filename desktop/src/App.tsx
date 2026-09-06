@@ -3,19 +3,21 @@ import { PortalAccountDialog, PortalSidebarDock, UpdateNotice, useUpdateControll
 import { sharedApi } from '@torrent-tv/web/shared-api';
 import { openExternal, pushUpdateStatus, sessionStore, setPortalIdentity, sharedOrigin, usePortal, useServerState } from './lib/state';
 import { DownloadsPage } from './pages/DownloadsPage';
+import { ProjectsPage } from '@torrent-tv/web/projects';
 import { JobsPage } from './pages/JobsPage';
 import { ServerPage } from './pages/ServerPage';
 import { SettingsPage } from './pages/SettingsPage';
 import './shell.css';
 import '@torrent-tv/web/style.css';
 
-// Task 10 appended Server and Settings: one View member, one sections
-// entry, and one render line each.
-type View = 'downloads' | 'jobs' | 'server' | 'settings';
+// The Projects section mounts the shared web view against the desktop's
+// native opener; one View member, one sections entry, and one render line.
+type View = 'downloads' | 'jobs' | 'server' | 'projects' | 'settings';
 const sections: { id: View; label: string }[] = [
   { id: 'server', label: 'Server' },
   { id: 'downloads', label: 'Downloads' },
   { id: 'jobs', label: 'Jobs' },
+  { id: 'projects', label: 'Projects' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -54,6 +56,7 @@ export function App() {
             <UpdateNotice status={portal.status} controller={updates} openExternal={openExternal} />
           )}
           {view === 'downloads' && <DownloadsPage />}
+          {view === 'projects' && <ProjectsPage links={portal.snapshot?.links ?? []} openExternal={openExternal} />}
           {view === 'jobs' && <JobsPage />}
           {view === 'server' && <ServerPage />}
           {view === 'settings' && <SettingsPage updates={updates} />}

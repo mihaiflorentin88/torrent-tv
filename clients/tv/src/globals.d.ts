@@ -13,6 +13,7 @@ interface Window {
     getIp(): string;
     getSubnetMask(): string;
     open(url: string): void;
+    openExternal(url: string): boolean;
     setDisplayRect(x: number, y: number, width: number, height: number): void;
     setDisplayMethod(mode: string): void;
     prepareAsync(successToken: string, errorToken: string): void;

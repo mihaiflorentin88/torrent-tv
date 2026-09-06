@@ -2484,9 +2484,9 @@ progress {
  justify-content: flex-end
 }
 
-/* Portal dock: compact promotion, other-projects links, and the account
-   entry, anchored to the sidebar bottom with the existing nav tokens. The
-   sidebar becomes a column so margin-top:auto seats the dock. */
+/* Portal dock: compact promotion and the account entry, anchored to the
+   sidebar bottom with the existing nav tokens. The sidebar becomes a
+   column so margin-top:auto seats the dock. */
 .sidebar {
  display: flex;
  flex-direction: column
@@ -2547,34 +2547,68 @@ progress {
  font-size: 12px
 }
 
-.portal-projects {
- padding: 8px 0;
- white-space: nowrap
-}
 
-.portal-projects p {
- margin: 2px 12px 7px 14px;
+.portal-promo-url {
  color: var(--muted);
- font-size: 12px;
- text-transform: uppercase;
- letter-spacing: .08em
+ font-size: 11px;
+ word-break: break-all;
+ opacity: .85
 }
 
-.portal-projects a {
- display: block;
- width: 246px;
- padding: 7px 12px;
- border-radius: 10px;
- color: #c7d3d8;
- text-decoration: none;
- font-size: 14px;
- overflow: hidden;
- text-overflow: ellipsis
+/* Projects page: one clickable card per server-published project, with the
+   full address kept visible as the no-opener fallback. */
+.projects {
+ padding: 4px 0 24px
 }
 
-.portal-projects a:hover {
- background: #ffffff0b;
+.projects-empty {
+ padding: 64px 24px;
+ text-align: center;
+ color: var(--muted)
+}
+
+.projects-empty h2 {
+ margin: 0 0 8px;
  color: var(--text)
+}
+
+.project-grid {
+ display: grid;
+ grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+ gap: 14px
+}
+
+.project-card {
+ display: flex;
+ flex-direction: column;
+ gap: 8px;
+ padding: 18px;
+ border: 1px solid var(--line);
+ border-radius: 12px;
+ background: var(--panel);
+ color: var(--text);
+ text-decoration: none
+}
+
+.project-card:hover {
+ border-color: var(--teal)
+}
+
+.project-card strong {
+ font-size: 16px
+}
+
+.project-card p {
+ margin: 0;
+ color: var(--muted);
+ font-size: 13px;
+ line-height: 1.5
+}
+
+.project-card code {
+ color: var(--teal);
+ font-size: 12px;
+ word-break: break-all
 }
 
 .portal-account {

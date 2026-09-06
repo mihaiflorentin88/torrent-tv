@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { chooseDirectionalTarget, chooseStructuredTarget, RectLike, remoteAction } from './navigation';
-import { PROJECTS_DIALOG_REGION, PROJECTS_MENU_ROW, UPDATE_DIALOG_REGION } from './portal';
+import { PROJECTS_MENU_ROW, UPDATE_DIALOG_REGION } from './portal';
 
 const rect = (left: number, top: number, width = 100, height = 100): RectLike => ({ left, top, right: left + width, bottom: top + height, width, height });
 
@@ -111,13 +111,16 @@ describe('modal dialog focus traps', () => {
   const contentItem = (row: number) => ({ dataset: { focusRegion: 'content', focusRow: String(row), focusCol: '0' } } as unknown as HTMLElement);
   const hero = contentItem(1);
   const menuSettings = { dataset: { focusRegion: 'sidebar', focusRow: '32', focusCol: '0' } } as unknown as HTMLElement;
-  it('keeps the single projects-dialog Close reachable from nowhere else and immovable', () => {
-    const close = dialogItem(PROJECTS_DIALOG_REGION, 0, 0);
-    const elements = [close, hero, menuSettings];
+  it('keeps the update confirmation dialog isolated from the projects page and the page behind', () => {
+    const projectsCard = dialogItem('content', 3, 0);
+    const cancel = dialogItem(UPDATE_DIALOG_REGION, 0, 0);
+    const elements = [cancel, projectsCard, hero, menuSettings];
+    // Nothing inside the dialog region can reach the page, and the projects
+    // card can never land on the dialog region from the page behind.
     for (const direction of ['left', 'right', 'up', 'down'] as const) {
-      expect(chooseStructuredTarget(close, elements, direction)).toBeNull();
+      expect(chooseStructuredTarget(cancel, elements, direction)).toBeNull();
+      expect(chooseStructuredTarget(projectsCard, [cancel, projectsCard], direction)).toBeNull();
     }
-    expect(chooseStructuredTarget(hero, elements, 'left')).toBeNull();
   });
   it('moves only between the update confirmation buttons and never into the page behind', () => {
     const cancel = dialogItem(UPDATE_DIALOG_REGION, 0, 0);

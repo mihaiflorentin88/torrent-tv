@@ -8,7 +8,7 @@
 // Ids parse through even when the view no longer knows them; views handle
 // absence.
 
-export type View = 'home' | 'search' | 'library' | 'continue' | 'favorites' | 'watched' | 'downloads' | 'library-categories' | 'tracker' | 'browse' | 'categories' | 'jobs' | 'events' | 'settings' | 'title' | 'watch';
+export type View = 'home' | 'search' | 'library' | 'continue' | 'favorites' | 'watched' | 'downloads' | 'library-categories' | 'tracker' | 'browse' | 'categories' | 'jobs' | 'events' | 'settings' | 'projects' | 'title' | 'watch';
 export interface Route { view: View; query?: string; id?: string; source?: number; t?: number }
 
 const viewPaths: Partial<Record<View, string>> = {
@@ -25,6 +25,7 @@ const viewPaths: Partial<Record<View, string>> = {
   jobs: '/jobs',
   events: '/events',
   settings: '/settings',
+  projects: '/projects',
 };
 
 const pathViews: Record<string, View> = { '/': 'home' };

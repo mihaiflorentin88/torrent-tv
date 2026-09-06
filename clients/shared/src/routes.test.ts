@@ -22,6 +22,7 @@ const adopted: [View, string][] = [
   ['jobs', '/jobs'],
   ['events', '/events'],
   ['settings', '/settings'],
+  ['projects', '/projects'],
 ];
 
 describe('Client routes', () => {

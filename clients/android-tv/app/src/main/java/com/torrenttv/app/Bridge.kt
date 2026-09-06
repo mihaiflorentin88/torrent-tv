@@ -1,5 +1,8 @@
 package com.torrenttv.app
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.webkit.JavascriptInterface
 import com.torrenttv.app.avplay.AvPlayBridge
 
@@ -20,6 +23,17 @@ class Bridge(
 
     @JavascriptInterface
     fun getSubnetMask(): String = network.subnetMask() ?: ""
+
+    // Opens an http(s) address in the platform browser. False means no
+    // activity accepted the intent (several ATV boxes ship no browser): the
+    // web app keeps the URL visible so the address can be used elsewhere.
+    @JavascriptInterface
+    fun openExternal(url: String): Boolean = try {
+        activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        true
+    } catch (error: ActivityNotFoundException) {
+        false
+    }
 
     // AVPlay-shaped player commands; see avplay/AvPlayBridge.kt.
     @JavascriptInterface fun open(url: String) = avplay.open(url)

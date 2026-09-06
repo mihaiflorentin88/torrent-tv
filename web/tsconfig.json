@@ -16,6 +16,7 @@
     "src.tsx",
     "settings.tsx",
     "portal.tsx",
+    "projects.tsx",
     "shortcuts.ts",
     "*.test.ts",
     "*.test.tsx",
