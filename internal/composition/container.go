@@ -345,7 +345,16 @@ func NewUpdateCoordinator(log *slog.Logger) *updates.Manager {
 		}
 		return notice.Version, true, nil
 	}
-	return newUpdateManager(updateCoordinatorOptions{log: log, notice: notice})
+	// The standalone --update coordinator must journal its operation
+	// failures somewhere a human can read them; a no-op sink turned every
+	// staging failure into a silent fallback to the running version.
+	return newUpdateManager(updateCoordinatorOptions{
+		log:    log,
+		notice: notice,
+		sink: func(event string, payload any) {
+			log.Info("updates event", "event", event, "payload", payload)
+		},
+	})
 }
 
 // bundleInstall reports whether the running executable lives inside a
