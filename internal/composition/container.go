@@ -170,7 +170,19 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 		Service:       service,
 		ListenAddress: current.ListenAddress,
 	}
-	sink := func(kind string, payload any) { service.PublishEvent(kind, payload) }
+	sink := func(kind string, payload any) {
+		service.PublishEvent(kind, payload)
+		// Update lifecycle events belong in the service log too: the SSE
+		// stream only reaches connected browser clients, and a failed
+		// self-update must be diagnosable from journald alone.
+		if event, ok := payload.(map[string]any); ok {
+			if kind == "updates.failed" {
+				log.Error("updates event", "event", kind, "detail", event["error"])
+				return
+			}
+			log.Info("updates event", "event", kind)
+		}
+	}
 	hub := portal.NewHub(
 		portalclient.New(portalHTTPClient()),
 		func() string { return settings.Get().PortalAPIKey },
