@@ -14,7 +14,7 @@ import {
   Version,
 } from '../bindings/github.com/mihaiflorentin88/torrent-tv/internal/gui/bindings';
 
-import { usePortal, useServerState } from '../lib/state';
+import { applyServerUpdate, checkForServerUpdate, usePortal, useServerState } from '../lib/state';
 
 // renderLogLine formats one JSONL log record as "time LEVEL message" —
 // the server's slog JSON handler keys — with HTTP access records rendered
@@ -208,9 +208,16 @@ export function ServerPage() {
           <span class={`dot dot-${server.state}`} aria-hidden="true" />
           {stateLine}
         </p>
+        {server.state === 'running' && (
+          <p class="update-check">
+            <button type="button" disabled={transitioning} onClick={() => void run(async () => { await checkForServerUpdate() })}>Check for updates</button>
+            {portal.status?.available && portal.status.latest ? `Latest: version ${portal.status.latest}.` : ''}
+          </p>
+        )}
         {server.state === 'running' && portal.status?.available && (
           <p class="update-state" data-state="available">
             {portal.status.latest ? `Update available: version ${portal.status.latest}.` : 'A new version is available.'}
+            {portal.status.selfUpdate && <button class="primary" type="button" disabled={transitioning} onClick={() => void run(async () => { await applyServerUpdate() })}>Download and install — Torrent TV restarts</button>}
           </p>
         )}
         <div class="fields">

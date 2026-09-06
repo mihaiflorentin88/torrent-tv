@@ -214,6 +214,23 @@ export function pushUpdateStatus(status: UpdateStatus): void {
   portalSync?.absorb({ kind: 'updates.status', payload: status });
 }
 
+// Check for a server update now (the same coordinator the hourly poll
+// and the web app's controller drive).
+export async function checkForServerUpdate(): Promise<UpdateStatus> {
+  const status = await sharedApi().updatesCheck();
+  pushUpdateStatus(status);
+  return status;
+}
+
+// Download and install a found update. The handoff restarts the
+// application into the new installation; the GUI window closes as part
+// of that relaunch.
+export async function applyServerUpdate(): Promise<UpdateStatus> {
+  const status = await sharedApi().updatesApply();
+  pushUpdateStatus(status);
+  return status;
+}
+
 // External links open through the native binding (http(s)-validated on the
 // Go side); failures keep the same quiet convention as the Downloads Play
 // handoff.
