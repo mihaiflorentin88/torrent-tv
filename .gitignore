@@ -82,3 +82,6 @@ clients/android-tv/local.properties
 clients/android-tv/app/build/
 clients/android-tv/build/
 server
+
+# Isolated worktrees
+.worktrees/
