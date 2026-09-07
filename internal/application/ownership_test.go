@@ -2,9 +2,12 @@ package application
 
 import (
 	"context"
+	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -149,5 +152,128 @@ func TestPrepareSeasonReusesLegacyQBSeasonPackUnderNativeDefault(t *testing.T) {
 	}
 	if adds := qb.snapshot().adds; len(adds) != 0 {
 		t.Fatalf("owner retention must not re-add the managed pack: adds=%v", adds)
+	}
+}
+
+func TestSurveyUncertaintyBlocksAdmissionWithoutZeroCounting(t *testing.T) {
+	repo, settings := retryHarness(t)
+	retentionSettings(t, settings, 20, 0)
+	seedRetentionRelease(t, repo, "native-release", "Native.S01.1080p.WEB-DL")
+	seedRetentionRelease(t, repo, "qb-release", "QBit.S01.1080p.WEB-DL")
+	updated := time.Now().UTC().Add(-time.Hour)
+	seedRetentionDownload(t, repo, "qb-ep", "qb-release", "qb:h2", updated, false, 1)
+	native := newMultiEngine(map[string]domain.DownloadStatus{
+		"h1": {Hash: "h1", State: "downloading", TotalBytes: 10 << 30},
+	}, nil)
+	playable := filepath.Join(t.TempDir(), "native-ep.mkv")
+	if err := os.WriteFile(playable, make([]byte, 128), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveDownload(context.Background(), domain.Download{
+		ID: "native-ep", ReleaseID: canonicalReleaseID("native-release"), EngineID: "native:h1",
+		FilePath: "native-ep.mkv", State: "downloading", Progress: 1, AbsolutePath: playable,
+		SizeBytes: 128, CreatedAt: updated, UpdatedAt: updated,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(testRegistry(openCatalog{}), engineSetFor(t, "native:", map[string]TorrentEngine{"native:": native}), repo, settings)
+	t.Cleanup(func() { _ = service.Close(context.Background()) })
+	ctx := context.Background()
+
+	plan, err := service.retentionSurvey(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.uncertainOwners) != 1 || plan.uncertainOwners[0] != "qb:" {
+		t.Fatalf("the absent qb owner must be reported uncertain, got %v", plan.uncertainOwners)
+	}
+
+	err = service.ensureAllocationRoom(ctx, domain.TorrentRelease{Name: "New.Release.2025"}, 1<<30)
+	if !errors.Is(err, domain.ErrEngineUnavailable) {
+		t.Fatalf("uncertainty must refuse new admission with ErrEngineUnavailable, got %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "qb:") {
+		t.Fatalf("the refusal must name the uncertain owner, got %v", err)
+	}
+
+	job, err := service.RunRetention()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "completed" || job.Error != "" {
+		t.Fatalf("uncertainty must not fail retention, got state=%q error=%q", job.State, job.Error)
+	}
+	rows, err := repo.ListDownloads(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("uncertain routes must never be evicted or forgotten, got %d rows", len(rows))
+	}
+	if _, err := service.Prepare(ctx, canonicalReleaseID("native-release"), 0); err != nil {
+		t.Fatalf("existing playback must survive admission refusal: %v", err)
+	}
+}
+
+// dyingEngine answers Status successfully failAfter times, then fails —
+// a deterministic stand-in for an engine that becomes unreachable mid-run.
+type dyingEngine struct {
+	TorrentEngine
+	mu        sync.Mutex
+	status    domain.DownloadStatus
+	calls     int
+	failAfter int
+}
+
+func newDyingEngine(status domain.DownloadStatus, failAfter int) *dyingEngine {
+	return &dyingEngine{status: status, failAfter: failAfter}
+}
+
+func (e *dyingEngine) Status(context.Context, string) (domain.DownloadStatus, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.calls++
+	if e.calls > e.failAfter {
+		return domain.DownloadStatus{}, domain.ErrTorrentNotFound
+	}
+	return e.status, nil
+}
+
+func TestAdmissionRefusesWhenEvictionReSurveyTurnsAnOwnerUncertain(t *testing.T) {
+	repo, settings := retryHarness(t)
+	retentionSettings(t, settings, 5, 0)
+	seedRetentionRelease(t, repo, "big-release", "Big.S01.1080p.WEB-DL")
+	seedRetentionRelease(t, repo, "small-release", "Small.S01.1080p.WEB-DL")
+	updated := time.Now().UTC()
+	seedRetentionDownload(t, repo, "big", "big-release", "qb:bighash", updated.Add(-2*time.Hour), false, 1)
+	seedRetentionDownload(t, repo, "small", "small-release", "native:smallhash", updated, false, 0.5)
+	qb := newMultiEngine(map[string]domain.DownloadStatus{
+		"bighash": {Hash: "bighash", State: "pausedUP", Progress: 1, TotalBytes: 10 << 30},
+	}, nil)
+	// The native owner answers the two pre-eviction surveys (the assertion
+	// probe and ensureAllocationRoom's entry gate) but fails the re-survey
+	// that follows the qb eviction — the gate must catch it mid-loop.
+	native := newDyingEngine(domain.DownloadStatus{Hash: "smallhash", State: "downloading", Progress: 0.5, TotalBytes: 1 << 30}, 2)
+	service := NewService(testRegistry(openCatalog{}), engineSetFor(t, "native:", map[string]TorrentEngine{"native:": native, "qb:": qb}), repo, settings)
+	t.Cleanup(func() { _ = service.Close(context.Background()) })
+	ctx := context.Background()
+
+	plan, err := service.retentionSurvey(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.uncertainOwners) != 0 {
+		t.Fatalf("initial survey must be clean, got %v", plan.uncertainOwners)
+	}
+
+	err = service.ensureAllocationRoom(ctx, domain.TorrentRelease{Name: "New.Release.2025"}, 1<<30)
+	if !errors.Is(err, domain.ErrEngineUnavailable) {
+		t.Fatalf("the re-survey uncertainty must refuse admission with ErrEngineUnavailable, got %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "native:") {
+		t.Fatalf("the refusal must name the newly uncertain owner, got %v", err)
+	}
+	if removed := qb.snapshot().removed; len(removed) != 1 {
+		t.Fatalf("exactly one eviction must precede the refusal, got %v", removed)
 	}
 }

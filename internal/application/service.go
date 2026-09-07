@@ -1331,6 +1331,9 @@ func (s *Service) ensureAllocationRoom(ctx context.Context, release domain.Torre
 	if err != nil {
 		return err
 	}
+	if err := refuseUncertainOwners(plan); err != nil {
+		return err
+	}
 	plan.storedBytes += incoming
 	reason, tripped := retentionDeficit(plan, settings)
 	rules := config.NormalizeEvictionRules(settings.EvictionRules)
@@ -1356,10 +1359,25 @@ func (s *Service) ensureAllocationRoom(ctx context.Context, release domain.Torre
 		if plan, err = s.retentionSurvey(ctx); err != nil {
 			return err
 		}
+		if err := refuseUncertainOwners(plan); err != nil {
+			return err
+		}
 		plan.storedBytes += incoming
 		reason, tripped = retentionDeficit(plan, settings)
 	}
 	return nil
+}
+
+// refuseUncertainOwners is the admission gate for survey uncertainty: a
+// download may not be admitted while any owner's footprint is unknown — the
+// under-count could wrongly report a cap fit. Checked on the initial survey
+// and again after every mid-eviction re-survey.
+func refuseUncertainOwners(plan retentionPlan) error {
+	if len(plan.uncertainOwners) == 0 {
+		return nil
+	}
+	return fmt.Errorf("refusing new download: cannot account for engine %s storage: %w",
+		strings.Join(plan.uncertainOwners, ", "), domain.ErrEngineUnavailable)
 }
 
 // incomingTorrentBytes reports how much storage the Release's torrent will

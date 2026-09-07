@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
@@ -156,12 +158,15 @@ func (r retentionRoute) lastActivity() time.Time {
 	return r.completedAt()
 }
 
-// retentionPlan is one evaluation pass over live engine telemetry.
+// retentionPlan is one evaluation pass over live engine telemetry. An owner
+// whose footprint cannot be surveyed (engine absent or Status failed) is
+// listed in uncertainOwners — unknown storage is never counted as zero.
 type retentionPlan struct {
-	routes      []retentionRoute
-	storedBytes int64
-	freeBytes   int64
-	freeErr     error
+	routes          []retentionRoute
+	storedBytes     int64
+	freeBytes       int64
+	freeErr         error
+	uncertainOwners []string
 }
 
 // retentionSurvey groups Managed downloads by Engine route, samples engine
@@ -175,8 +180,13 @@ func (s *Service) retentionSurvey(ctx context.Context) (retentionPlan, error) {
 	}
 	byRoute := map[string][]domain.Download{}
 	order := []string{}
+	plan := retentionPlan{}
 	for _, row := range managed {
 		if _, _, ok := s.owner(row.EngineID); !ok {
+			prefix := routePrefix(row.EngineID)
+			if !slices.Contains(plan.uncertainOwners, prefix) {
+				plan.uncertainOwners = append(plan.uncertainOwners, prefix)
+			}
 			continue
 		}
 		if _, seen := byRoute[row.EngineID]; !seen {
@@ -188,11 +198,13 @@ func (s *Service) retentionSurvey(ctx context.Context) (retentionPlan, error) {
 	if err != nil {
 		return retentionPlan{}, err
 	}
-	plan := retentionPlan{}
 	for _, engineID := range order {
 		engine, hash, _ := s.owner(engineID)
 		status, statusErr := engine.Status(ctx, hash)
 		if statusErr != nil {
+			if !slices.Contains(plan.uncertainOwners, engineID) {
+				plan.uncertainOwners = append(plan.uncertainOwners, engineID)
+			}
 			continue
 		}
 		favorite, watched, lastPlayed := household.routeFacts(byRoute[engineID])
@@ -364,6 +376,9 @@ func (s *Service) runRetention(job domain.Job) {
 		s.failOrWait(&job, err, retentionKind)
 		s.finishRetentionJob(job, 0, 0)
 		return
+	}
+	if len(plan.uncertainOwners) > 0 {
+		s.jobLog(job, "warn", retentionKind, "engine footprint unavailable; cap enforced on reachable engines only", map[string]any{"owners": strings.Join(plan.uncertainOwners, ", ")})
 	}
 	if settings.ReserveGB > 0 && plan.freeErr != nil {
 		s.jobLog(job, "warn", retentionKind, "Free space unavailable on the download root; reserve check skipped", map[string]any{"error": plan.freeErr.Error()})

@@ -600,3 +600,54 @@ func TestCloseTimeoutAbortsHandoffKeepsRepositoryOpenAndBlocksJournal(t *testing
 	}
 	close(catalog.release)
 }
+
+// closeOrderEngine records every Close and fails if the repository is
+// already closed when an engine closes — engines must shut down while the
+// repository is still writable.
+type closeOrderEngine struct {
+	TorrentEngine
+	name  string
+	repo  Repository
+	mu    sync.Mutex
+	count int
+}
+
+func (e *closeOrderEngine) Close() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.count++
+	if _, err := e.repo.ListEvents(context.Background(), 0, 1); err != nil {
+		return fmt.Errorf("engine %s closed while the repository was already closed: %w", e.name, err)
+	}
+	return nil
+}
+
+func (e *closeOrderEngine) closeCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.count
+}
+
+func TestCloseClosesEachEngineOnceBeforeRepositoryIdempotently(t *testing.T) {
+	repo, settings := retryHarness(t)
+	native, qb := &closeOrderEngine{name: "native", repo: repo}, &closeOrderEngine{name: "qb", repo: repo}
+	service := NewService(testRegistry(idleCatalog{}), engineSetFor(t, "native:", map[string]TorrentEngine{"native:": native, "qb:": qb}), repo, settings)
+	service.StartScheduler()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := service.Close(ctx); err != nil {
+		t.Fatalf("close must stop workers before closing engines and the repository: %v", err)
+	}
+	if native.closeCount() != 1 || qb.closeCount() != 1 {
+		t.Fatalf("each engine must close exactly once, got native=%d qb=%d", native.closeCount(), qb.closeCount())
+	}
+	if _, err := repo.ListEvents(context.Background(), 0, 1); err == nil {
+		t.Fatal("the repository must be closed after Close returns")
+	}
+	if err := service.Close(ctx); err != nil {
+		t.Fatalf("a second Close must stay idempotent, got %v", err)
+	}
+	if native.closeCount() != 1 || qb.closeCount() != 1 {
+		t.Fatalf("a second Close must not re-close engines, got native=%d qb=%d", native.closeCount(), qb.closeCount())
+	}
+}
