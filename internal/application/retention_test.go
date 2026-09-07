@@ -137,7 +137,7 @@ func TestRetentionEvictsOldestCompletedUntilWithinCap(t *testing.T) {
 	seedRetentionDownload(t, repo, "first", "first-release", "qb:old", base, false, 1)
 	seedRetentionDownload(t, repo, "second", "second-release", "qb:middle", base.Add(time.Hour), false, 1)
 	seedRetentionDownload(t, repo, "third", "third-release", "qb:newest", base.Add(2*time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	job, err := service.RunRetention()
 	if err != nil {
@@ -183,7 +183,7 @@ func TestRetentionReserveBreachEvictsWhenCapSatisfied(t *testing.T) {
 		"only": {Hash: "only", State: "pausedUP", Progress: 1, TotalBytes: 600 << 20},
 	}}
 	seedRetentionDownload(t, repo, "solo", "solo-release", "qb:only", time.Now().UTC().Add(-time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 	free := int64(512 << 20)
 	service.freeSpace = func(string) (int64, error) { return free + engine.freedSnapshot(), nil }
 
@@ -221,7 +221,7 @@ func TestRetentionNeverEvictsIncompleteOrLeased(t *testing.T) {
 	seedRetentionDownload(t, repo, "watching", "watching-release", "qb:leased", base, true, 1)
 	seedRetentionDownload(t, repo, "fetching", "fetching-release", "qb:incomplete", base.Add(time.Hour), false, 0.5)
 	seedRetentionDownload(t, repo, "spare", "spare-release", "qb:eligible", base.Add(2*time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	job, err := service.RunRetention()
 	if err != nil {
@@ -252,7 +252,7 @@ func TestRetentionEvictsSeasonPackSiblingsTogether(t *testing.T) {
 	seedRetentionDownload(t, repo, "ep1", "pack-release", "qb:pack", base, false, 1)
 	seedRetentionDownload(t, repo, "ep2", "pack-release", "qb:pack", base.Add(time.Second), false, 1)
 	seedRetentionDownload(t, repo, "film", "film-release", "qb:loner", base.Add(time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -284,7 +284,7 @@ func TestRetentionZeroSettingsDisableChecks(t *testing.T) {
 		"big": {Hash: "big", State: "pausedUP", Progress: 1, TotalBytes: 500 << 30},
 	}}
 	seedRetentionDownload(t, repo, "huge", "huge-release", "qb:big", time.Now().UTC().Add(-time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 	service.freeSpace = func(string) (int64, error) { return 0, nil }
 
 	job, err := service.RunRetention()
@@ -352,7 +352,7 @@ func TestRetentionNewestCompletedRuleEvictsNewestFirst(t *testing.T) {
 	seedRetentionDownload(t, repo, "first", "first-release", "qb:old", base, false, 1)
 	seedRetentionDownload(t, repo, "second", "second-release", "qb:middle", base.Add(time.Hour), false, 1)
 	seedRetentionDownload(t, repo, "third", "third-release", "qb:newest", base.Add(2*time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -379,7 +379,7 @@ func TestRetentionLeastRecentlyPlayedFallsBackToDownloadAge(t *testing.T) {
 	seedRetentionDownload(t, repo, "played-row", "played-release", "qb:played", base.Add(2*time.Hour), false, 1)
 	seedRetentionDownload(t, repo, "fresh-row", "fresh-release", "qb:fresh", base.Add(4*time.Hour), false, 1)
 	seedPlayback(t, repo, "played-row", "played-release", false, base.Add(time.Hour))
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -406,7 +406,7 @@ func TestRetentionWatchedFirstRuleEvictsWatched(t *testing.T) {
 	seedRetentionDownload(t, repo, "seen-row", "seen-release", "qb:seen", base, false, 1)
 	seedRetentionDownload(t, repo, "unseen-row", "unseen-release", "qb:unseen", base.Add(time.Hour), false, 1)
 	seedPlayback(t, repo, "seen-row", "seen-release", true, base.Add(30*time.Minute))
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -432,7 +432,7 @@ func TestRetentionLargestAndSmallestRules(t *testing.T) {
 	seedRetentionDownload(t, repo, "small-row", "small-release", "qb:small", base, false, 1)
 	seedRetentionDownload(t, repo, "mid-row", "mid-release", "qb:mid", base.Add(time.Hour), false, 1)
 	seedRetentionDownload(t, repo, "big-row", "big-release", "qb:big", base.Add(2*time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -452,7 +452,7 @@ func TestRetentionLargestAndSmallestRules(t *testing.T) {
 	}}
 	seedRetentionDownload(t, repo2, "small-row", "small-release", "qb:small", base, false, 1)
 	seedRetentionDownload(t, repo2, "mid-row", "mid-release", "qb:mid", base.Add(time.Hour), false, 1)
-	service2 := NewService(openCatalog{}, engine2, repo2, settings2)
+	service2 := NewService(testRegistry(openCatalog{}), engine2, repo2, settings2)
 
 	if _, err := service2.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -475,7 +475,7 @@ func TestRetentionRuleTiesBreakToOldestCompletedThenEngineID(t *testing.T) {
 	base := time.Now().UTC().Add(-3 * time.Hour)
 	seedRetentionDownload(t, repo, "elder-row", "elder-release", "qb:elder", base, false, 1)
 	seedRetentionDownload(t, repo, "younger-row", "younger-release", "qb:younger", base.Add(time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -497,7 +497,7 @@ func TestRetentionRuleTiesBreakToOldestCompletedThenEngineID(t *testing.T) {
 	same := time.Now().UTC().Add(-2 * time.Hour)
 	seedRetentionDownload(t, repo2, "zeta-row", "zeta-release", "qb:zeta", same, false, 1)
 	seedRetentionDownload(t, repo2, "alpha-row", "alpha-release", "qb:alpha", same, false, 1)
-	service2 := NewService(openCatalog{}, engine2, repo2, settings2)
+	service2 := NewService(testRegistry(openCatalog{}), engine2, repo2, settings2)
 
 	if _, err := service2.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -520,7 +520,7 @@ func TestRetentionFavoriteProtectionFollowsTheToggle(t *testing.T) {
 	seedRetentionDownload(t, repo, "fav-row", "fav-release", "qb:fav", base, false, 1)
 	seedRetentionDownload(t, repo, "plain-row", "plain-release", "qb:plain", base.Add(time.Hour), false, 1)
 	seedFavorite(t, repo, "fav-release")
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	// Default (protectFavorites off): the favorite is ordinary eviction stock.
 	if _, err := service.RunRetention(); err != nil {
@@ -542,7 +542,7 @@ func TestRetentionFavoriteProtectionFollowsTheToggle(t *testing.T) {
 	seedRetentionDownload(t, repo2, "fav-row", "fav-release", "qb:fav", base, false, 1)
 	seedRetentionDownload(t, repo2, "plain-row", "plain-release", "qb:plain", base.Add(time.Hour), false, 1)
 	seedFavorite(t, repo2, "fav-release")
-	service2 := NewService(openCatalog{}, engine2, repo2, settings2)
+	service2 := NewService(testRegistry(openCatalog{}), engine2, repo2, settings2)
 
 	if _, err := service2.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -573,7 +573,7 @@ func TestRetentionNeverWatchedProtectionToggle(t *testing.T) {
 	seedRetentionDownload(t, repo, "finished-row", "played-release", "qb:finished", base.Add(2*time.Hour), false, 1)
 	seedPlayback(t, repo, "partial-row", "partial-release", false, base.Add(20*time.Minute))
 	seedPlayback(t, repo, "finished-row", "played-release", true, base.Add(30*time.Minute))
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -607,7 +607,7 @@ func TestRetentionProtectionTogglesCanReleaseIncompleteAndLeased(t *testing.T) {
 	base := time.Now().UTC().Add(-2 * time.Hour)
 	seedRetentionDownload(t, repo, "partial-row", "partial-release", "qb:partial", base, false, 0.5)
 	seedRetentionDownload(t, repo, "streamed-row", "streamed-release", "qb:streamed", base.Add(time.Hour), true, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)
@@ -638,7 +638,7 @@ func TestRetentionEmptyRulesFallBackToOldestCompleted(t *testing.T) {
 	seedRetentionDownload(t, repo, "first", "first-release", "qb:old", base, false, 1)
 	seedRetentionDownload(t, repo, "second", "second-release", "qb:middle", base.Add(time.Hour), false, 1)
 	seedRetentionDownload(t, repo, "third", "third-release", "qb:newest", base.Add(2*time.Hour), false, 1)
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 
 	if _, err := service.RunRetention(); err != nil {
 		t.Fatal(err)

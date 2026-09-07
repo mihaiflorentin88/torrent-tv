@@ -28,7 +28,7 @@ func TestFilterCatalogSources(t *testing.T) {
 	if got := filterCatalogSources([]domain.CatalogSource{item}, domain.CatalogQuery{MinSeeders: 8}); len(got) != 0 {
 		t.Fatal("minimum seeder filter was ignored")
 	}
-	game := domain.TorrentRelease{Name: "Naruto game", Category: "Games PC", Seeders: 20}
+	game := domain.TorrentRelease{Name: "Naruto game", Category: "Games PC", Seeders: 20, DiscoveryExcluded: true}
 	if got := filterCatalogSources([]domain.CatalogSource{{Release: game, Parsed: domain.ParseRelease(game)}}, domain.CatalogQuery{Search: "naruto"}); len(got) != 0 {
 		t.Fatal("default-blacklisted category leaked into media discovery")
 	}

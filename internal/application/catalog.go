@@ -56,21 +56,46 @@ func (s *Service) CatalogDetail(ctx context.Context, id string) (domain.CatalogD
 	if err != nil {
 		return domain.CatalogDetail{}, err
 	}
-	if len(matched) == 0 {
+	// Household managed sources: if a disabled-only downloaded title is opened,
+	// expose its managed playable sources without exposing new acquisition choices.
+	seenReleases := map[string]bool{}
+	for _, m := range matched {
+		seenReleases[m.Release.ID] = true
+	}
+	var extraSources []domain.CatalogSource
+	if managedDownloads, dlErr := s.repo.ListDownloads(ctx); dlErr == nil {
+		for _, dl := range managedDownloads {
+			if dl.TitleID == id && !seenReleases[dl.ReleaseID] {
+				seenReleases[dl.ReleaseID] = true
+				if rel, relErr := s.repo.GetRelease(ctx, dl.ReleaseID); relErr == nil {
+					extraSources = append(extraSources, domain.CatalogSource{Release: rel, Parsed: domain.ParseRelease(rel)})
+				}
+			}
+		}
+	}
+	allSources := append(matched, extraSources...)
+	if len(allSources) == 0 {
 		return domain.CatalogDetail{}, fmt.Errorf("catalog title not found")
 	}
-	title := groupCatalog(matched, true)[0]
+	title := groupCatalog(allSources, true)[0]
+	var eligibleTrackers []domain.TrackerRef
+	for _, ref := range title.Trackers {
+		if s.trackers.Eligible(ref.ID) {
+			eligibleTrackers = append(eligibleTrackers, ref)
+		}
+	}
+	title.Trackers = eligibleTrackers
 	s.applyCachedMetadata(&title)
 	detail := domain.CatalogDetail{Title: title, Seasons: []domain.CatalogSeason{}, Sources: []domain.CatalogSource{}}
 	if title.Kind == domain.MediaMovie {
-		detail.Sources = matched
+		detail.Sources = allSources
 		s.applyCatalogState(ctx, &detail)
 		return detail, nil
 	}
 	type episodeKey struct{ season, episode int }
 	episodes := map[episodeKey][]domain.CatalogSource{}
 	seasonPacks := map[int][]domain.CatalogSource{}
-	for _, source := range matched {
+	for _, source := range allSources {
 		p := source.Parsed
 		if p.EpisodeStart > 0 {
 			key := episodeKey{p.SeasonStart, p.EpisodeStart}
@@ -610,7 +635,7 @@ func filterCatalogSources(items []domain.CatalogSource, q domain.CatalogQuery) [
 		if r.Seeders <= 0 {
 			continue
 		}
-		if domain.DefaultBlacklistedCategory(r.Category) {
+		if r.DiscoveryExcluded {
 			continue
 		}
 		if search != "" && !strings.Contains(strings.ToLower(p.Title+" "+p.EpisodeTitle+" "+r.Name), search) {
@@ -655,6 +680,7 @@ func groupCatalog(items []domain.CatalogSource, includeSources bool) []domain.Ca
 	groups := map[string]*domain.CatalogTitle{}
 	categories, resolutions := map[string]map[string]bool{}, map[string]map[string]bool{}
 	seasons, episodes := map[string]map[int]bool{}, map[string]map[string]bool{}
+	trackers := map[string]map[string]domain.TrackerRef{}
 	order := []string{}
 	for _, x := range items {
 		id := domain.CatalogTitleID(x.Release, x.Parsed)
@@ -663,6 +689,7 @@ func groupCatalog(items []domain.CatalogSource, includeSources bool) []domain.Ca
 			title = &domain.CatalogTitle{ID: id, Title: x.Parsed.Title, Kind: x.Parsed.Kind, Year: x.Parsed.Year, IMDbID: x.Release.IMDbID, Categories: []string{}, Resolutions: []string{}, Sources: []domain.CatalogSource{}}
 			groups[id] = title
 			categories[id], resolutions[id], seasons[id], episodes[id] = map[string]bool{}, map[string]bool{}, map[int]bool{}, map[string]bool{}
+			trackers[id] = map[string]domain.TrackerRef{}
 			order = append(order, id)
 		}
 		title.SourceCount++
@@ -677,6 +704,13 @@ func groupCatalog(items []domain.CatalogSource, includeSources bool) []domain.Ca
 		}
 		categories[id][x.Release.Category] = true
 		setNonEmpty(resolutions[id], x.Parsed.Resolution)
+		if x.Release.TrackerID != "" {
+			name := x.Release.TrackerName
+			if name == "" {
+				name = x.Release.TrackerID
+			}
+			trackers[id][x.Release.TrackerID] = domain.TrackerRef{ID: x.Release.TrackerID, Name: name}
+		}
 		if x.Parsed.SeasonStart > 0 {
 			for n := x.Parsed.SeasonStart; n <= max(x.Parsed.SeasonStart, x.Parsed.SeasonEnd); n++ {
 				seasons[id][n] = true
@@ -694,6 +728,16 @@ func groupCatalog(items []domain.CatalogSource, includeSources bool) []domain.Ca
 		title := groups[id]
 		title.Categories, title.Resolutions = sortedKeys(categories[id]), sortedKeys(resolutions[id])
 		title.SeasonCount, title.EpisodeCount = len(seasons[id]), len(episodes[id])
+		trackerKeys := make([]string, 0, len(trackers[id]))
+		for tid := range trackers[id] {
+			trackerKeys = append(trackerKeys, tid)
+		}
+		sort.Strings(trackerKeys)
+		trackerList := make([]domain.TrackerRef, 0, len(trackerKeys))
+		for _, tid := range trackerKeys {
+			trackerList = append(trackerList, trackers[id][tid])
+		}
+		title.Trackers = trackerList
 		out = append(out, *title)
 	}
 	return out

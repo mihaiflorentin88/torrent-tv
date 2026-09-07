@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -56,6 +57,10 @@ func (e *streamEngine) Pause(context.Context, string) error  { return nil }
 func (e *streamEngine) Resume(context.Context, string) error { return nil }
 func (e *streamEngine) Remove(context.Context, string, bool) error {
 	return nil
+}
+
+func (e *streamEngine) ResolveMagnet(context.Context, string, string) ([]byte, error) {
+	return nil, errors.New("not supported")
 }
 
 func newStreamHTTPTest(t *testing.T, engine *streamEngine, download domain.Download) http.Handler {

@@ -190,10 +190,26 @@ func (e *retryEngine) Status(context.Context, string) (domain.DownloadStatus, er
 	return domain.DownloadStatus{Hash: "livehash", State: "downloading", TotalBytes: 4096}, nil
 }
 
-type openCatalog struct{ TrackerCatalog }
+type openCatalog struct{ Tracker }
 
-func (openCatalog) OpenTorrent(context.Context, string) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("d4:infod6:lengthi4eee")), nil
+func (openCatalog) ID() string   { return "filelist" }
+func (openCatalog) Name() string { return "FileList" }
+func (openCatalog) Capabilities() TrackerCapabilities {
+	return TrackerCapabilities{Categories: true}
+}
+func (openCatalog) Categories() []domain.TrackerCategory { return nil }
+func (openCatalog) Acquire(context.Context, string) (domain.TorrentAcquisition, error) {
+	return domain.TorrentAcquisition{Metainfo: []byte("d4:infod6:lengthi4eee")}, nil
+}
+
+func testRegistry(adapter Tracker) *TrackerRegistry {
+	reg, err := NewTrackerRegistry([]TrackerRegistration{
+		{Adapter: adapter, Enabled: func() bool { return true }, Configured: func() bool { return true }},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return reg
 }
 
 func retryHarness(t *testing.T) (*sqlite.Repository, *config.Store) {
@@ -249,7 +265,7 @@ func TestRetryResumesExistingTorrent(t *testing.T) {
 	repo, settings := retryHarness(t)
 	seedRetryDownload(t, repo, "release", true)
 	engine := &retryEngine{}
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 	if err := service.Manage(context.Background(), "episode", "retry", false); err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +282,7 @@ func TestRetryRepreparesVanishedTorrent(t *testing.T) {
 	repo, settings := retryHarness(t)
 	seedRetryDownload(t, repo, "release", true)
 	engine := &retryEngine{resumeErr: domain.ErrTorrentNotFound}
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 	if err := service.Manage(context.Background(), "episode", "retry", false); err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +302,7 @@ func TestRetrySurfacesErrorWhenReleaseGone(t *testing.T) {
 	repo, settings := retryHarness(t)
 	seedRetryDownload(t, repo, "gone", false)
 	engine := &retryEngine{resumeErr: domain.ErrTorrentNotFound}
-	service := NewService(openCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
 	err := service.Manage(context.Background(), "episode", "retry", false)
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("retry without a cached release must surface the lookup error: %v", err)
@@ -322,7 +338,7 @@ func TestDownloadsMarksForeignEngineRouteUnavailable(t *testing.T) {
 	if err := repo.SaveDownload(ctx, stale); err != nil {
 		t.Fatal(err)
 	}
-	service := NewService(openCatalog{}, &retryEngine{}, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), &retryEngine{}, repo, settings)
 	service.SetEngineRoutePrefix("native:")
 	items, err := service.Downloads(ctx)
 	if err != nil {
@@ -336,10 +352,16 @@ func TestDownloadsMarksForeignEngineRouteUnavailable(t *testing.T) {
 	}
 }
 
-type deadCatalog struct{ TrackerCatalog }
+type deadCatalog struct{ Tracker }
 
-func (deadCatalog) OpenTorrent(context.Context, string) (io.ReadCloser, error) {
-	return nil, fmt.Errorf("%w: FileList no longer hosts the .torrent for this release", domain.ErrTorrentRemoved)
+func (deadCatalog) ID() string   { return "filelist" }
+func (deadCatalog) Name() string { return "FileList" }
+func (deadCatalog) Capabilities() TrackerCapabilities {
+	return TrackerCapabilities{Categories: true}
+}
+func (deadCatalog) Categories() []domain.TrackerCategory { return nil }
+func (deadCatalog) Acquire(context.Context, string) (domain.TorrentAcquisition, error) {
+	return domain.TorrentAcquisition{}, fmt.Errorf("%w: FileList no longer hosts the .torrent for this release", domain.ErrTorrentRemoved)
 }
 
 func TestPrepareRemovesReleaseDeletedFromTracker(t *testing.T) {
@@ -348,7 +370,7 @@ func TestPrepareRemovesReleaseDeletedFromTracker(t *testing.T) {
 	if _, err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{movie}); err != nil {
 		t.Fatal(err)
 	}
-	service := NewService(deadCatalog{}, &retryEngine{}, repo, settings)
+	service := NewService(testRegistry(deadCatalog{}), &retryEngine{}, repo, settings)
 	_, err := service.Prepare(context.Background(), movie.ID, 0)
 	if err == nil || !strings.Contains(err.Error(), "no longer available on FileList") {
 		t.Fatalf("prepare must explain the removal to the user, got %v", err)
@@ -362,18 +384,28 @@ func TestPrepareRemovesReleaseDeletedFromTracker(t *testing.T) {
 	}
 }
 
-type idleCatalog struct{ TrackerCatalog }
+type idleCatalog struct{ Tracker }
 
+func (idleCatalog) ID() string   { return "filelist" }
+func (idleCatalog) Name() string { return "FileList" }
+func (idleCatalog) Capabilities() TrackerCapabilities {
+	return TrackerCapabilities{Categories: true}
+}
+func (idleCatalog) Categories() []domain.TrackerCategory { return nil }
 func (idleCatalog) Latest(context.Context) ([]domain.TorrentRelease, error) {
 	return nil, nil
 }
 
-func (idleCatalog) Category(context.Context, int) ([]domain.TorrentRelease, error) {
+func (idleCatalog) Category(context.Context, string) ([]domain.TorrentRelease, error) {
 	return nil, nil
 }
 
 func (idleCatalog) Search(context.Context, string) ([]domain.TorrentRelease, error) {
 	return nil, nil
+}
+
+func (idleCatalog) Acquire(context.Context, string) (domain.TorrentAcquisition, error) {
+	return domain.TorrentAcquisition{}, nil
 }
 
 type closerEngine struct {
@@ -389,7 +421,7 @@ func (e *closerEngine) Close() error {
 func TestCloseJoinsWorkersClosesEngineAndRepositoryIdempotently(t *testing.T) {
 	repo, settings := retryHarness(t)
 	engine := &closerEngine{}
-	service := NewService(idleCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(idleCatalog{}), engine, repo, settings)
 	service.StartScheduler()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -408,12 +440,18 @@ func TestCloseJoinsWorkersClosesEngineAndRepositoryIdempotently(t *testing.T) {
 }
 
 type blockingCatalog struct {
-	TrackerCatalog
+	Tracker
 	release chan struct{}
 	mu      sync.Mutex
 	entered bool
 }
 
+func (c *blockingCatalog) ID() string   { return "filelist" }
+func (c *blockingCatalog) Name() string { return "FileList" }
+func (c *blockingCatalog) Capabilities() TrackerCapabilities {
+	return TrackerCapabilities{Categories: true}
+}
+func (c *blockingCatalog) Categories() []domain.TrackerCategory { return nil }
 func (c *blockingCatalog) Latest(context.Context) ([]domain.TorrentRelease, error) {
 	c.mu.Lock()
 	c.entered = true
@@ -432,7 +470,7 @@ func TestCloseTimeoutAbortsHandoffKeepsRepositoryOpenAndBlocksJournal(t *testing
 	repo, settings := retryHarness(t)
 	catalog := &blockingCatalog{release: make(chan struct{})}
 	engine := &closerEngine{}
-	service := NewService(catalog, engine, repo, settings)
+	service := NewService(testRegistry(catalog), engine, repo, settings)
 	if _, err := service.SyncCatalog("latest"); err != nil {
 		t.Fatal(err)
 	}

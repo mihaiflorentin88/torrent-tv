@@ -8,20 +8,15 @@ import (
 	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
-type TrackerCatalog interface {
-	Latest(context.Context) ([]domain.TorrentRelease, error)
-	Category(context.Context, int) ([]domain.TorrentRelease, error)
-	Search(context.Context, string) ([]domain.TorrentRelease, error)
-	OpenTorrent(context.Context, string) (io.ReadCloser, error)
-}
-
-// Tracker is the provider-neutral catalog boundary. TrackerCatalog remains the
-// minimum compatibility surface for existing adapters and tests; new trackers
-// advertise their identity and capabilities through this interface.
 type Tracker interface {
-	TrackerCatalog
 	ID() string
+	Name() string
 	Capabilities() TrackerCapabilities
+	Categories() []domain.TrackerCategory
+	Latest(context.Context) ([]domain.TorrentRelease, error)
+	Category(context.Context, string) ([]domain.TorrentRelease, error)
+	Search(context.Context, string) ([]domain.TorrentRelease, error)
+	Acquire(context.Context, string) (domain.TorrentAcquisition, error)
 }
 type TrackerCapabilities struct {
 	IMDbSearch    bool `json:"imdbSearch"`
@@ -46,6 +41,7 @@ type TorrentEngine interface {
 	Pause(context.Context, string) error
 	Resume(context.Context, string) error
 	Remove(context.Context, string, bool) error
+	ResolveMagnet(ctx context.Context, uri string, downloadRoot string) ([]byte, error)
 }
 type SubtitleQuery struct {
 	Release          domain.TorrentRelease

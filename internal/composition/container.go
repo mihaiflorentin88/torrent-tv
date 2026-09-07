@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/httpapi"
 	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/mediaprobe"
 	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/nativetorrent"
+	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/piratebay"
 	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/portalclient"
 	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/qbittorrent"
 	"github.com/mihaiflorentin88/torrent-tv/internal/adapters/sqlite"
@@ -29,6 +31,7 @@ import (
 	"github.com/mihaiflorentin88/torrent-tv/internal/application"
 	"github.com/mihaiflorentin88/torrent-tv/internal/application/portal"
 	"github.com/mihaiflorentin88/torrent-tv/internal/application/updates"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 	"golang.org/x/term"
 )
@@ -128,6 +131,35 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 		v := settings.Get()
 		return v.FileListURL, v.FileListUsername, v.FileListPasskey
 	})
+	pb := piratebay.New(func() (string, string) {
+		v := settings.Get()
+		return v.PirateBayWebsiteURL, v.PirateBayAPIURL
+	})
+	registry, err := application.NewTrackerRegistry([]application.TrackerRegistration{
+		{
+			Adapter: filelistAdapter{fl},
+			Enabled: func() bool {
+				return settings.Get().FileListEnabled
+			},
+			Configured: func() bool {
+				v := settings.Get()
+				return strings.TrimSpace(v.FileListUsername) != "" && strings.TrimSpace(v.FileListPasskey) != ""
+			},
+		},
+		{
+			Adapter: pb,
+			Enabled: func() bool {
+				return settings.Get().PirateBayEnabled
+			},
+			Configured: func() bool {
+				v := settings.Get()
+				return strings.TrimSpace(v.PirateBayWebsiteURL) != "" && strings.TrimSpace(v.PirateBayAPIURL) != ""
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("tracker registry: %w", err)
+	}
 	var engine application.TorrentEngine
 	var engineCloser io.Closer
 	routePrefix := "qb:"
@@ -152,7 +184,7 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 	default:
 		return nil, fmt.Errorf("unknown download engine %q", current.DownloadEngine)
 	}
-	service := application.NewService(fl, engine, repo, settings, subtitles.NewSubDL(settings))
+	service := application.NewService(registry, engine, repo, settings, subtitles.NewSubDL(settings))
 	service.SetMetadataProvider(tmdb.New(func() string { return settings.Get().TMDBAPIKey }))
 	service.SetMediaProbe(mediaprobe.New(settings))
 	service.SetEngineRoutePrefix(routePrefix)
@@ -618,6 +650,31 @@ func (b *completingAssetBody) Close() error {
 // jitterInterval returns a bounded, always-positive offset in [5%, 15%)
 // of the base interval so installations never check or refresh in
 // lockstep.
+type filelistAdapter struct {
+	*filelist.Client
+}
+
+func (a filelistAdapter) Categories() []domain.TrackerCategory {
+	out := make([]domain.TrackerCategory, 0, len(domain.Categories))
+	for _, c := range domain.Categories {
+		out = append(out, domain.TrackerCategory{
+			ID:          strconv.Itoa(c.ID),
+			Name:        c.Name,
+			BrowseClass: c.Artwork,
+			Excluded:    c.DefaultBlacklisted,
+		})
+	}
+	return out
+}
+
+func (a filelistAdapter) Category(ctx context.Context, categoryID string) ([]domain.TorrentRelease, error) {
+	id, err := strconv.Atoi(categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid FileList category ID %q: %w", categoryID, err)
+	}
+	return a.Client.Category(ctx, id)
+}
+
 func jitterInterval(d time.Duration) time.Duration {
 	if d <= 0 {
 		return 0

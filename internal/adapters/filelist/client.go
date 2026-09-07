@@ -182,7 +182,7 @@ func filelistCategory(name string) (id string, browseClass string, excluded bool
 			return strconv.Itoa(c.ID), class, c.DefaultBlacklisted
 		}
 	}
-	return name, "other", false
+	return name, "other", true
 }
 
 func (c *Client) request(ctx context.Context, path string) (*http.Response, error) {

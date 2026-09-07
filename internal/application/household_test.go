@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,13 +54,19 @@ func (e *streamingEngine) PrepareRange(context.Context, string, int, int64, int6
 func (e *streamingEngine) Resume(context.Context, string) error { e.resumed = true; return nil }
 
 type failingCatalog struct {
-	TrackerCatalog
+	Tracker
 	opens int
 }
 
-func (c *failingCatalog) OpenTorrent(context.Context, string) (io.ReadCloser, error) {
+func (*failingCatalog) ID() string   { return "filelist" }
+func (*failingCatalog) Name() string { return "FileList" }
+func (*failingCatalog) Capabilities() TrackerCapabilities {
+	return TrackerCapabilities{Categories: true}
+}
+func (*failingCatalog) Categories() []domain.TrackerCategory { return nil }
+func (c *failingCatalog) Acquire(context.Context, string) (domain.TorrentAcquisition, error) {
 	c.opens++
-	return nil, fmt.Errorf("FileList rate limit")
+	return domain.TorrentAcquisition{}, fmt.Errorf("FileList rate limit")
 }
 
 func (e *removeEngine) Remove(_ context.Context, _ string, deleteFiles bool) error {
@@ -188,7 +193,7 @@ func TestPrepareReusesManagedDownloadWithoutTrackerLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	catalog := &failingCatalog{}
-	service := NewService(catalog, &removeEngine{}, repo, settings)
+	service := NewService(testRegistry(catalog), &removeEngine{}, repo, settings)
 
 	got, err := service.Prepare(ctx, release.ID, download.FileIndex)
 	if err != nil || got.ID != download.ID {
@@ -233,7 +238,7 @@ func TestPrepareReappliesStreamingSettingsForIncompleteManagedDownload(t *testin
 		t.Fatal(err)
 	}
 	engine := &streamingEngine{}
-	service := NewService(&failingCatalog{}, engine, repo, settings)
+	service := NewService(testRegistry(&failingCatalog{}), engine, repo, settings)
 	if _, err := service.Prepare(ctx, release.ID, download.FileIndex); err != nil {
 		t.Fatal(err)
 	}

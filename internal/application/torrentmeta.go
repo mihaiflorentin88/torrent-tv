@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,21 +18,36 @@ type bnode struct {
 	dict  map[string]bnode
 }
 
-func (s *Service) torrentManifest(ctx context.Context, release domain.TorrentRelease) (domain.TorrentManifest, error) {
-	if cached, err := s.repo.GetTorrentManifest(ctx, release.ID); err == nil {
-		return cached, nil
-	} else if err != sql.ErrNoRows {
-		return domain.TorrentManifest{}, err
+func (s *Service) releaseMetainfo(ctx context.Context, release domain.TorrentRelease) ([]byte, error) {
+	if cached, err := s.repo.GetTorrentManifest(ctx, release.ID); err == nil && len(cached.Metainfo) > 0 {
+		return cached.Metainfo, nil
+	} else if err != nil && err != sql.ErrNoRows {
+		return nil, err
 	}
-	body, err := s.catalog.OpenTorrent(ctx, release.ID)
+	tracker, err := s.trackers.RequireEligible(release.TrackerID)
 	if err != nil {
-		return domain.TorrentManifest{}, err
+		return nil, err
 	}
-	defer body.Close()
-	data, err := io.ReadAll(io.LimitReader(body, 16<<20))
+	providerID := release.ProviderID
+	if providerID == "" {
+		providerID = release.ID
+	}
+	acquisition, err := tracker.Acquire(ctx, providerID)
 	if err != nil {
-		return domain.TorrentManifest{}, err
+		return nil, err
 	}
+	if err := acquisition.Validate(); err != nil {
+		return nil, err
+	}
+	if acquisition.Magnet == "" {
+		return acquisition.Metainfo, nil
+	}
+	resolveCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	return s.engine.ResolveMagnet(resolveCtx, acquisition.Magnet, s.settings.Get().DownloadRoot)
+}
+
+func parseTorrentManifest(releaseID string, data []byte) (domain.TorrentManifest, error) {
 	if len(data) == 0 || len(data) >= 16<<20 {
 		return domain.TorrentManifest{}, fmt.Errorf("torrent metadata is empty or too large")
 	}
@@ -69,13 +83,35 @@ func (s *Service) torrentManifest(ctx context.Context, release domain.TorrentRel
 		if e != nil {
 			return domain.TorrentManifest{}, e
 		}
-		path, ok := safeTorrentPath(string(info.dict["name"].value))
+		name := string(info.dict["name"].value)
+		if name == "" {
+			name = "content"
+		}
+		path, ok := safeTorrentPath(name)
 		if !ok {
 			return domain.TorrentManifest{}, fmt.Errorf("torrent contains an unsafe file path")
 		}
 		files = append(files, domain.TorrentFile{Index: 0, Path: path, SizeBytes: length, Playable: isPlayable(path)})
 	}
-	manifest := domain.TorrentManifest{ReleaseID: release.ID, Files: files, FetchedAt: time.Now().UTC()}
+	return domain.TorrentManifest{ReleaseID: releaseID, Files: files, Metainfo: data, FetchedAt: time.Now().UTC()}, nil
+}
+
+func (s *Service) torrentManifest(ctx context.Context, release domain.TorrentRelease) (domain.TorrentManifest, error) {
+	if cached, err := s.repo.GetTorrentManifest(ctx, release.ID); err == nil {
+		if len(cached.Files) > 0 || len(cached.Metainfo) > 0 {
+			return cached, nil
+		}
+	} else if err != sql.ErrNoRows {
+		return domain.TorrentManifest{}, err
+	}
+	data, err := s.releaseMetainfo(ctx, release)
+	if err != nil {
+		return domain.TorrentManifest{}, err
+	}
+	manifest, err := parseTorrentManifest(release.ID, data)
+	if err != nil {
+		return domain.TorrentManifest{}, err
+	}
 	if err = s.repo.SaveTorrentManifest(ctx, manifest); err != nil {
 		return domain.TorrentManifest{}, err
 	}
@@ -150,6 +186,7 @@ func bint(node bnode) (int64, error) {
 	}
 	return value, nil
 }
+
 func safeTorrentPath(path string) (string, bool) {
 	path = strings.Trim(strings.ReplaceAll(path, "\\", "/"), "/")
 	if path == "" {
@@ -162,6 +199,7 @@ func safeTorrentPath(path string) (string, bool) {
 	}
 	return path, true
 }
+
 func isPlayable(path string) bool {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts", ".mp3", ".m4a", ".flac", ".ogg", ".opus":

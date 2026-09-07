@@ -41,9 +41,16 @@ func (e *prepareGateEngine) Status(_ context.Context, hash string) (domain.Downl
 }
 
 type prepareGateCatalog struct {
-	application.TrackerCatalog
+	application.Tracker
 	torrent string
 }
+
+func (prepareGateCatalog) ID() string   { return "filelist" }
+func (prepareGateCatalog) Name() string { return "FileList" }
+func (prepareGateCatalog) Capabilities() application.TrackerCapabilities {
+	return application.TrackerCapabilities{Categories: true}
+}
+func (prepareGateCatalog) Categories() []domain.TrackerCategory { return nil }
 
 func (e *prepareGateEngine) Remove(_ context.Context, hash string, _ bool) error {
 	e.mu.Lock()
@@ -57,8 +64,8 @@ func (e *prepareGateEngine) PrepareRange(context.Context, string, int, int64, in
 	return nil
 }
 
-func (c prepareGateCatalog) OpenTorrent(context.Context, string) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader(c.torrent)), nil
+func (c prepareGateCatalog) Acquire(context.Context, string) (domain.TorrentAcquisition, error) {
+	return domain.TorrentAcquisition{Metainfo: []byte(c.torrent)}, nil
 }
 
 func newPrepareGateHandler(t *testing.T, engine application.TorrentEngine) http.Handler {
@@ -99,7 +106,14 @@ func newPrepareGateHandler(t *testing.T, engine application.TorrentEngine) http.
 	if err := repo.SaveDownload(ctx, download); err != nil {
 		t.Fatal(err)
 	}
-	service := application.NewService(prepareGateCatalog{torrent: "d4:infod6:lengthi524288000e4:name5:movieee"}, engine, repo, store)
+	registry, _ := application.NewTrackerRegistry([]application.TrackerRegistration{
+		{
+			Adapter:    prepareGateCatalog{torrent: "d4:infod6:lengthi524288000e4:name5:movieee"},
+			Enabled:    func() bool { return true },
+			Configured: func() bool { return true },
+		},
+	})
+	service := application.NewService(registry, engine, repo, store)
 	return New(service, store, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
 }
 

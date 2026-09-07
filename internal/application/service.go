@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -22,7 +23,7 @@ import (
 )
 
 type Service struct {
-	catalog           TrackerCatalog
+	trackers          *TrackerRegistry
 	engine            TorrentEngine
 	engineRoutePrefix string
 	repo              Repository
@@ -39,7 +40,8 @@ type Service struct {
 	refreshQueue      chan titleRefreshRequest
 	searchQueue       chan trackerSearchRequest
 	jobSlots          chan struct{}
-	trackerSlots      chan struct{}
+	providerSlotsMu   sync.Mutex
+	providerSlots     map[string]chan struct{}
 	pendingMu         sync.Mutex
 	pendingMetadata   map[string]bool
 	mediaInfoMu       sync.Mutex
@@ -68,13 +70,30 @@ type (
 	trackerSearchRequest struct{ Query string }
 )
 
-func NewService(c TrackerCatalog, e TorrentEngine, r Repository, s *config.Store, subtitles ...SubtitleProvider) *Service {
+func NewService(trackers *TrackerRegistry, e TorrentEngine, r Repository, s *config.Store, subtitles ...SubtitleProvider) *Service {
 	limit := s.Get().MaxConcurrentJobs
 	if limit < 1 {
 		limit = 10
 	}
 	base, cancel := context.WithCancel(context.Background())
-	service := &Service{catalog: c, engine: e, repo: r, settings: s, subtitles: subtitles, eventSubscribers: map[chan domain.Event]struct{}{}, refreshQueue: make(chan titleRefreshRequest, 256), searchQueue: make(chan trackerSearchRequest, 256), jobSlots: make(chan struct{}, limit), trackerSlots: make(chan struct{}, 1), pendingMetadata: map[string]bool{}, mediaInfoCache: map[string]cachedMediaInfo{}, freeSpace: freeDiskBytes, baseCtx: base, cancelBase: cancel, stopping: make(chan struct{})}
+	service := &Service{
+		trackers:         trackers,
+		engine:           e,
+		repo:             r,
+		settings:         s,
+		subtitles:        subtitles,
+		eventSubscribers: map[chan domain.Event]struct{}{},
+		refreshQueue:     make(chan titleRefreshRequest, 256),
+		searchQueue:      make(chan trackerSearchRequest, 256),
+		jobSlots:         make(chan struct{}, limit),
+		providerSlots:    make(map[string]chan struct{}),
+		pendingMetadata:  map[string]bool{},
+		mediaInfoCache:   map[string]cachedMediaInfo{},
+		freeSpace:        freeDiskBytes,
+		baseCtx:          base,
+		cancelBase:       cancel,
+		stopping:         make(chan struct{}),
+	}
 	service.wg.Add(2)
 	go service.titleRefreshWorker()
 	go service.trackerSearchWorker()
@@ -95,30 +114,28 @@ func (s *Service) SetMetadataProvider(provider MetadataProvider) {
 
 func (s *Service) SetMediaProbe(probe MediaProbe) { s.mediaProbe = probe }
 
-func (s *Service) acquire(ctx context.Context, tracker bool) error {
-	if tracker {
-		select {
-		case s.trackerSlots <- struct{}{}:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
+func (s *Service) acquireJob(ctx context.Context) error {
 	select {
 	case s.jobSlots <- struct{}{}:
 		return nil
 	case <-ctx.Done():
-		if tracker {
-			<-s.trackerSlots
-		}
 		return ctx.Err()
 	}
 }
 
-func (s *Service) release(tracker bool) {
+func (s *Service) releaseJob() {
 	<-s.jobSlots
-	if tracker {
-		<-s.trackerSlots
+}
+
+func (s *Service) providerSlot(trackerID string) chan struct{} {
+	s.providerSlotsMu.Lock()
+	defer s.providerSlotsMu.Unlock()
+	ch, ok := s.providerSlots[trackerID]
+	if !ok {
+		ch = make(chan struct{}, 1)
+		s.providerSlots[trackerID] = ch
 	}
+	return ch
 }
 
 func (s *Service) jobLog(job domain.Job, level, phase, message string, fields map[string]any) {
@@ -149,7 +166,7 @@ func (s *Service) metadataWorker() {
 }
 
 func (s *Service) runMetadataRequest(request metadataRequest) {
-	if err := s.acquire(s.baseCtx, false); err != nil {
+	if err := s.acquireJob(s.baseCtx); err != nil {
 		return
 	}
 	job, _ := s.repo.GetJob(context.Background(), "metadata:"+request.TitleID)
@@ -193,7 +210,7 @@ func (s *Service) runMetadataRequest(request metadataRequest) {
 	s.pendingMu.Lock()
 	delete(s.pendingMetadata, request.TitleID)
 	s.pendingMu.Unlock()
-	s.release(false)
+	s.releaseJob()
 }
 
 func (s *Service) publish(kind string, payload any) {
@@ -319,7 +336,7 @@ func (s *Service) SyncCatalog(mode string) (domain.Job, error) {
 	if mode != "latest" && mode != "rebuild" {
 		return domain.Job{}, fmt.Errorf("mode must be latest or rebuild")
 	}
-	job := domain.Job{ID: "catalog-" + mode, Kind: "catalog-" + mode, State: "queued", Label: map[string]string{"latest": "Fetch latest FileList releases", "rebuild": "Rebuild FileList catalog"}[mode], DedupeKey: "catalog-" + mode, Attempt: 1, UpdatedAt: time.Now().UTC()}
+	job := domain.Job{ID: "catalog-" + mode, Kind: "catalog-" + mode, State: "queued", Label: map[string]string{"latest": "Fetch latest releases", "rebuild": "Rebuild catalog"}[mode], DedupeKey: "catalog-" + mode, Attempt: 1, UpdatedAt: time.Now().UTC()}
 	jobs, _ := s.repo.ListJobs(context.Background(), 200)
 	for _, existing := range jobs {
 		if existing.DedupeKey == job.DedupeKey && (existing.State == "queued" || existing.State == "running") {
@@ -344,10 +361,6 @@ func (s *Service) SyncCatalog(mode string) (domain.Job, error) {
 func (s *Service) runCatalogSync(job domain.Job, mode string) {
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
-	if err := s.acquire(s.baseCtx, true); err != nil {
-		return
-	}
-	defer s.release(true)
 	ctx := s.baseCtx
 	job.State = "running"
 	job.Progress = .02
@@ -355,56 +368,163 @@ func (s *Service) runCatalogSync(job domain.Job, mode string) {
 	_ = s.repo.SaveJob(ctx, job)
 	s.publish("job.updated", job)
 	s.jobLog(job, "info", "start", "Catalog synchronization started", map[string]any{"mode": mode})
-	var err error
+
+	eligible := s.trackers.EligibleIDs()
 	total := 0
-	if mode == "latest" {
-		var items []domain.TorrentRelease
-		items, err = s.catalog.Latest(ctx)
-		if err == nil {
-			total = len(items)
-			_, err = s.upsertReleases(ctx, items)
-		}
-		_ = s.repo.RecordSync(ctx, "latest", total, err)
-	} else {
-		categories := []domain.Category{}
-		for _, category := range domain.Categories {
-			if !category.DefaultBlacklisted {
-				categories = append(categories, category)
-			}
-		}
-		for i, category := range categories {
-			items, e := s.catalog.Category(ctx, category.ID)
-			if e != nil {
-				err = e
-				break
-			}
-			if _, e = s.upsertReleases(ctx, items); e != nil {
-				err = e
-				break
-			}
-			total += len(items)
-			job.Progress = float64(i+1) / float64(len(categories))
-			job.UpdatedAt = time.Now().UTC()
-			_ = s.repo.SaveJob(ctx, job)
-			s.publish("job.updated", job)
-		}
-		_ = s.repo.RecordSync(ctx, "rebuild", total, err)
+	type trackerSyncResult struct {
+		id    string
+		count int
+		err   error
 	}
+	results := make([]trackerSyncResult, len(eligible))
+	var wg sync.WaitGroup
+
+	for i, id := range eligible {
+		tr, ok := s.trackers.Lookup(id)
+		if !ok {
+			continue
+		}
+		wg.Add(1)
+		s.wg.Add(1)
+		go func(idx int, trackerID string, tracker Tracker) {
+			defer s.wg.Done()
+			defer wg.Done()
+
+			if err := s.acquireJob(ctx); err != nil {
+				results[idx] = trackerSyncResult{id: trackerID, err: err}
+				return
+			}
+			defer s.releaseJob()
+
+			slot := s.providerSlot(trackerID)
+			select {
+			case slot <- struct{}{}:
+			case <-ctx.Done():
+				results[idx] = trackerSyncResult{id: trackerID, err: ctx.Err()}
+				return
+			}
+			defer func() { <-slot }()
+
+			if !s.trackers.Eligible(trackerID) {
+				return
+			}
+
+			childKey := trackerID + ":" + mode
+			childJob := domain.Job{
+				ID:        childKey,
+				TrackerID: trackerID,
+				Kind:      "catalog-" + mode,
+				State:     "running",
+				DedupeKey: childKey,
+				Label:     fmt.Sprintf("%s %s sync", tracker.Name(), mode),
+				Attempt:   1,
+				UpdatedAt: time.Now().UTC(),
+			}
+			_ = s.repo.SaveJob(ctx, childJob)
+			s.publish("job.updated", childJob)
+
+			var items []domain.TorrentRelease
+			var err error
+			if mode == "latest" {
+				items, err = tracker.Latest(ctx)
+			} else {
+				categories := tracker.Categories()
+				for catIdx, category := range categories {
+					if category.Excluded {
+						continue
+					}
+					catItems, e := tracker.Category(ctx, category.ID)
+					if e != nil {
+						err = e
+						break
+					}
+					items = append(items, catItems...)
+					if len(categories) > 0 {
+						childJob.Progress = float64(catIdx+1) / float64(len(categories))
+					}
+					childJob.UpdatedAt = time.Now().UTC()
+					_ = s.repo.SaveJob(ctx, childJob)
+					s.publish("job.updated", childJob)
+				}
+			}
+
+			// Check live eligibility again before exposing results
+			if !s.trackers.Eligible(trackerID) {
+				childJob.State = "completed"
+				childJob.Progress = 1
+				childJob.UpdatedAt = time.Now().UTC()
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				return
+			}
+
+			if err != nil {
+				s.failOrWait(&childJob, err, "catalog-sync")
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				_ = s.repo.RecordSync(ctx, childKey, 0, err)
+				results[idx] = trackerSyncResult{id: trackerID, err: err}
+				return
+			}
+
+			stored, upsertErr := s.upsertTrackerReleases(ctx, trackerID, tracker.Name(), items)
+			if upsertErr != nil {
+				s.failOrWait(&childJob, upsertErr, "catalog-sync")
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				_ = s.repo.RecordSync(ctx, childKey, 0, upsertErr)
+				results[idx] = trackerSyncResult{id: trackerID, err: upsertErr}
+				return
+			}
+
+			childJob.State = "completed"
+			childJob.Progress = 1
+			childJob.UpdatedAt = time.Now().UTC()
+			_ = s.repo.SaveJob(ctx, childJob)
+			s.publish("job.updated", childJob)
+			_ = s.repo.RecordSync(ctx, childKey, len(stored), nil)
+			s.publish("catalog.updated", map[string]any{"mode": mode, "tracker": trackerID, "items": len(stored), "job": childJob})
+			results[idx] = trackerSyncResult{id: trackerID, count: len(stored)}
+		}(i, id, tr)
+	}
+	wg.Wait()
+
+	var namedFailures []string
+	successfulTrackers := 0
+	for _, res := range results {
+		if res.err != nil {
+			namedFailures = append(namedFailures, fmt.Sprintf("%s: %s", res.id, res.err.Error()))
+		} else {
+			successfulTrackers++
+			total += res.count
+		}
+	}
+
 	job.UpdatedAt = time.Now().UTC()
-	if err != nil {
-		s.failOrWait(&job, err, "catalog-sync")
+	if len(namedFailures) > 0 && successfulTrackers == 0 && len(eligible) > 0 {
+		job.State = "failed"
+		job.Error = strings.Join(namedFailures, "; ")
+		job.Progress = 0
 	} else {
 		job.State = "completed"
 		job.Retryable = false
 		job.NextAttemptAt = nil
 		job.Progress = 1
+		if len(namedFailures) > 0 {
+			job.Error = strings.Join(namedFailures, "; ")
+		} else {
+			job.Error = ""
+		}
 		if retained, discoverable, countErr := s.repo.CatalogCounts(ctx, s.eligibleTrackerIDs()); countErr == nil {
 			job.Label = fmt.Sprintf("%s · %d refreshed · %d retained (%d discoverable)", job.Label, total, retained, discoverable)
 		}
 	}
 	_ = s.repo.SaveJob(ctx, job)
-	if err == nil {
+	s.publish("job.updated", job)
+	if job.State == "completed" {
 		s.jobLog(job, "info", "complete", "Catalog synchronization completed", map[string]any{"items": total})
+	} else {
+		s.jobLog(job, "error", "complete", "Catalog synchronization failed", map[string]any{"error": job.Error})
 	}
 	s.publish("catalog.updated", map[string]any{"mode": mode, "items": total, "job": job})
 }
@@ -436,7 +556,10 @@ func (s *Service) RetryJob(ctx context.Context, id string) (domain.Job, error) {
 		}
 		return s.QueueTitleRefresh(ctx, titleID, groupCatalog(sources, false)[0].Title, true)
 	case "tracker-search":
-		query := strings.TrimPrefix(job.Label, "Search FileList for ")
+		query := strings.TrimPrefix(job.Label, "Search for ")
+		if query == job.Label {
+			query = strings.TrimPrefix(job.Label, "Search FileList for ")
+		}
 		return s.QueueTrackerSearch(ctx, query, true)
 	case retentionKind:
 		return s.RunRetention()
@@ -593,6 +716,9 @@ func (s *Service) recoverInterruptedJobs() {
 		return
 	}
 	for _, job := range jobs {
+		if job.TrackerID == "" && (job.Kind == "tracker-search" || job.Kind == "catalog-latest" || job.Kind == "catalog-rebuild" || job.Kind == "catalog-title-refresh") {
+			job.TrackerID = "filelist"
+		}
 		if job.State != "queued" && job.State != "running" {
 			continue
 		}
@@ -602,10 +728,9 @@ func (s *Service) recoverInterruptedJobs() {
 				continue
 			}
 			if sources, sourceErr := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{strings.TrimPrefix(job.DedupeKey, "catalog-title-refresh:")}, s.eligibleTrackerIDs()); sourceErr == nil && len(sources) > 0 {
-				blacklisted := defaultBlacklistedCategories()
 				allowed := false
 				for _, source := range sources {
-					allowed = allowed || !blacklisted[source.Release.Category]
+					allowed = allowed || !source.Release.DiscoveryExcluded
 				}
 				if !allowed {
 					job.State, job.Error, job.UpdatedAt = "failed", "category is excluded from discovery", time.Now().UTC()
@@ -659,58 +784,182 @@ func (s *Service) JobLogs(ctx context.Context, id string, before int64, limit in
 }
 
 func (s *Service) Browse(ctx context.Context, search, category string, limit, offset int) (domain.Page[domain.TorrentRelease], error) {
-	key := "latest"
-	age, err := s.repo.SyncAge(ctx, key)
-	if err != nil {
-		return domain.Page[domain.TorrentRelease]{}, err
+	eligible := s.eligibleTrackerIDs()
+	stale := true
+	if len(eligible) > 0 {
+		for _, id := range eligible {
+			if age, err := s.repo.SyncAge(ctx, id+":latest"); err == nil && age >= 0 && time.Duration(age)*time.Second <= s.settings.CatalogMaxAge() {
+				stale = false
+				break
+			}
+		}
 	}
-	stale := age < 0 || time.Duration(age)*time.Second > s.settings.CatalogMaxAge()
-	page, err := s.repo.ListReleases(ctx, search, category, limit, offset, s.eligibleTrackerIDs())
+	page, err := s.repo.ListReleases(ctx, search, category, limit, offset, eligible)
 	page.Stale = stale
 	return page, err
 }
 
 func (s *Service) Search(ctx context.Context, q string) (domain.Page[domain.TorrentRelease], error) {
-	if len([]rune(strings.TrimSpace(q))) < 3 {
+	q = strings.TrimSpace(q)
+	if len([]rune(q)) < 3 {
 		return domain.Page[domain.TorrentRelease]{Items: []domain.TorrentRelease{}}, nil
 	}
-	key := "search:" + strings.ToLower(strings.TrimSpace(q))
-	items, err := s.catalog.Search(ctx, q)
-	_ = s.repo.RecordSync(ctx, key, len(items), err)
-	if err != nil {
-		return domain.Page[domain.TorrentRelease]{}, err
+	eligible := s.trackers.EligibleIDs()
+	if len(eligible) == 0 {
+		return domain.Page[domain.TorrentRelease]{Items: []domain.TorrentRelease{}}, nil
 	}
-	stored, err := s.upsertReleases(ctx, items)
-	if err != nil {
-		return domain.Page[domain.TorrentRelease]{}, err
+
+	sum := sha256.Sum256([]byte(strings.ToLower(q)))
+	queryHash := base64.RawURLEncoding.EncodeToString(sum[:12])
+	type trackerSearchResult struct {
+		id    string
+		items []domain.TorrentRelease
+		err   error
 	}
-	seen := map[string]bool{}
-	blacklisted := defaultBlacklistedCategories()
-	for _, release := range stored {
-		if blacklisted[release.Category] {
+	results := make([]trackerSearchResult, len(eligible))
+	var wg sync.WaitGroup
+
+	for i, id := range eligible {
+		tr, ok := s.trackers.Lookup(id)
+		if !ok {
+			continue
+		}
+		wg.Add(1)
+		s.wg.Add(1)
+		go func(idx int, trackerID string, tracker Tracker) {
+			defer s.wg.Done()
+			defer wg.Done()
+
+			if err := s.acquireJob(ctx); err != nil {
+				results[idx] = trackerSearchResult{id: trackerID, err: err}
+				return
+			}
+			defer s.releaseJob()
+
+			slot := s.providerSlot(trackerID)
+			select {
+			case slot <- struct{}{}:
+			case <-ctx.Done():
+				results[idx] = trackerSearchResult{id: trackerID, err: ctx.Err()}
+				return
+			}
+			defer func() { <-slot }()
+
+			if !s.trackers.Eligible(trackerID) {
+				return
+			}
+
+			searchKey := "tracker-search:" + trackerID + ":" + queryHash
+			childJob := domain.Job{
+				ID:        searchKey,
+				TrackerID: trackerID,
+				Kind:      "tracker-search",
+				State:     "running",
+				DedupeKey: searchKey,
+				Label:     fmt.Sprintf("Search %s for %s", tracker.Name(), q),
+				Attempt:   1,
+				UpdatedAt: time.Now().UTC(),
+			}
+			_ = s.repo.SaveJob(ctx, childJob)
+			s.publish("job.updated", childJob)
+
+			items, err := tracker.Search(ctx, q)
+
+			// Recheck live eligibility before exposing results
+			if !s.trackers.Eligible(trackerID) {
+				childJob.State = "completed"
+				childJob.Progress = 1
+				childJob.UpdatedAt = time.Now().UTC()
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				return
+			}
+
+			if err != nil {
+				s.failOrWait(&childJob, err, "tracker-search")
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				_ = s.repo.RecordSync(ctx, searchKey, 0, err)
+				results[idx] = trackerSearchResult{id: trackerID, err: err}
+				return
+			}
+
+			stored, upsertErr := s.upsertTrackerReleases(ctx, trackerID, tracker.Name(), items)
+			if upsertErr != nil {
+				s.failOrWait(&childJob, upsertErr, "tracker-search")
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				_ = s.repo.RecordSync(ctx, searchKey, 0, upsertErr)
+				results[idx] = trackerSearchResult{id: trackerID, err: upsertErr}
+				return
+			}
+
+			seen := map[string]bool{}
+			for _, release := range stored {
+				if release.DiscoveryExcluded {
+					continue
+				}
+				parsed := domain.ParseRelease(release)
+				tid := domain.CatalogTitleID(release, parsed)
+				if tid == "" || seen[tid] || len([]rune(strings.TrimSpace(parsed.Title))) < 3 {
+					continue
+				}
+				seen[tid] = true
+				_, _ = s.QueueTitleRefresh(context.Background(), tid, parsed.Title, false)
+			}
+
+			childJob.State = "completed"
+			childJob.Progress = 1
+			childJob.UpdatedAt = time.Now().UTC()
+			_ = s.repo.SaveJob(ctx, childJob)
+			s.publish("job.updated", childJob)
+			_ = s.repo.RecordSync(ctx, searchKey, len(stored), nil)
+			s.publish("catalog.search.completed", map[string]any{"query": q, "tracker": trackerID, "items": len(stored), "titleCount": len(seen)})
+			results[idx] = trackerSearchResult{id: trackerID, items: stored}
+		}(i, id, tr)
+	}
+	wg.Wait()
+
+	var allStored []domain.TorrentRelease
+	var namedFailures []string
+	successful := 0
+	for _, res := range results {
+		if res.err != nil {
+			namedFailures = append(namedFailures, fmt.Sprintf("%s: %s", res.id, res.err.Error()))
+		} else {
+			successful++
+			allStored = append(allStored, res.items...)
+		}
+	}
+
+	if len(namedFailures) > 0 && successful == 0 {
+		return domain.Page[domain.TorrentRelease]{}, errors.New(strings.Join(namedFailures, "; "))
+	}
+
+	seenTitles := map[string]bool{}
+	for _, release := range allStored {
+		if release.DiscoveryExcluded {
 			continue
 		}
 		parsed := domain.ParseRelease(release)
-		id := domain.CatalogTitleID(release, parsed)
-		if id == "" || seen[id] || len([]rune(strings.TrimSpace(parsed.Title))) < 3 {
-			continue
+		tid := domain.CatalogTitleID(release, parsed)
+		if tid != "" {
+			seenTitles[tid] = true
 		}
-		seen[id] = true
-		_, _ = s.QueueTitleRefresh(context.Background(), id, parsed.Title, false)
 	}
-	s.publish("catalog.search.completed", map[string]any{"query": q, "items": len(stored), "titleCount": len(seen)})
-	return domain.Page[domain.TorrentRelease]{Items: stored, Total: len(stored)}, nil
+	s.publish("catalog.search.completed", map[string]any{"query": q, "items": len(allStored), "titleCount": len(seenTitles)})
+	return domain.Page[domain.TorrentRelease]{Items: allStored, Total: len(allStored)}, nil
 }
 
 func (s *Service) eligibleTrackerIDs() []string {
-	return []string{"filelist"}
+	return s.trackers.EligibleIDs()
 }
 
-func (s *Service) upsertReleases(ctx context.Context, items []domain.TorrentRelease) ([]domain.TorrentRelease, error) {
+func (s *Service) upsertTrackerReleases(ctx context.Context, trackerID, trackerName string, items []domain.TorrentRelease) ([]domain.TorrentRelease, error) {
 	for i := range items {
 		if items[i].TrackerID == "" {
-			items[i].TrackerID = "filelist"
-			items[i].TrackerName = "FileList"
+			items[i].TrackerID = trackerID
+			items[i].TrackerName = trackerName
 		}
 		if items[i].ProviderID == "" {
 			items[i].ProviderID = items[i].ID
@@ -719,14 +968,8 @@ func (s *Service) upsertReleases(ctx context.Context, items []domain.TorrentRele
 	return s.repo.UpsertReleases(ctx, items)
 }
 
-func defaultBlacklistedCategories() map[string]bool {
-	blacklisted := map[string]bool{}
-	for _, category := range domain.Categories {
-		if category.DefaultBlacklisted {
-			blacklisted[category.Name] = true
-		}
-	}
-	return blacklisted
+func (s *Service) upsertReleases(ctx context.Context, items []domain.TorrentRelease) ([]domain.TorrentRelease, error) {
+	return s.upsertTrackerReleases(ctx, "filelist", "FileList", items)
 }
 
 func (s *Service) SearchTitles(ctx context.Context, q string) (domain.Page[domain.CatalogTitle], error) {
@@ -741,8 +984,7 @@ func (s *Service) QueueTrackerSearch(ctx context.Context, q string, force bool) 
 	if len([]rune(q)) < 3 {
 		return domain.Job{}, fmt.Errorf("search query must contain at least three characters")
 	}
-	sum := sha256.Sum256([]byte(strings.ToLower(q)))
-	key := "tracker-search:" + base64.RawURLEncoding.EncodeToString(sum[:12])
+	key := searchJobKey(q)
 	if existing, err := s.repo.GetJob(ctx, key); err == nil && (existing.State == "queued" || existing.State == "running" || existing.State == "retry_wait") {
 		return existing, nil
 	}
@@ -753,7 +995,7 @@ func (s *Service) QueueTrackerSearch(ctx context.Context, q string, force bool) 
 			attempt++
 		}
 	}
-	job := domain.Job{ID: key, Kind: "tracker-search", State: "queued", Label: "Search FileList for " + q, DedupeKey: key, Attempt: attempt, UpdatedAt: time.Now().UTC()}
+	job := domain.Job{ID: key, Kind: "tracker-search", State: "queued", Label: "Search for " + q, DedupeKey: key, Attempt: attempt, UpdatedAt: time.Now().UTC()}
 	if err := s.repo.SaveJob(ctx, job); err != nil {
 		return domain.Job{}, err
 	}
@@ -788,11 +1030,7 @@ func (s *Service) trackerSearchWorker() {
 }
 
 func (s *Service) runTrackerSearch(request trackerSearchRequest) {
-	sum := sha256.Sum256([]byte(strings.ToLower(request.Query)))
-	key := "tracker-search:" + base64.RawURLEncoding.EncodeToString(sum[:12])
-	if err := s.acquire(s.baseCtx, true); err != nil {
-		return
-	}
+	key := searchJobKey(request.Query)
 	job, _ := s.repo.GetJob(context.Background(), key)
 	job.State = "running"
 	job.Progress = .1
@@ -801,23 +1039,40 @@ func (s *Service) runTrackerSearch(request trackerSearchRequest) {
 	job.UpdatedAt = time.Now().UTC()
 	_ = s.repo.SaveJob(context.Background(), job)
 	s.publish("job.updated", job)
-	s.jobLog(job, "info", "tracker-search", "Submitted FileList search started", map[string]any{"query": request.Query})
+	s.jobLog(job, "info", "tracker-search", "Submitted search started", map[string]any{"query": request.Query})
+
 	ctx, cancel := context.WithTimeout(s.baseCtx, time.Duration(s.settings.Get().TitleRefreshTimeoutMinutes)*time.Minute)
+	defer cancel()
+
 	page, err := s.Search(ctx, request.Query)
 	job.UpdatedAt = time.Now().UTC()
-	if err != nil {
+
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(request.Query))))
+	queryHash := base64.RawURLEncoding.EncodeToString(sum[:12])
+	var namedFailures []string
+	for _, id := range s.trackers.EligibleIDs() {
+		childKey := "tracker-search:" + id + ":" + queryHash
+		if cj, cjErr := s.repo.GetJob(context.Background(), childKey); cjErr == nil && cj.Error != "" {
+			namedFailures = append(namedFailures, fmt.Sprintf("%s: %s", id, cj.Error))
+		}
+	}
+
+	if err != nil && len(page.Items) == 0 {
 		s.failOrWait(&job, err, "tracker-search")
 	} else {
 		job.State = "completed"
 		job.Progress = 1
 		job.Retryable = false
 		job.NextAttemptAt = nil
+		if len(namedFailures) > 0 {
+			job.Error = strings.Join(namedFailures, "; ")
+		} else {
+			job.Error = ""
+		}
 		s.jobLog(job, "info", "complete", "Tracker search completed", map[string]any{"releases": len(page.Items)})
 	}
 	_ = s.repo.SaveJob(context.Background(), job)
 	s.publish("job.updated", job)
-	cancel()
-	s.release(true)
 }
 
 func (s *Service) QueueTitleRefresh(ctx context.Context, titleID, query string, force bool) (domain.Job, error) {
@@ -827,6 +1082,12 @@ func (s *Service) QueueTitleRefresh(ctx context.Context, titleID, query string, 
 	}
 	key := "catalog-title-refresh:" + titleID
 	if !force {
+		for _, id := range s.trackers.EligibleIDs() {
+			refreshKey := "catalog-title-refresh:" + id + ":" + titleID
+			if age, err := s.repo.SyncAge(ctx, refreshKey); err == nil && age >= 0 && age < int64(time.Hour/time.Second) {
+				return domain.Job{ID: key, Kind: "catalog-title-refresh", State: "completed", Label: "Title was refreshed less than one hour ago", DedupeKey: key, Progress: 1, UpdatedAt: time.Now().UTC()}, nil
+			}
+		}
 		if age, err := s.repo.SyncAge(ctx, key); err == nil && age >= 0 && age < int64(time.Hour/time.Second) {
 			return domain.Job{ID: key, Kind: "catalog-title-refresh", State: "completed", Label: "Title was refreshed less than one hour ago", DedupeKey: key, Progress: 1, UpdatedAt: time.Now().UTC()}, nil
 		}
@@ -881,9 +1142,6 @@ func (s *Service) titleRefreshWorker() {
 
 func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 	key := "catalog-title-refresh:" + request.TitleID
-	if err := s.acquire(s.baseCtx, true); err != nil {
-		return
-	}
 	job, _ := s.repo.GetJob(context.Background(), key)
 	job.State = "running"
 	job.Progress = .05
@@ -892,62 +1150,165 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 	job.UpdatedAt = time.Now().UTC()
 	_ = s.repo.SaveJob(context.Background(), job)
 	s.publish("job.updated", job)
-	s.jobLog(job, "info", "tracker-search", "Searching FileList for title versions", map[string]any{"query": request.Query})
-	timeout := time.Duration(s.settings.Get().TitleRefreshTimeoutMinutes) * time.Minute
-	ctx, cancel := context.WithTimeout(s.baseCtx, timeout)
-	items, err := s.catalog.Search(ctx, request.Query)
-	if err == nil {
-		s.jobLog(job, "info", "tracker-search", "FileList title search completed", map[string]any{"releases": len(items)})
-		job.Progress = .2
-		job.UpdatedAt = time.Now().UTC()
-		_ = s.repo.SaveJob(context.Background(), job)
-		s.publish("job.updated", job)
+	s.jobLog(job, "info", "tracker-search", "Searching for title versions", map[string]any{"query": request.Query})
+
+	eligible := s.trackers.EligibleIDs()
+	type refreshResult struct {
+		id    string
+		count int
+		err   error
 	}
-	var stored []domain.TorrentRelease
-	if err == nil {
-		stored, err = s.upsertReleases(ctx, items)
-	}
-	if err == nil {
-		for index, release := range stored {
-			parsed := domain.ParseRelease(release)
-			if release.FileCount > 1 && (domain.CatalogTitleID(release, parsed) == request.TitleID) {
-				if _, manifestErr := s.torrentManifest(ctx, release); manifestErr != nil {
-					s.jobLog(job, "warn", "torrent-manifest", "Could not inspect a multi-file torrent", map[string]any{"releaseId": release.ID, "release": release.Name, "error": manifestErr.Error()})
-					if errors.Is(manifestErr, context.DeadlineExceeded) || errors.Is(manifestErr, context.Canceled) {
-						err = manifestErr
-						break
+	results := make([]refreshResult, len(eligible))
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithTimeout(s.baseCtx, time.Duration(s.settings.Get().TitleRefreshTimeoutMinutes)*time.Minute)
+	defer cancel()
+
+	for i, id := range eligible {
+		tr, ok := s.trackers.Lookup(id)
+		if !ok {
+			continue
+		}
+		wg.Add(1)
+		s.wg.Add(1)
+		go func(idx int, trackerID string, tracker Tracker) {
+			defer s.wg.Done()
+			defer wg.Done()
+
+			if err := s.acquireJob(ctx); err != nil {
+				results[idx] = refreshResult{id: trackerID, err: err}
+				return
+			}
+			defer s.releaseJob()
+
+			slot := s.providerSlot(trackerID)
+			select {
+			case slot <- struct{}{}:
+			case <-ctx.Done():
+				results[idx] = refreshResult{id: trackerID, err: ctx.Err()}
+				return
+			}
+			defer func() { <-slot }()
+
+			if !s.trackers.Eligible(trackerID) {
+				return
+			}
+
+			refreshKey := "catalog-title-refresh:" + trackerID + ":" + request.TitleID
+			childJob := domain.Job{
+				ID:        refreshKey,
+				TrackerID: trackerID,
+				Kind:      "catalog-title-refresh",
+				State:     "running",
+				DedupeKey: refreshKey,
+				Label:     fmt.Sprintf("Refresh %s for %s", tracker.Name(), request.Query),
+				Attempt:   1,
+				UpdatedAt: time.Now().UTC(),
+			}
+			_ = s.repo.SaveJob(ctx, childJob)
+			s.publish("job.updated", childJob)
+
+			items, err := tracker.Search(ctx, request.Query)
+
+			// Recheck live eligibility before exposing results
+			if !s.trackers.Eligible(trackerID) {
+				childJob.State = "completed"
+				childJob.Progress = 1
+				childJob.UpdatedAt = time.Now().UTC()
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				return
+			}
+
+			if err != nil {
+				s.failOrWait(&childJob, err, "title-refresh")
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				_ = s.repo.RecordSync(ctx, refreshKey, 0, err)
+				results[idx] = refreshResult{id: trackerID, err: err}
+				return
+			}
+
+			stored, upsertErr := s.upsertTrackerReleases(ctx, trackerID, tracker.Name(), items)
+			if upsertErr != nil {
+				s.failOrWait(&childJob, upsertErr, "title-refresh")
+				_ = s.repo.SaveJob(ctx, childJob)
+				s.publish("job.updated", childJob)
+				_ = s.repo.RecordSync(ctx, refreshKey, 0, upsertErr)
+				results[idx] = refreshResult{id: trackerID, err: upsertErr}
+				return
+			}
+
+			for _, release := range stored {
+				parsed := domain.ParseRelease(release)
+				if release.FileCount > 1 && (domain.CatalogTitleID(release, parsed) == request.TitleID) {
+					if _, manifestErr := s.torrentManifest(ctx, release); manifestErr != nil {
+						s.jobLog(childJob, "warn", "torrent-manifest", "Could not inspect a multi-file torrent", map[string]any{"releaseId": release.ID, "release": release.Name, "error": manifestErr.Error()})
+						if errors.Is(manifestErr, context.DeadlineExceeded) || errors.Is(manifestErr, context.Canceled) {
+							break
+						}
 					}
 				}
 			}
-			job.Progress = .2 + .7*float64(index+1)/float64(max(1, len(items)))
-			job.UpdatedAt = time.Now().UTC()
-			_ = s.repo.SaveJob(context.Background(), job)
+
+			childJob.State = "completed"
+			childJob.Progress = 1
+			childJob.UpdatedAt = time.Now().UTC()
+			_ = s.repo.SaveJob(ctx, childJob)
+			s.publish("job.updated", childJob)
+			_ = s.repo.RecordSync(ctx, refreshKey, len(stored), nil)
+			s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": request.TitleID, "tracker": trackerID, "items": len(stored), "job": childJob})
+			results[idx] = refreshResult{id: trackerID, count: len(stored)}
+		}(i, id, tr)
+	}
+	wg.Wait()
+
+	var namedFailures []string
+	total := 0
+	successful := 0
+	for _, res := range results {
+		if res.err != nil {
+			namedFailures = append(namedFailures, fmt.Sprintf("%s: %s", res.id, res.err.Error()))
+		} else {
+			successful++
+			total += res.count
 		}
 	}
-	_ = s.repo.RecordSync(context.Background(), key, len(items), err)
+
 	job.UpdatedAt = time.Now().UTC()
-	if err != nil {
-		s.failOrWait(&job, err, "title-refresh")
+	if len(namedFailures) > 0 && successful == 0 && len(eligible) > 0 {
+		job.State = "failed"
+		job.Error = strings.Join(namedFailures, "; ")
+		job.Progress = 0
 	} else {
 		job.State = "completed"
 		job.Retryable = false
 		job.NextAttemptAt = nil
 		job.Progress = 1
-		job.Label = fmt.Sprintf("Refreshed %s · %d releases", request.Query, len(items))
+		if len(namedFailures) > 0 {
+			job.Error = strings.Join(namedFailures, "; ")
+		} else {
+			job.Error = ""
+		}
+		job.Label = fmt.Sprintf("Refreshed %s · %d releases", request.Query, total)
 		_ = s.EnsureMetadata(context.Background(), []string{request.TitleID})
 	}
 	_ = s.repo.SaveJob(context.Background(), job)
-	if err == nil {
-		s.jobLog(job, "info", "complete", "Title refresh completed", map[string]any{"releases": len(items)})
+	if job.State == "completed" {
+		s.jobLog(job, "info", "complete", "Title refresh completed", map[string]any{"releases": total})
+	} else {
+		s.jobLog(job, "error", "complete", "Title refresh failed", map[string]any{"error": job.Error})
 	}
 	s.publish("job.updated", job)
-	s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": request.TitleID, "items": len(items), "job": job})
-	cancel()
-	s.release(true)
+	s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": request.TitleID, "items": total, "job": job})
 }
 
 func (s *Service) TestFileList(ctx context.Context) (int, error) {
-	items, err := s.catalog.Latest(ctx)
+	tracker, err := s.trackers.RequireEligible("filelist")
+	if err != nil {
+		return 0, err
+	}
+	items, err := tracker.Latest(ctx)
 	return len(items), err
 }
 func (s *Service) TestEngine(ctx context.Context) (string, error) { return s.engine.Test(ctx) }
@@ -961,12 +1322,14 @@ func (s *Service) TestEngine(ctx context.Context) (string, error) { return s.eng
 // the retention job uses) and the survey re-run; only when nothing evictable
 // remains does the download fail with a visible Allocation problem. A zero
 // Allocation disables the whole check.
-func (s *Service) ensureAllocationRoom(ctx context.Context, release domain.TorrentRelease) error {
+func (s *Service) ensureAllocationRoom(ctx context.Context, release domain.TorrentRelease, incoming int64) error {
 	settings := s.settings.Get()
 	if settings.AllocationGB <= 0 {
 		return nil
 	}
-	incoming := s.incomingTorrentBytes(ctx, release)
+	if incoming <= 0 {
+		incoming = s.incomingTorrentBytes(ctx, release)
+	}
 	plan, err := s.retentionSurvey(ctx)
 	if err != nil {
 		return err
@@ -1039,19 +1402,42 @@ func (s *Service) Prepare(ctx context.Context, releaseID string, fileIndex int) 
 	} else if !errors.Is(reuseErr, sql.ErrNoRows) {
 		return domain.Download{}, reuseErr
 	}
-	if err := s.ensureAllocationRoom(ctx, release); err != nil {
+	_, err = s.trackers.RequireEligible(release.TrackerID)
+	if err != nil {
 		return domain.Download{}, err
 	}
-	torrent, err := s.catalog.OpenTorrent(ctx, release.ID)
+	if err := s.ensureAllocationRoom(ctx, release, 0); err != nil {
+		return domain.Download{}, err
+	}
+	metainfo, err := s.releaseMetainfo(ctx, release)
 	if err != nil {
 		if errors.Is(err, domain.ErrTorrentRemoved) {
 			return domain.Download{}, s.removeDeadRelease(ctx, release)
 		}
 		return domain.Download{}, err
 	}
-	defer torrent.Close()
+	manifest, err := parseTorrentManifest(release.ID, metainfo)
+	if err != nil {
+		return domain.Download{}, err
+	}
+	manifest.Metainfo = metainfo
+	_ = s.repo.SaveTorrentManifest(ctx, manifest)
+
+	incoming := release.SizeBytes
+	var totalFiles int64
+	for _, f := range manifest.Files {
+		totalFiles += f.SizeBytes
+	}
+	if totalFiles > 0 {
+		incoming = totalFiles
+	}
+	if incoming > release.SizeBytes {
+		if err := s.ensureAllocationRoom(ctx, release, incoming); err != nil {
+			return domain.Download{}, err
+		}
+	}
 	settings := s.settings.Get()
-	hash, err := s.engine.Add(ctx, torrent, settings.DownloadRoot)
+	hash, err := s.engine.Add(ctx, bytes.NewReader(metainfo), settings.DownloadRoot)
 	if err != nil {
 		return domain.Download{}, err
 	}
@@ -1102,7 +1488,20 @@ func (s *Service) Prepare(ctx context.Context, releaseID string, fileIndex int) 
 	}
 	id := sourceID(releaseID, selected.Path)
 	now := time.Now().UTC()
-	d := domain.Download{ID: id, ReleaseID: releaseID, EngineID: s.enginePrefix() + hash, FileIndex: fileIndex, FilePath: selected.Path, AbsolutePath: abs, SizeBytes: selected.SizeBytes, FileOffset: selected.Offset, CreatedAt: now, UpdatedAt: now}
+	d := domain.Download{
+		ID:           id,
+		ReleaseID:    releaseID,
+		EngineID:     s.enginePrefix() + hash,
+		FileIndex:    fileIndex,
+		FilePath:     selected.Path,
+		AbsolutePath: abs,
+		SizeBytes:    selected.SizeBytes,
+		FileOffset:   selected.Offset,
+		TrackerID:    release.TrackerID,
+		TrackerName:  release.TrackerName,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
 	applyDownloadStatus(&d, status, selected)
 	if old, e := s.repo.GetDownload(ctx, id); e == nil {
 		d.CreatedAt = old.CreatedAt
@@ -1152,7 +1551,20 @@ func (s *Service) prepareExistingTorrentFile(ctx context.Context, release domain
 			return domain.Download{}, pathErr
 		}
 		now := time.Now().UTC()
-		download := domain.Download{ID: sourceID(release.ID, selected.Path), ReleaseID: release.ID, EngineID: managed.EngineID, FileIndex: selected.Index, FilePath: selected.Path, AbsolutePath: abs, SizeBytes: selected.SizeBytes, FileOffset: selected.Offset, CreatedAt: now, UpdatedAt: now}
+		download := domain.Download{
+			ID:           sourceID(release.ID, selected.Path),
+			ReleaseID:    release.ID,
+			EngineID:     managed.EngineID,
+			FileIndex:    selected.Index,
+			FilePath:     selected.Path,
+			AbsolutePath: abs,
+			SizeBytes:    selected.SizeBytes,
+			FileOffset:   selected.Offset,
+			TrackerID:    release.TrackerID,
+			TrackerName:  release.TrackerName,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
 		applyDownloadStatus(&download, status, selected)
 		if old, oldErr := s.repo.GetDownload(ctx, download.ID); oldErr == nil {
 			download.CreatedAt = old.CreatedAt
@@ -1266,18 +1678,41 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 	}
 	settings := s.settings.Get()
 	if hash == "" {
-		if fitErr := s.ensureAllocationRoom(ctx, release); fitErr != nil {
-			return nil, fitErr
+		_, err = s.trackers.RequireEligible(release.TrackerID)
+		if err != nil {
+			return nil, err
 		}
-		torrent, openErr := s.catalog.OpenTorrent(ctx, release.ID)
-		if openErr != nil {
-			if errors.Is(openErr, domain.ErrTorrentRemoved) {
+		if err := s.ensureAllocationRoom(ctx, release, 0); err != nil {
+			return nil, err
+		}
+		metainfo, err := s.releaseMetainfo(ctx, release)
+		if err != nil {
+			if errors.Is(err, domain.ErrTorrentRemoved) {
 				return nil, s.removeDeadRelease(ctx, release)
 			}
-			return nil, openErr
+			return nil, err
 		}
-		defer torrent.Close()
-		hash, err = s.engine.Add(ctx, torrent, settings.DownloadRoot)
+		manifest, err := parseTorrentManifest(release.ID, metainfo)
+		if err != nil {
+			return nil, err
+		}
+		manifest.Metainfo = metainfo
+		_ = s.repo.SaveTorrentManifest(ctx, manifest)
+
+		incoming := release.SizeBytes
+		var totalFiles int64
+		for _, f := range manifest.Files {
+			totalFiles += f.SizeBytes
+		}
+		if totalFiles > 0 {
+			incoming = totalFiles
+		}
+		if incoming > release.SizeBytes {
+			if fitErr := s.ensureAllocationRoom(ctx, release, incoming); fitErr != nil {
+				return nil, fitErr
+			}
+		}
+		hash, err = s.engine.Add(ctx, bytes.NewReader(metainfo), settings.DownloadRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -1348,7 +1783,20 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 		if pathErr != nil {
 			return nil, pathErr
 		}
-		download := domain.Download{ID: sourceID(releaseID, file.Path), ReleaseID: releaseID, EngineID: engineID, FileIndex: file.Index, FilePath: file.Path, AbsolutePath: abs, SizeBytes: file.SizeBytes, FileOffset: file.Offset, CreatedAt: now, UpdatedAt: now}
+		download := domain.Download{
+			ID:           sourceID(releaseID, file.Path),
+			ReleaseID:    releaseID,
+			EngineID:     engineID,
+			FileIndex:    file.Index,
+			FilePath:     file.Path,
+			AbsolutePath: abs,
+			SizeBytes:    file.SizeBytes,
+			FileOffset:   file.Offset,
+			TrackerID:    release.TrackerID,
+			TrackerName:  release.TrackerName,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
 		applyDownloadStatus(&download, status, file)
 		if old, oldErr := s.repo.GetDownload(ctx, download.ID); oldErr == nil {
 			download.CreatedAt = old.CreatedAt
@@ -1784,7 +2232,18 @@ func (s *Service) SetTitleFavorite(ctx context.Context, titleID string, favorite
 		return err
 	}
 	if len(sources) == 0 {
-		return sql.ErrNoRows
+		hasManaged := false
+		if downloads, dlErr := s.repo.ListDownloads(ctx); dlErr == nil {
+			for _, dl := range downloads {
+				if dl.TitleID == titleID {
+					hasManaged = true
+					break
+				}
+			}
+		}
+		if !hasManaged {
+			return sql.ErrNoRows
+		}
 	}
 	return s.repo.SetFavorite(ctx, householdProfile, titleID, favorite)
 }
@@ -1830,6 +2289,13 @@ func (s *Service) HouseholdState(ctx context.Context) (domain.HouseholdState, er
 	titleSources := map[string][]domain.CatalogSource{}
 	for _, source := range catalogSources {
 		titleSources[domain.CatalogTitleID(source.Release, source.Parsed)] = append(titleSources[domain.CatalogTitleID(source.Release, source.Parsed)], source)
+	}
+	for _, relID := range releaseIDs {
+		if tid := releaseTitle[relID]; tid != "" && len(titleSources[tid]) == 0 {
+			if rel, relErr := s.repo.GetRelease(ctx, relID); relErr == nil {
+				titleSources[tid] = append(titleSources[tid], domain.CatalogSource{Release: rel, Parsed: domain.ParseRelease(rel)})
+			}
+		}
 	}
 	favoriteSet := map[string]bool{}
 	playbackBySource := map[string]domain.PlaybackState{}
