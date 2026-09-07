@@ -1,5 +1,4 @@
 import type { NetworkInfo, TVPlatformHooks } from '../../tv/src/platform';
-import './webos.d.ts';
 
 export function getNetworkInfo(): Promise<NetworkInfo | null> {
   return new Promise(resolve => {
@@ -47,7 +46,7 @@ export function openExternal(url: string): Promise<boolean> {
       window.webOSDev.launch({
         id: 'com.webos.app.browser',
         params: { target: url },
-        onSuccess: () => finish(true),
+        onSuccess: response => finish(response.returnValue !== false),
         onFailure: () => finish(false),
       });
     } catch {

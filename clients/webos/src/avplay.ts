@@ -501,7 +501,7 @@ export function createAVPlay(): WebOSAVPlay {
   getDuration(): number {
    if (!video) return 0;
    const d = video.duration;
-   if (typeof d !== 'number' || !isFinite(d) || isNaN(d) || d <= 0) {
+   if (typeof d !== 'number' || !isFinite(d) || d <= 0) {
     return 0;
    }
    return Math.round(d * 1000);

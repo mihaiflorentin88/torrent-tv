@@ -223,6 +223,17 @@ describe('webOS platform hooks contract', () => {
         params: { target: 'https://example.com/shows' },
       }));
     });
+    it('resolves false when onSuccess callback reports returnValue false', async () => {
+      testWindow.webOSDev = {
+        connection: { getStatus: () => { } },
+        launch: (params: WebOSLaunchParameters) => {
+          params.onSuccess?.({ returnValue: false });
+        },
+      };
+
+      const result = await openExternal('https://example.com/shows');
+      expect(result).toBe(false);
+    });
 
     it('resolves false on onFailure callback', async () => {
       testWindow.webOSDev = {

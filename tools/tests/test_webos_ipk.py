@@ -444,6 +444,105 @@ class WebosIpkTests(unittest.TestCase):
             with self.assertRaisesRegex(webos_ipk.WebosIpkError, "did not report a recognizable version"):
                 webos_ipk.find_ares_package(str(stub))
 
+    def test_pack_rejects_malformed_appinfo_json_with_webos_ipk_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "src"
+            src.mkdir()
+            (src / "index.html").write_text("<!doctype html><html><body></body></html>")
+            appinfo = root / "appinfo.json"
+            appinfo.write_text("{ not valid json: true }")
+            icons = {
+                "icon.png": root / "icon.png",
+                "largeIcon.png": root / "largeIcon.png",
+                "splashBackground.png": root / "splashBackground.png",
+                "bgImage.png": root / "bgImage.png",
+            }
+            icons["icon.png"].write_bytes(png(80, 80))
+            icons["largeIcon.png"].write_bytes(png(130, 130))
+            icons["splashBackground.png"].write_bytes(png(1920, 1080))
+            icons["bgImage.png"].write_bytes(png(1920, 1080))
+            stub = root / "fake-ares-package"
+            stub.write_text("#!/bin/sh\necho 'Version: 3.2.5'\n")
+            stub.chmod(0o755)
+            out_ipk = root / "out.ipk"
+
+            with self.assertRaisesRegex(webos_ipk.WebosIpkError, "appinfo file .* is not valid JSON"):
+                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.5.11", ares_bin=str(stub))
+            self.assertFalse(out_ipk.exists())
+
+    def test_pack_cleans_up_and_does_not_leave_output_on_archive_validation_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "src"
+            src.mkdir()
+            (src / "index.html").write_text("<!doctype html><html><body></body></html>")
+            appinfo = root / "appinfo.json"
+            appinfo.write_text(json.dumps(VALID_APPINFO))
+            icons = {
+                "icon.png": root / "icon.png",
+                "largeIcon.png": root / "largeIcon.png",
+                "splashBackground.png": root / "splashBackground.png",
+                "bgImage.png": root / "bgImage.png",
+            }
+            icons["icon.png"].write_bytes(png(80, 80))
+            icons["largeIcon.png"].write_bytes(png(130, 130))
+            icons["splashBackground.png"].write_bytes(png(1920, 1080))
+            icons["bgImage.png"].write_bytes(png(1920, 1080))
+
+            # Stub reports correct version, and on pack writes an invalid IPK archive into out_dir
+            stub = root / "fake-ares-package"
+            stub.write_text("""#!/bin/sh
+if [ "$1" = "-v" ] || [ "$1" = "--version" ]; then
+    echo 'Version: 3.2.5'
+    exit 0
+fi
+# Output directory is argument 4: $1=app, $2=-o, $3=out_dir
+out_dir="$3"
+echo "corrupt-archive" > "$out_dir/bad.ipk"
+""")
+            stub.chmod(0o755)
+            out_ipk = root / "out.ipk"
+
+            with self.assertRaises(webos_ipk.WebosIpkError):
+                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.5.11", ares_bin=str(stub))
+            self.assertFalse(out_ipk.exists())
+
+    def test_pack_unlinks_preexisting_output_on_archive_validation_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "src"
+            src.mkdir()
+            (src / "index.html").write_text("<!doctype html><html><body></body></html>")
+            appinfo = root / "appinfo.json"
+            appinfo.write_text(json.dumps(VALID_APPINFO))
+            icons = {
+                "icon.png": root / "icon.png",
+                "largeIcon.png": root / "largeIcon.png",
+                "splashBackground.png": root / "splashBackground.png",
+                "bgImage.png": root / "bgImage.png",
+            }
+            icons["icon.png"].write_bytes(png(80, 80))
+            icons["largeIcon.png"].write_bytes(png(130, 130))
+            icons["splashBackground.png"].write_bytes(png(1920, 1080))
+            icons["bgImage.png"].write_bytes(png(1920, 1080))
+
+            stub = root / "fake-ares-package"
+            stub.write_text("""#!/bin/sh
+if [ "$1" = "-v" ] || [ "$1" = "--version" ]; then
+    echo 'Version: 3.2.5'
+    exit 0
+fi
+out_dir="$3"
+echo "corrupt-archive" > "$out_dir/bad.ipk"
+""")
+            stub.chmod(0o755)
+            out_ipk = root / "out.ipk"
+            out_ipk.write_text("pre-existing stale file")
+
+            with self.assertRaises(webos_ipk.WebosIpkError):
+                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.5.11", ares_bin=str(stub))
+            self.assertFalse(out_ipk.exists())
 
 if __name__ == "__main__":
     unittest.main()

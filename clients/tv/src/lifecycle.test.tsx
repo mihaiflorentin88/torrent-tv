@@ -235,6 +235,7 @@ describe('Player suspension and visible return lifecycle', () => {
   });
 
   afterEach(() => {
+    expect(mockAVPlay.setExternalSubtitlePath).not.toHaveBeenCalled();
     render(null, container);
     container.remove();
     delete (window as unknown as { webapis?: unknown }).webapis;
@@ -664,6 +665,7 @@ describe('Player track selection and subtitle behavior honesty', () => {
   });
 
   afterEach(() => {
+    expect(mockAVPlay.setExternalSubtitlePath).not.toHaveBeenCalled();
     render(null, container);
     container.remove();
     delete (window as unknown as { webapis?: unknown }).webapis;

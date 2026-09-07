@@ -62,15 +62,23 @@ export async function openExternalURL(url: string): Promise<boolean> {
   try {
     if (typeof window.tizen?.application?.launchAppControl === 'function') {
       return await new Promise<boolean>(resolve => {
+        let finished = false;
+        const finish = (value: boolean) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          resolve(value);
+        };
+        const timer = window.setTimeout(() => finish(false), 3000);
         try {
           window.tizen.application.launchAppControl(
             new window.tizen.ApplicationControl('http://tizen.org/appcontrol/operation/view', url),
             null,
-            () => resolve(true),
-            () => resolve(false)
+            () => finish(true),
+            () => finish(false)
           );
         } catch {
-          resolve(false);
+          finish(false);
         }
       });
     }

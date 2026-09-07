@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { exitApplication, getNetworkInfo, onAppVisibilityChange, onVirtualKeyboardChange, openExternalURL, registerMediaKeys } from './platform';
 
 const platformWindow = window as unknown as {
@@ -183,6 +183,24 @@ describe('openExternalURL', () => {
       },
     };
     expect(await openExternalURL('https://example.invalid/p')).toBe(false);
+  });
+  it('resolves false on 3-second timeout when Tizen launchAppControl hangs', async () => {
+    vi.useFakeTimers();
+    try {
+      platformWindow.tizen = {
+        ApplicationControl: function(this: { operation: string; uri: string }, operation: string, uri: string) { this.operation = operation; this.uri = uri; } as unknown as new (operation: string, uri: string) => { operation: string; uri: string },
+        application: {
+          launchAppControl: () => {
+            // Hanging launch
+          },
+        },
+      };
+      const launchPromise = openExternalURL('https://example.invalid/hang');
+      vi.advanceTimersByTime(3000);
+      expect(await launchPromise).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to the Android shell intent', async () => {

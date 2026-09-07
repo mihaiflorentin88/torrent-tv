@@ -510,7 +510,10 @@ def pack(
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, dest)
 
-        appinfo_raw = json.loads(appinfo.read_text(encoding="utf-8"))
+        try:
+            appinfo_raw = json.loads(appinfo.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise WebosIpkError(f"appinfo file {appinfo} is not valid JSON: {exc}") from exc
         appinfo_raw["version"] = target_version
         (stage_dir / "appinfo.json").write_text(json.dumps(appinfo_raw, indent=2), encoding="utf-8")
 
@@ -541,11 +544,18 @@ def pack(
             )
 
         pkg_file = generated_ipks[0]
-        output.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(pkg_file, output)
-
-    report = validate_archive(output, target_version=target_version, version_file=version_file)
-    return report
+        try:
+            report = validate_archive(pkg_file, target_version=target_version, version_file=version_file)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(pkg_file, output)
+            return report
+        except Exception:
+            if output.is_file():
+                try:
+                    output.unlink()
+                except OSError:
+                    pass
+            raise
 
 
 def main() -> None:

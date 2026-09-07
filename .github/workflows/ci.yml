@@ -96,6 +96,8 @@ jobs:
           java-version: 17
       - name: Install locked dependencies
         run: npm ci
+      - name: webOS client unit tests
+        run: npm run test -w @torrent-tv/webos
       - name: Build shared TV app and sync into Android assets
         run: |
           npm run build -w @torrent-tv/tv
