@@ -250,6 +250,90 @@ func CatalogTitleID(release TorrentRelease, parsed ParsedRelease) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:15])
 }
 
+// CandidateAnchor represents an IMDb-backed identity within a family.
+type CandidateAnchor struct {
+	IMDbID      string
+	CanonicalID string       // base64url SHA256 hash from CatalogTitleID
+	KnownYears  map[int]bool // parsed release years from anchor releases
+}
+
+// ReleaseEvidence is the per-release identity evidence used by canonical resolution.
+type ReleaseEvidence struct {
+	ReleaseID string
+	Title     string
+	SortTitle string
+	IMDbID    string // raw provider fact; "" when absent
+	Year      int    // parsed release year; 0 when absent
+}
+
+// ResolveFamilyTitleIDs returns the canonical title id (a real CatalogTitleID
+// base64url hash) for every release in one (media kind, normalized sort title)
+// family. Pure, deterministic, order-independent.
+func ResolveFamilyTitleIDs(kind MediaKind, sortTitle string, evidence []ReleaseEvidence) map[string]string {
+	anchors := make([]CandidateAnchor, 0, 4)
+	anchorIndex := make(map[string]int) // lowercased IMDbID -> anchors index
+	results := make(map[string]string, len(evidence))
+
+	// Pass 1: explicit IMDb identity is authoritative; distinct IDs never merge.
+	for _, ev := range evidence {
+		id := strings.ToLower(strings.TrimSpace(ev.IMDbID))
+		if id == "" {
+			continue
+		}
+		idx, ok := anchorIndex[id]
+		if !ok {
+			idx = len(anchors)
+			anchorIndex[id] = idx
+			anchors = append(anchors, CandidateAnchor{
+				IMDbID:      id,
+				CanonicalID: CatalogTitleID(TorrentRelease{IMDbID: id}, ParsedRelease{Kind: kind, Title: ev.Title, SortTitle: sortTitle}),
+				KnownYears:  map[int]bool{},
+			})
+		}
+		if ev.Year > 0 {
+			anchors[idx].KnownYears[ev.Year] = true
+		}
+		results[ev.ReleaseID] = anchors[idx].CanonicalID
+	}
+
+	// Pass 2: missing-IMDb releases join an anchor only under conservative,
+	// unambiguous conditions; otherwise they keep their evidence fallback.
+	for _, ev := range evidence {
+		if strings.TrimSpace(ev.IMDbID) != "" {
+			continue
+		}
+		switch {
+		case kind == MediaSeries:
+			if len(anchors) == 1 {
+				results[ev.ReleaseID] = anchors[0].CanonicalID
+			}
+		case ev.Year > 0:
+			var match *CandidateAnchor
+			for i := range anchors {
+				a := &anchors[i]
+				if len(a.KnownYears) == 0 || a.KnownYears[ev.Year] {
+					if match != nil {
+						match = nil
+						break
+					}
+					match = a
+				}
+			}
+			if match != nil {
+				results[ev.ReleaseID] = match.CanonicalID
+			}
+		default: // movie, year 0
+			if len(anchors) == 1 {
+				results[ev.ReleaseID] = anchors[0].CanonicalID
+			}
+		}
+		if results[ev.ReleaseID] == "" {
+			results[ev.ReleaseID] = CatalogTitleID(TorrentRelease{}, ParsedRelease{Kind: kind, Title: ev.Title, SortTitle: sortTitle, Year: ev.Year})
+		}
+	}
+	return results
+}
+
 func cleanTitle(v string) string {
 	v = strings.Trim(v, " ._-()[]")
 	v = strings.NewReplacer(".", " ", "_", " ").Replace(v)
