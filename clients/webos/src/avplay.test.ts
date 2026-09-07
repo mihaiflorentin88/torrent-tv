@@ -347,4 +347,43 @@ describe('webOS avplay adapter', () => {
   expect(() => av.setSilentSubtitle(false)).toThrow(RangeError);
   expect(() => av.setSubtitlePosition(1500)).not.toThrow();
  });
+
+ it('does not report buffering progress during stable playback without a buffering episode', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  bufferedRanges(video, 30, 60);
+  // Progressive stream downloads ahead while playing: plain progress events
+  // with no waiting/stall since the last buffering start must stay silent.
+  fire(video, 'progress');
+  expect(recorded.calls.onbufferingprogress).toBeUndefined();
+  expect(recorded.calls.onbufferingstart).toBeUndefined();
+  expect(recorded.calls.onbufferingcomplete).toBeUndefined();
+  // Once a real buffering episode begins, progress is delivered again.
+  fire(video, 'waiting');
+  fire(video, 'progress');
+  expect(recorded.calls.onbufferingstart).toHaveLength(1);
+  expect(recorded.calls.onbufferingprogress).toEqual([[50]]);
+ });
+
+ it('stops listening for prepare settle events after prepareAsync resolves once', () => {
+  const av = createAVPlay();
+  av.open('http://host/video.mp4');
+  av.setListener(createRecordedListener());
+  const ok = vi.fn();
+  const fail = vi.fn();
+  av.prepareAsync(ok, fail);
+  const video = document.querySelector('video') as HTMLVideoElement;
+  fire(video, 'loadedmetadata');
+  expect(ok).toHaveBeenCalledTimes(1);
+  // Late duplicate metadata and errors must not settle prepare again.
+  Object.defineProperty(video, 'error', {
+   configurable: true,
+   value: { code: 4, MEDIA_ERR_SRC_NOT_SUPPORTED: 4 },
+  });
+  fire(video, 'error');
+  fire(video, 'loadedmetadata');
+  expect(ok).toHaveBeenCalledTimes(1);
+  expect(fail).not.toHaveBeenCalled();
+ });
 });

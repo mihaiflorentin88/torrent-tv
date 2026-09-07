@@ -147,6 +147,8 @@ export function createAVPlay(): WebOSAVPlay {
    function onLoadedMetadata(): void {
     if (currentGen !== generation || prepareSettled) return;
     prepareSettled = true;
+    el.removeEventListener('loadedmetadata', onLoadedMetadata);
+    el.removeEventListener('error', onInitialError);
     prepared = true;
     if (typeof success === 'function') {
      success();
@@ -156,14 +158,16 @@ export function createAVPlay(): WebOSAVPlay {
    function onInitialError(): void {
     if (currentGen !== generation || prepareSettled) return;
     prepareSettled = true;
+    el.removeEventListener('loadedmetadata', onLoadedMetadata);
+    el.removeEventListener('error', onInitialError);
     const msg = formatMediaError(el.error);
     if (typeof error === 'function') {
      error(msg);
     }
    }
 
-   el.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
-   el.addEventListener('error', onInitialError, { once: true });
+   el.addEventListener('loadedmetadata', onLoadedMetadata);
+   el.addEventListener('error', onInitialError);
 
    // Playback progress and timeupdate
    el.addEventListener('timeupdate', function() {
@@ -190,7 +194,7 @@ export function createAVPlay(): WebOSAVPlay {
 
    // Buffering progress: approximate from HTMLMediaElement buffered TimeRanges
    el.addEventListener('progress', function() {
-    if (currentGen !== generation) return;
+    if (currentGen !== generation || !bufferingStarted) return;
     const duration = el.duration;
     if (typeof duration === 'number' && isFinite(duration) && duration > 0 && el.buffered && el.buffered.length > 0) {
      const current = el.currentTime;
