@@ -77,16 +77,21 @@ export function onKeyboardVisibility(listener: (visible: boolean) => void): () =
 
 export function onVisibility(listener: (visible: boolean) => void): () => void {
   let lastVisible: boolean | null = null;
-  const handler = () => {
-    const visible = !document.hidden;
+  const emit = (visible: boolean) => {
     if (visible !== lastVisible) {
       lastVisible = visible;
       listener(visible);
     }
   };
+  const handler = () => emit(!document.hidden);
+  const relaunchHandler = () => {
+    if (!document.hidden) emit(true);
+  };
   document.addEventListener('visibilitychange', handler);
+  document.addEventListener('webOSRelaunch', relaunchHandler);
   return () => {
     document.removeEventListener('visibilitychange', handler);
+    document.removeEventListener('webOSRelaunch', relaunchHandler);
   };
 }
 

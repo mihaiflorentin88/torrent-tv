@@ -331,6 +331,39 @@ describe('webOS platform hooks contract', () => {
       // No further events after unsubscribe
       expect(received).toEqual([false, true]);
     });
+
+    it('reconciles visible state on webOSRelaunch only when document.hidden is false', () => {
+      const received: boolean[] = [];
+      const unsub = onVisibility(visible => {
+        received.push(visible);
+      });
+
+      // Move to hidden
+      Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(received).toEqual([false]);
+
+      // webOSRelaunch arrives while document is still hidden (duplicate launch event): MUST ignore
+      document.dispatchEvent(new Event('webOSRelaunch'));
+      expect(received).toEqual([false]);
+
+      // Document becomes visible and webOSRelaunch reconciles
+      Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+      document.dispatchEvent(new Event('webOSRelaunch'));
+      expect(received).toEqual([false, true]);
+
+      // Duplicate webOSRelaunch while already visible: deduped
+      document.dispatchEvent(new Event('webOSRelaunch'));
+      expect(received).toEqual([false, true]);
+
+      // Clean unsubscription removes relaunch listener
+      unsub();
+      Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+      document.dispatchEvent(new Event('webOSRelaunch'));
+      expect(received).toEqual([false, true]);
+    });
   });
 });
 

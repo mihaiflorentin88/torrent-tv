@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks';
+import { onVirtualKeyboardChange } from './platform';
 
 export type Direction = 'left' | 'right' | 'up' | 'down';
 
@@ -25,7 +26,7 @@ export function remoteAction(key: string, keyCode: number): Direction | 'enter' 
   if (key === 'ArrowUp' || keyCode === 38) return 'up';
   if (key === 'ArrowDown' || keyCode === 40) return 'down';
   if (key === 'Enter' || key === 'Return' || keyCode === 13) return 'enter';
-  if (key === 'XF86Back' || key === 'Back' || keyCode === 10009) return 'back';
+  if (key === 'XF86Back' || key === 'Back' || keyCode === 10009 || keyCode === 461) return 'back';
   return null;
 }
 
@@ -190,29 +191,52 @@ export function useTVNavigation(options: {
       if (key) latest.current.onFocusKey?.(key);
     };
     let backStarted = 0; let backTimer = 0;
+    let editingElement: HTMLInputElement | HTMLTextAreaElement | null = null;
+    let finishTime = 0;
+    const finishEditing = () => {
+      const element = editingElement;
+      if (!element) return;
+      editingElement = null;
+      finishTime = Date.now();
+      element.dataset.tvEditing = 'false';
+      element.readOnly = true;
+      element.blur();
+      window.setTimeout(() => focusElement(latest.current.inputExitTarget?.() || element), 0);
+    };
+    const disposeKeyboard = onVirtualKeyboardChange(visible => {
+      if (!visible) finishEditing();
+    });
     const keydown = (event: KeyboardEvent) => {
       const action = remoteAction(event.key, event.keyCode);
       const active = document.activeElement;
       if (isTextInput(active) && active.dataset.tvEditing !== 'true' && action === 'enter') {
         event.preventDefault();
+        editingElement = active;
         active.dataset.tvEditing = 'true';
         active.readOnly = false;
         active.blur();
         window.setTimeout(() => { active.focus(); if (typeof active.select === 'function') active.select(); }, 0);
         return;
       }
+      if (editingElement) {
+        if (action === 'ime-done' || action === 'ime-cancel' || action === 'back') {
+          event.preventDefault();
+          finishEditing();
+        }
+        return;
+      }
       if (isTextInput(active) && active.dataset.tvEditing === 'true') {
         if (action === 'ime-done' || action === 'ime-cancel' || action === 'back') {
-          active.dataset.tvEditing = 'false';
-          active.readOnly = true;
-          active.blur();
-          window.setTimeout(() => focusElement(latest.current.inputExitTarget?.() || active), 0);
+          event.preventDefault();
+          editingElement = active;
+          finishEditing();
         }
         return;
       }
       if (!action) return;
       if (action === 'back') {
         event.preventDefault();
+        if (Date.now() - finishTime < 350) return;
         if (latest.current.onLongBack) { if (!backStarted) { backStarted = Date.now(); backTimer = window.setTimeout(() => { backStarted = 0; latest.current.onLongBack?.() }, 5000) }; return }
         latest.current.onBack();
         return;
@@ -240,6 +264,7 @@ export function useTVNavigation(options: {
     document.addEventListener('keyup', keyup);
     return () => {
       window.clearTimeout(timer);
+      disposeKeyboard();
       document.removeEventListener('focusin', focus);
       document.removeEventListener('keydown', keydown);
       document.removeEventListener('keyup', keyup); window.clearTimeout(backTimer);

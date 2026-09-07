@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { chooseDirectionalTarget, chooseStructuredTarget, RectLike, remoteAction } from './navigation';
+// @vitest-environment happy-dom
+import { h, render } from 'preact';
+import { useRef } from 'preact/hooks';
+import { describe, expect, it, vi } from 'vitest';
+import { chooseDirectionalTarget, chooseStructuredTarget, RectLike, remoteAction, useTVNavigation } from './navigation';
+import type { TVPlatformHooks } from './platform';
 import { PROJECTS_MENU_ROW, UPDATE_DIALOG_REGION } from './portal';
 
 const rect = (left: number, top: number, width = 100, height = 100): RectLike => ({ left, top, right: left + width, bottom: top + height, width, height });
@@ -78,6 +82,10 @@ describe('remoteAction', () => {
     expect(remoteAction('', 65376)).toBe('ime-done');
     expect(remoteAction('', 65385)).toBe('ime-cancel');
   });
+
+  it('recognizes the LG webOS back keycode', () => {
+    expect(remoteAction('', 461)).toBe('back');
+  });
 });
 
 describe('TVSettings update rows', () => {
@@ -140,5 +148,195 @@ describe('remoteAction Android back arrivals', () => {
     expect(remoteAction('GoBack', 0)).toBe('back');
     expect(remoteAction('BrowserBack', 0)).toBe('back');
     expect(remoteAction('Escape', 27)).toBe('back');
+  });
+});
+
+describe('useTVNavigation input editing and keyboard dismissal', () => {
+  function setupHarness() {
+    vi.useFakeTimers();
+    let keyboardVisibilityListener: ((visible: boolean) => void) | null = null;
+    const testPlatform: TVPlatformHooks = {
+      getNetworkInfo: async () => null,
+      openExternal: async () => false,
+      exit: () => { },
+      onKeyboardVisibility: listener => {
+        keyboardVisibilityListener = listener;
+        return () => { keyboardVisibilityListener = null; };
+      },
+      onVisibility: () => () => { },
+    };
+    window.FileListTVPlatform = testPlatform;
+
+    const onBack = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    function Harness() {
+      const inputRef = useRef<HTMLInputElement>(null);
+      const exitRef = useRef<HTMLButtonElement>(null);
+      useTVNavigation({
+        getInitialFocus: () => inputRef.current,
+        inputExitTarget: () => exitRef.current,
+        onBack,
+      });
+      return h('div', null,
+        h('input', {
+          ref: inputRef,
+          readOnly: true,
+          'data-focus-key': 'test-input',
+          defaultValue: 'test text',
+        }),
+        h('button', {
+          ref: exitRef,
+          'data-focus-key': 'test-exit',
+        }, 'Exit target')
+      );
+    }
+
+    render(h(Harness, null), container);
+    const input = container.querySelector<HTMLInputElement>('input')!;
+    const exitBtn = container.querySelector<HTMLButtonElement>('button')!;
+
+    const cleanup = () => {
+      render(null, container);
+      container.remove();
+      delete window.FileListTVPlatform;
+      vi.useRealTimers();
+    };
+
+    return {
+      container,
+      input,
+      exitBtn,
+      onBack,
+      emitKeyboardVisibility: (visible: boolean) => keyboardVisibilityListener?.(visible),
+      cleanup,
+    };
+  }
+  it('returns focus to inputExitTarget once on keyboard dismissal, and the same Back does not exit route', () => {
+    const { input, exitBtn, onBack, emitKeyboardVisibility, cleanup } = setupHarness();
+    vi.advanceTimersByTime(20);
+
+    let exitFocusCount = 0;
+    exitBtn.addEventListener('focus', () => { exitFocusCount++; });
+
+    // Enter editing mode on input
+    input.focus();
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true });
+    document.dispatchEvent(enter);
+    vi.advanceTimersByTime(20);
+
+    expect(input.dataset.tvEditing).toBe('true');
+    expect(input.readOnly).toBe(false);
+
+    // Keyboard dismissal arrives from the OS
+    emitKeyboardVisibility(false);
+    vi.advanceTimersByTime(20);
+
+    expect(input.dataset.tvEditing).toBe('false');
+    expect(input.readOnly).toBe(true);
+    expect(document.activeElement).toBe(exitBtn);
+    expect(exitFocusCount).toBe(1);
+
+    // Coinciding/leaked Back key event from remote (same user action that closed keyboard)
+    const sameBack = new KeyboardEvent('keydown', { key: 'Back', keyCode: 461, bubbles: true });
+    document.dispatchEvent(sameBack);
+    vi.advanceTimersByTime(20);
+
+    // Must NOT exit the route
+    expect(onBack).not.toHaveBeenCalled();
+    // Must NOT return focus a second time
+    expect(exitFocusCount).toBe(1);
+
+    // After the dismissal window, subsequent Back press exits the route normally
+    vi.advanceTimersByTime(360);
+    const nextBack = new KeyboardEvent('keydown', { key: 'Back', keyCode: 461, bubbles: true });
+    document.dispatchEvent(nextBack);
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    cleanup();
+  });
+
+  it('finishes editing and returns focus once when Back key arrives first, deduping subsequent dismissal event', () => {
+    const { input, exitBtn, onBack, emitKeyboardVisibility, cleanup } = setupHarness();
+    vi.advanceTimersByTime(20);
+
+    let exitFocusCount = 0;
+    exitBtn.addEventListener('focus', () => { exitFocusCount++; });
+
+    // Enter editing mode
+    input.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+    vi.advanceTimersByTime(20);
+    expect(input.dataset.tvEditing).toBe('true');
+
+    // User presses Back (keyCode 461) while editing
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Back', keyCode: 461, bubbles: true }));
+    vi.advanceTimersByTime(20);
+
+    expect(input.dataset.tvEditing).toBe('false');
+    expect(input.readOnly).toBe(true);
+    expect(document.activeElement).toBe(exitBtn);
+    expect(exitFocusCount).toBe(1);
+    expect(onBack).not.toHaveBeenCalled();
+
+    // OS subsequent keyboard dismissal event is deduped
+    emitKeyboardVisibility(false);
+    vi.advanceTimersByTime(20);
+    expect(exitFocusCount).toBe(1);
+
+    cleanup();
+  });
+
+  it('finishes editing on Tizen IME done (65376) and cancel (65385)', () => {
+    const { input, exitBtn, onBack, cleanup } = setupHarness();
+    vi.advanceTimersByTime(20);
+
+    // IME done
+    input.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+    vi.advanceTimersByTime(20);
+    expect(input.dataset.tvEditing).toBe('true');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '', keyCode: 65376, bubbles: true }));
+    vi.advanceTimersByTime(20);
+    expect(input.dataset.tvEditing).toBe('false');
+    expect(input.readOnly).toBe(true);
+    expect(document.activeElement).toBe(exitBtn);
+    expect(onBack).not.toHaveBeenCalled();
+
+    // IME cancel
+    input.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+    vi.advanceTimersByTime(20);
+    expect(input.dataset.tvEditing).toBe('true');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '', keyCode: 65385, bubbles: true }));
+    vi.advanceTimersByTime(20);
+    expect(input.dataset.tvEditing).toBe('false');
+    expect(input.readOnly).toBe(true);
+    expect(document.activeElement).toBe(exitBtn);
+    expect(onBack).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  it('ignores keyboard visibility false if this navigation owner did not start the edit', () => {
+    const { input, exitBtn, emitKeyboardVisibility, cleanup } = setupHarness();
+    vi.advanceTimersByTime(20);
+
+    // Input is NOT in editing mode
+    expect(input.dataset.tvEditing).toBeUndefined();
+    let exitFocused = false;
+    exitBtn.addEventListener('focus', () => { exitFocused = true; });
+
+    // Spurious or unowned keyboard visibility event
+    emitKeyboardVisibility(false);
+    vi.advanceTimersByTime(20);
+
+    expect(exitFocused).toBe(false);
+    expect(input.dataset.tvEditing).toBeUndefined();
+
+    cleanup();
   });
 });
