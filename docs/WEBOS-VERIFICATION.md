@@ -174,7 +174,63 @@ The following behaviors require physical LG TV hardware and cannot be verified b
 
 ## 6. Task 9 Extension Area: webOS 3.x Investigation
 
-*This section is reserved for Task 9. Task 9 investigates whether webOS TV 3.x (Chromium 38) can be supported under the single-IPK architecture, and records its evidence-backed adopt/defer decision below.*
+### 6.1 Decision: DEFER webOS 3.x (Chromium 38) — 2026-09-07
 
-- **Status:** Pending Task 9 execution.
-- **Support floor:** Currently pinned to webOS TV 4.0+ (Chromium 53 floor).
+**Status: DEFERRED.** The support floor remains webOS TV 4.0+ (Chromium 53, `target: 'chrome53'` in `clients/webos/vite.config.ts`). No adoption, no 3.x IPK variant, and no reduced-feature mode is shipped.
+
+#### 6.2 Runtime sources checked (2026-09-07)
+
+| Source | Check | Result |
+| --- | --- | --- |
+| Docker Hub `selenoid/chrome` (the Task 2 floor image series) | Hub API tag query `name=38` and full oldest-tag listing | No `38.0` tag; count=0. Oldest published tag is `48.0`; series verified 48.0→128.0. The 53.0 floor image (digest `sha256:5e3d995d…`) remains the guaranteed engine. |
+| Docker Hub `zenika/alpine-chrome` | oldest tags via Hub API | Oldest tags are 86.x-era; nothing near 38. |
+| Docker Hub `browserless/chromium` | tag query `name=38` | API returned null/0 matches. |
+| Docker Hub `selenium/node-chrome` | tag listing | Oldest surviving tags are 118.x-era; no 3x-era Chrome. |
+| Docker Hub search "chromium 38" | Hub search API | No repository publishes a Chromium 38 browser image (matches were unrelated: kasmweb Fedora 38, drupalci php-5.5.38, etc.). |
+| Google Chromium snapshot archive `commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64/` | range-probed revisions for surviving 38-trunk builds | Most 38-era revisions are purged (283000–289000 mostly 404). Revision **285500** survives and is Chromium **38.0.2105.0** (Linux x64 trunk build); revision 292500 survives as 39.0.2140.0. |
+
+The only publicly obtainable Chromium 38 engine found is the archived snapshot build r285500 (Chromium 38.0.2105.0). No distribution, registry, or browser-vendor channel ships a supported Chromium 38 container image today.
+
+#### 6.3 Execution evidence (real 38 engine, emulated amd64 under Docker on Apple Silicon)
+
+Snapshot r285500 was executed under Docker (`--platform linux/amd64` with Xvfb and remote debugging port 9222): the binary runs, reports `Chromium 38.0.2105.0`, and serves raw CDP (`Protocol-Version: 1.1`, UA `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2105.0 Safari/537.36`).
+
+The current packaged dist (`clients/webos/dist`, chrome53 target) was served to this engine at 1920×1080 and evaluated over CDP:
+
+* **Boot result: FAILED.** `startup.js` caught the script parse failure and correctly surfaced the FileList startup-failure panel with:
+  `Application startup failed: Unexpected token => at http://host.docker.internal:8899/app.js:1:69`
+  The application bundle global (`TorrentTV`) never attached because Chromium 38 rejects ES2015+ syntax at parse time (arrow functions, template literals, and `let`/`const` which throws `Unexpected strict mode reserved word`).
+* **Feature probe on the live 38 engine:**
+  - `CSS.supports('display','grid')` → `false` (no native CSS Grid support).
+  - `window.fetch` → `undefined` (Fetch API missing; added in Chrome 42).
+  - `Object.assign` → `undefined` (missing; added in Chrome 45).
+  - `Intl` → `object` (present).
+  - `Uint8Array` / Typed Arrays → `function` (present).
+* **Failure panel behavior:** The fallback startup error screen (`fatal-error.js` / `startup.js`) rendered successfully on Chromium 38, confirming UI-21 resilience under catastrophic bundle failure on older engines.
+
+Per plan discipline this evidence is labeled **engine-only**: it demonstrates real engine behavior; it is not playback, IPK, or hardware evidence.
+
+#### 6.4 Gap inventory (Chromium 38 vs. current build)
+
+* **Syntax/transpilation (blocking):** Vite 7 / esbuild **cannot** transpile `let`/`const`/async-await to ES5 or `chrome38` target (fails with 950 `Transforming let/const … is not supported yet` errors). Supporting Chromium 38 would require replacing or augmenting esbuild with a dedicated Babel (`@babel/preset-env`) + `regenerator-runtime` pipeline.
+* **CSS Grid (blocking for layout parity):** Chromium 38 has zero CSS Grid support. While `@supports not (display: grid)` flex fallbacks exist in `clients/webos/dist/app.css`, layout and focus traversal on 38 could not be validated because the application bundle cannot parse.
+* **API polyfills:** Missing APIs required by the bundle on 38 include `fetch`, `Object.assign`, and `Array.from` (used 6 times in dist). Core-js polyfills currently in `clients/webos/src/compat.ts` address only Chromium 53 gaps (`Object.entries`, `String.prototype.padStart`/`padEnd`).
+* **Adapter code paths:** The media/subtitle/aspect adapters were designed for the Chromium 53 floor; zero adapter paths could execute on 38 due to boot failure.
+* **Bundle size impact:** Current `clients/webos/dist/app.js` is 154,902 B. An ES5 + regenerator + polyfill build would substantially expand bundle size, but cannot be produced without introducing a secondary Babel toolchain.
+
+#### 6.5 Adoption bar vs. outcome
+
+Adoption requires the full UI-01–UI-21 walkthrough set passing on a real 38 engine, one unified IPK, and no reduced feature set. None of these three criteria can be met:
+1. The walkthrough set cannot boot due to syntax parse failures.
+2. A single IPK cannot target both modern/53 engines cleanly without either double-bundling or degrading performance across all webOS versions.
+3. Shipping an ES5-downgraded secondary build or disabled feature set violates the non-reduced-feature contract.
+
+Therefore, **DEFER** is the only honest, evidence-backed outcome.
+
+#### 6.6 Reopening conditions
+
+Support for webOS 3.x may only be reconsidered if:
+1. Physical webOS 3.x hardware (specific model and firmware) becomes available with active Developer Mode for `ares-cli` verification; and
+2. A maintainable, single-IPK build configuration (e.g. Babel ES5 with measured bundle regression) is established that passes all UI-01 through UI-21 walkthrough scenarios on that engine without reducing features.
+
+Until those conditions are satisfied, webOS TV 4.0+ (Chromium 53) remains the authoritative, verified floor.

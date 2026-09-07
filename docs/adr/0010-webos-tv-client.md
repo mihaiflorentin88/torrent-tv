@@ -31,15 +31,18 @@ from repository releases via the official `@webos-tools/cli` 3.2.5 packaging
 tools and LG's Developer Mode app, matching the manual update posture of
 ADR-0008 and ADR-0009.
 
-Support for webOS TV 3.x (Chromium 38) is explicitly deferred to a separate
-investigation (Task 9) and is not claimed or speculatively shipped here.
+Support for webOS TV 3.x (Chromium 38) was investigated in Task 9 and is
+explicitly deferred (see docs/WEBOS-VERIFICATION.md §6): Chromium 38 fails to
+parse ES2015+ syntax (rejecting arrow functions, template strings, and let/const),
+and supporting it would require a dedicated Babel pipeline and separate package,
+violating the single-IPK, non-reduced-feature design.
 
 ## Considered options
 
 - **Separate React / Enact UI for webOS** — rejected: re-implements the entire interface, diverges from the Tizen and Android design by construction, and creates three independent UI codebases to maintain for zero user benefit.
 - **Transcoded HLS / DASH stream pipeline** — rejected: violates ADR-0001 (the server never transcodes video); webOS HTML5 `<video>` handles direct HTTP Range streams natively.
 - **Blanket browser shims for older engines** — rejected: blanket polyfills inflate the bundle and mask runtime failures; layout uses capability-detected `@supports not (display: grid)` CSS fallbacks and behavioral `scrollIntoView` detection without user-agent sniffing.
-- **Include webOS 3.x in initial support floor** — deferred: Chromium 38 lacks modern JavaScript syntax and standard CSS features; support requires an evidence-backed engine evaluation and is investigated separately rather than faked.
+- **Include webOS 3.x in initial support floor** — deferred following Task 9 investigation: Chromium 38 lacks modern JavaScript syntax and standard CSS Grid; support cannot be achieved under a unified single-IPK build without compromising the verified Chromium 53 floor.
 - **LG Content Store / auto-update channel** — rejected: Torrent TV is a private-network application; sideloading via LG's official Developer Mode app avoids store submission overhead, account dependencies, and rooting requirements.
 
 ## Consequences
