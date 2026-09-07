@@ -159,34 +159,62 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tracker registry: %w", err)
 	}
-	engines := map[string]application.TorrentEngine{}
 	var defaultPrefix string
 	switch current.DownloadEngine {
 	case "", "native":
-		nt, err := nativetorrent.New(nativetorrent.Config{
-			DataDir:     current.DownloadRoot,
-			SessionDir:  current.TorrentSessionDir,
-			PeerPort:    current.TorrentPeerPort,
-			Readahead:   current.ReadAheadBytes,
-			StartWindow: current.InitialBufferBytes,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("native torrent engine: %w", err)
-		}
-		engines["native:"] = nt
 		defaultPrefix = "native:"
 	case "qbittorrent":
-		engines["qb:"] = qbittorrent.New(func() (string, string, string) {
-			v := settings.Get()
-			return v.QBittorrentURL, v.QBittorrentUsername, v.QBittorrentPassword
-		})
 		defaultPrefix = "qb:"
 	default:
 		return nil, fmt.Errorf("unknown download engine %q", current.DownloadEngine)
 	}
+	// Size the engine set from the persisted downloads: the default is
+	// always constructed; the other engine only when legacy rows reference
+	// it. A native-only installation never constructs a qBittorrent
+	// client, and vice versa. A persisted-prefix read error is fatal.
+	persistedPrefixes, err := repo.DistinctEnginePrefixes(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("distinct engine prefixes: %w", err)
+	}
+	var legacyNativeErr error
+	engines := map[string]application.TorrentEngine{}
+	for _, prefix := range requiredEngines(defaultPrefix, persistedPrefixes) {
+		switch prefix {
+		case "native:":
+			nt, err := nativetorrent.New(nativetorrent.Config{
+				DataDir:     current.DownloadRoot,
+				SessionDir:  current.TorrentSessionDir,
+				PeerPort:    current.TorrentPeerPort,
+				Readahead:   current.ReadAheadBytes,
+				StartWindow: current.InitialBufferBytes,
+			})
+			if err != nil {
+				if defaultPrefix == "native:" {
+					return nil, fmt.Errorf("native torrent engine: %w", err)
+				}
+				// Legacy rows only: the failed native engine must not
+				// abort startup under a qBittorrent default. It is marked
+				// unavailable, so native routes report the original error.
+				legacyNativeErr = err
+				continue
+			}
+			engines["native:"] = nt
+		case "qb:":
+			// Construction stays lazy: no network probes here.
+			engines["qb:"] = qbittorrent.New(func() (string, string, string) {
+				v := settings.Get()
+				return v.QBittorrentURL, v.QBittorrentUsername, v.QBittorrentPassword
+			})
+		}
+	}
 	engineSet, err := application.NewEngineSet(defaultPrefix, engines)
 	if err != nil {
 		return nil, fmt.Errorf("torrent engines: %w", err)
+	}
+	if legacyNativeErr != nil {
+		engineSet.MarkUnavailable("native:", legacyNativeErr)
+		log.Warn("legacy native torrent engine failed to initialize; native downloads unavailable",
+			"error", legacyNativeErr)
 	}
 	service := application.NewService(registry, engineSet, repo, settings, subtitles.NewSubDL(settings))
 	service.SetMetadataProvider(tmdb.New(func() string { return settings.Get().TMDBAPIKey }))
@@ -266,6 +294,27 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 	)
 	app.Server = &http.Server{Addr: current.ListenAddress, Handler: handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32 << 10}
 	return app, nil
+}
+
+// requiredEngines sizes the engine set: the default engine is always
+// required; the other prefix only when persisted downloads reference it.
+// The result is deduplicated and sorted ("native:" before "qb:") so the
+// build order is deterministic.
+func requiredEngines(defaultPrefix string, persisted []string) []string {
+	required := map[string]bool{defaultPrefix: true}
+	for _, prefix := range persisted {
+		if prefix == "native:" || prefix == "qb:" {
+			required[prefix] = true
+		}
+	}
+	order := []string{"native:", "qb:"}
+	var out []string
+	for _, prefix := range order {
+		if required[prefix] {
+			out = append(out, prefix)
+		}
+	}
+	return out
 }
 
 // ListenAndServe serves until Shutdown. The server's BaseContext hook

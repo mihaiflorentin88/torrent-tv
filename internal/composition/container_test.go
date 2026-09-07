@@ -18,13 +18,127 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mihaiflorentin88/torrent-tv/internal/application"
 	"github.com/mihaiflorentin88/torrent-tv/internal/application/portal"
 	"github.com/mihaiflorentin88/torrent-tv/internal/application/updates"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 	"github.com/mihaiflorentin88/torrent-tv/internal/platform/config"
 )
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+// TestRequiredEnginesMatrix pins the composition-sizing matrix: the
+// default engine is always required, the other prefix only when persisted
+// rows reference it, and duplicate persisted prefixes collapse.
+func TestRequiredEnginesMatrix(t *testing.T) {
+	cases := []struct {
+		name          string
+		defaultPrefix string
+		persisted     []string
+		want          []string
+	}{
+		{"native default, no rows", "native:", nil, []string{"native:"}},
+		{"qb default, qb rows only", "qb:", []string{"qb:"}, []string{"qb:"}},
+		{"qb default, native legacy rows", "qb:", []string{"native:"}, []string{"native:", "qb:"}},
+		{"native default, both rows", "native:", []string{"qb:", "native:"}, []string{"native:", "qb:"}},
+		{"duplicate persisted rows", "qb:", []string{"native:", "native:"}, []string{"native:", "qb:"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := requiredEngines(tc.defaultPrefix, tc.persisted)
+			if len(got) != len(tc.want) {
+				t.Fatalf("requiredEngines(%q, %v) = %v; want %v", tc.defaultPrefix, tc.persisted, got, tc.want)
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Fatalf("requiredEngines(%q, %v) = %v; want %v", tc.defaultPrefix, tc.persisted, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// TestLegacyNativeFailurePolicy exercises the exact policy wiring the
+// container applies (requiredEngines -> NewEngineSet -> MarkUnavailable):
+// with qb as default and a legacy native row whose engine failed to
+// construct, startup proceeds, the default stays qb:, the native prefix
+// reports its construction error, and native routes stop resolving.
+// nativetorrent.New has no injectable failure seam and none is added to
+// production, so the failing engine is simulated at the same
+// application.EngineSet seam the container feeds.
+func TestLegacyNativeFailurePolicy(t *testing.T) {
+	defaultPrefix := "qb:"
+	persisted := []string{"native:"}
+
+	// Mirrors the container: build only required engines. qb: always
+	// constructs; native: "fails" — the container's policy is
+	// MarkUnavailable + warn rather than abort.
+	var engines map[string]application.TorrentEngine
+	for _, prefix := range requiredEngines(defaultPrefix, persisted) {
+		if engines == nil {
+			engines = map[string]application.TorrentEngine{}
+		}
+		engines[prefix] = &stubEngine{}
+	}
+
+	set, err := application.NewEngineSet(defaultPrefix, engines)
+	if err != nil {
+		t.Fatalf("NewEngineSet: %v", err)
+	}
+	nativeErr := errors.New("nativetorrent: session open failed")
+	set.MarkUnavailable("native:", nativeErr)
+
+	if got := set.DefaultPrefix(); got != "qb:" {
+		t.Fatalf("DefaultPrefix() = %q; want qb:", got)
+	}
+	initErr, ok := set.InitError("native:")
+	if !ok || !errors.Is(initErr, nativeErr) {
+		t.Fatalf("InitError(native:) = %v, %v; want nativeErr, true", initErr, ok)
+	}
+	if _, _, ok := set.Resolve("native:abc"); ok {
+		t.Fatal("Resolve(native:abc) ok after failed native construction; want false")
+	}
+	if set.Default() == nil {
+		t.Fatal("Default() nil; qb default engine must remain routable")
+	}
+}
+
+// stubEngine satisfies application.TorrentEngine for composition tests.
+type stubEngine struct{}
+
+func (stubEngine) Test(context.Context) (string, error) { return "", errors.New("stub") }
+func (stubEngine) Add(context.Context, io.Reader, string) (string, error) {
+	return "", errors.New("stub")
+}
+
+func (stubEngine) Files(context.Context, string) ([]domain.TorrentFile, error) {
+	return nil, errors.New("stub")
+}
+
+func (stubEngine) Status(context.Context, string) (domain.DownloadStatus, error) {
+	return domain.DownloadStatus{}, errors.New("stub")
+}
+
+func (stubEngine) Pieces(context.Context, string) (domain.PieceMap, error) {
+	return domain.PieceMap{}, errors.New("stub")
+}
+
+func (stubEngine) PrepareFile(context.Context, string, int, []int) error { return errors.New("stub") }
+
+func (stubEngine) PrepareFiles(context.Context, string, []int, []int) error {
+	return errors.New("stub")
+}
+
+func (stubEngine) PrepareRange(context.Context, string, int, int64, int64) error {
+	return errors.New("stub")
+}
+func (stubEngine) Pause(context.Context, string) error        { return errors.New("stub") }
+func (stubEngine) Resume(context.Context, string) error       { return errors.New("stub") }
+func (stubEngine) Remove(context.Context, string, bool) error { return errors.New("stub") }
+func (stubEngine) ResolveMagnet(context.Context, string, string) ([]byte, error) {
+	return nil, errors.New("stub")
 }
 
 // TestNewAtLoadsExplicitPath pins the constructor serve and the GUI

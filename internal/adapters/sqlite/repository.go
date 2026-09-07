@@ -34,6 +34,28 @@ func Open(path string) (*Repository, error) {
 }
 func (r *Repository) Close() error { return r.db.Close() }
 
+// DistinctEnginePrefixes returns the distinct engine owner prefixes
+// (e.g. "native:", "qb:") across persisted downloads. The substr includes
+// the trailing colon, matching route keys. Rows without a colon are
+// ignored. Composition uses this to size the engine set at startup.
+func (r *Repository) DistinctEnginePrefixes(ctx context.Context) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT DISTINCT substr(engine_id, 1, instr(engine_id, ':')) FROM downloads WHERE instr(engine_id, ':') > 0 ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var prefixes []string
+	for rows.Next() {
+		var prefix string
+		if err := rows.Scan(&prefix); err != nil {
+			return nil, err
+		}
+		prefixes = append(prefixes, prefix)
+	}
+	return prefixes, rows.Err()
+}
+
 func (r *Repository) migrate(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS releases(
