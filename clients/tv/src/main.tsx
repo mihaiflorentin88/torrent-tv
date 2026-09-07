@@ -69,7 +69,6 @@ export function Player({ api, download, resumeMs, preferences, onClose, onStateC
   const subtitleDelayRef = useRef(0);
   const subtitleCues = useRef<SubtitleCue[]>([]);
   const playing = useRef(false);
-  const externalSubtitlePath = useRef('');
   const autoSubtitleAttempted = useRef(false);
   const preferenceRef = useRef<PlaybackPreferences>(preferences || { audioLanguage: 'en', audioTrackIndex: -1, subtitleLanguage: 'ro', subtitleMode: 'auto' });
   const phaseRef = useRef(phase);
@@ -208,7 +207,6 @@ export function Player({ api, download, resumeMs, preferences, onClose, onStateC
       av.open(api.streamURL(download.streamUrl));
       av.setDisplayRect(0, 0, 1920, 1080);
       av.setDisplayMethod(aspect);
-      if (externalSubtitlePath.current) av.setExternalSubtitlePath(externalSubtitlePath.current);
       av.setListener({
         onbufferingstart: () => { if (token === session.current) { playing.current = false; setPhase('buffering'); setMessage('Buffering…'); controls.setPlaying(false); revealControls(true); } },
         onbufferingprogress: (progress: number) => { if (token === session.current) setMessage(`Buffering ${progress}%`); },
@@ -233,14 +231,14 @@ export function Player({ api, download, resumeMs, preferences, onClose, onStateC
         onstreamcompleted: () => { if (token === session.current) { current.current = duration.current; void save().then(() => onComplete(preferenceRef.current)); } },
         oncurrentplaytime: (value: number) => { if (token === session.current) { current.current = value; if (scrubTarget.current === null) setPosition(value); if (subtitleCues.current.length) setExternalSubtitle(subtitleAt(subtitleCues.current, value, subtitleDelayRef.current)); if (Date.now() - lastSaved.current >= 10_000) { lastSaved.current = Date.now(); save(); } } },
         onsubtitlechange: (_duration: number, text: string) => { if (token === session.current) setExternalSubtitle(String(text || '')); },
+        ontrackschanged: () => { if (token === session.current) refreshTracks(); },
         onerror: (error: string) => void recover(error, token),
       });
       av.prepareAsync(() => {
         if (token !== session.current) return;
         duration.current = av.getDuration(); setTotal(duration.current);
         const allTracks = (av.getTotalTrackInfo?.() || []).map(normalizeTrack); setTracks(allTracks); applyAudioPreference(allTracks);
-        if (externalSubtitlePath.current) { try { av.setSilentSubtitle(false); } catch { } }
-        else if (!autoSubtitleAttempted.current) { autoSubtitleAttempted.current = true; void autoSelectSubtitles(allTracks); }
+        if (!autoSubtitleAttempted.current) { autoSubtitleAttempted.current = true; void autoSelectSubtitles(allTracks); }
         if (position > 0 && position < duration.current) av.seekTo(clampSeek(position, duration.current));
         if (autoplay) { av.play(); playing.current = true; setPhase('playing'); setMessage(''); controls.setPlaying(true); revealControls(); }
         else { playing.current = false; setPhase('paused'); setMessage('Paused'); controls.setPlaying(false); revealControls(true); }
@@ -318,7 +316,36 @@ export function Player({ api, download, resumeMs, preferences, onClose, onStateC
 
   function chooseTrack(type: 'AUDIO' | 'TEXT', index: number | null) {
     const av = window.webapis?.avplay;
-    try { if (type === 'TEXT' && index === null) { av.setSilentSubtitle(true); subtitleCues.current = []; setExternalSubtitle(''); } else { if (type === 'TEXT') { av.setSilentSubtitle(false); subtitleCues.current = []; setExternalSubtitle(''); } av.setSelectTrack(type, index); if (type === 'AUDIO') { const wasPlaying = playing.current; if (!wasPlaying) av.play(); window.clearTimeout(audioTimer.current); audioTimer.current = window.setTimeout(() => { try { av.seekTo(clampSeek(current.current, duration.current)); if (!wasPlaying) av.pause(); refreshTracks(); } catch { } }, 120); } } } catch { }
+    try {
+      if (type === 'TEXT' && index === null) {
+        av.setSilentSubtitle(true);
+        subtitleCues.current = [];
+        setExternalSubtitle('');
+      } else {
+        if (type === 'TEXT') {
+          av.setSilentSubtitle(false);
+          subtitleCues.current = [];
+          setExternalSubtitle('');
+        }
+        av.setSelectTrack(type, index);
+        if (type === 'AUDIO') {
+          const wasPlaying = playing.current;
+          if (!wasPlaying) av.play();
+          window.clearTimeout(audioTimer.current);
+          audioTimer.current = window.setTimeout(() => {
+            try {
+              av.seekTo(clampSeek(current.current, duration.current));
+              if (!wasPlaying) av.pause();
+              refreshTracks();
+            } catch { }
+          }, 120);
+        }
+      }
+    } catch (error) {
+      setMessage('Could not select the ' + (type === 'AUDIO' ? 'audio track' : 'subtitle') + ': ' + (error as Error).message);
+      closeMenu();
+      return;
+    }
     closeMenu();
     const selected = index === null ? null : tracks.find(track => track.type === type && track.index === index);
     if (type === 'AUDIO' && selected) void savePreferences({ ...preferenceRef.current, audioLanguage: selected.language || 'en', audioTrackIndex: selected.index });
@@ -342,7 +369,7 @@ export function Player({ api, download, resumeMs, preferences, onClose, onStateC
     setMessage(`Preparing ${candidate.title}…`); if (menuRef.current) closeMenu(); else revealControls(true);
     try {
       const asset = await api.prepareSubtitle(download.id, candidate.provider, candidate.id, 'vtt');
-      const response = await fetch(api.streamURL(asset.url)); if (!response.ok) throw new Error(`server returned ${response.status}`); const cues = parseVTT(await response.text()); if (!cues.length) throw new Error('the downloaded subtitle contained no readable cues'); subtitleCues.current = cues; externalSubtitlePath.current = ''; try { window.webapis?.avplay.setSilentSubtitle(true); } catch { } setExternalSubtitle(subtitleAt(cues, current.current, subtitleDelayRef.current)); if (persist) await savePreferences({ ...preferenceRef.current, subtitleLanguage: candidate.language || 'en', subtitleProvider: candidate.provider, subtitleCandidateId: candidate.id, subtitleMode: 'selected' }); showTransientMessage(`${candidate.language || 'Subtitle'} selected`); revealControls(); return true;
+      const response = await fetch(api.streamURL(asset.url)); if (!response.ok) throw new Error(`server returned ${response.status}`); const cues = parseVTT(await response.text()); if (!cues.length) throw new Error('the downloaded subtitle contained no readable cues'); subtitleCues.current = cues; try { window.webapis?.avplay.setSilentSubtitle(true); } catch { } setExternalSubtitle(subtitleAt(cues, current.current, subtitleDelayRef.current)); if (persist) await savePreferences({ ...preferenceRef.current, subtitleLanguage: candidate.language || 'en', subtitleProvider: candidate.provider, subtitleCandidateId: candidate.id, subtitleMode: 'selected' }); showTransientMessage(`${candidate.language || 'Subtitle'} selected`); revealControls(); return true;
     } catch (error) { setMessage(`Subtitle preparation failed: ${(error as Error).message}`); return false; }
   }
   function changeDelay(delta: number) { const next = Math.max(-10_000, Math.min(10_000, subtitleDelay + delta)); setSubtitleDelay(next); try { window.webapis?.avplay.setSubtitlePosition(next); } catch { } }

@@ -20,6 +20,7 @@ export interface AVPlayListener {
  oncurrentplaytime?(milliseconds: number): void;
  onsubtitlechange?(duration: number, text: string): void;
  onerror?(error: string): void;
+ ontrackschanged?(): void;
 }
 
 export interface RawTrack {
@@ -61,13 +62,55 @@ function formatMediaError(err: MediaError | null): string {
    return 'Media error ' + err.code;
  }
 }
+interface AudioTrackLike {
+ enabled?: boolean;
+ language?: string;
+ languageCode?: string;
+ label?: string;
+ title?: string;
+ id?: string;
+}
+
+interface CueLike {
+ startTime: number;
+ endTime: number;
+ text?: string;
+}
+
+interface TextTrackLike {
+ mode?: string;
+ language?: string;
+ languageCode?: string;
+ label?: string;
+ title?: string;
+ cues?: ArrayLike<CueLike> | null;
+ oncuechange?: (() => void) | null;
+}
+
+interface TrackListLike<T> {
+ length: number;
+ [index: number]: T | undefined;
+ addEventListener?(type: string, fn: () => void): void;
+ removeEventListener?(type: string, fn: () => void): void;
+}
+
+interface AVMediaElement extends HTMLVideoElement {
+ audioTracks?: TrackListLike<AudioTrackLike>;
+ textTracks: TrackListLike<TextTrackLike> & TextTrackList;
+}
 
 export function createAVPlay(): WebOSAVPlay {
  let sourceUrl = '';
  let displayMethod = 'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO';
  let listener: AVPlayListener | null = null;
- let video: HTMLVideoElement | null = null;
+ let video: AVMediaElement | null = null;
  let hiddenSamsungObject: HTMLElement | null = null;
+ let selectedTextTrack: TextTrackLike | null = null;
+ let subtitleOffsetMs = 0;
+ let lastForwardedKey: string | null = null;
+ let lastTrackSignature = '';
+ let wiredAudioList: TrackListLike<AudioTrackLike> | null = null;
+ let wiredTextList: TrackListLike<TextTrackLike> | null = null;
  let generation = 0;
  let endedFired = false;
  let bufferingStarted = false;
@@ -79,7 +122,116 @@ export function createAVPlay(): WebOSAVPlay {
   }
  }
 
+ function getAudioList(): TrackListLike<AudioTrackLike> | null {
+  if (!video) return null;
+  const list = video.audioTracks;
+  return list && typeof list.length === 'number' ? list : null;
+ }
+
+ function getTextList(): TrackListLike<TextTrackLike> | null {
+  if (!video) return null;
+  const list = video.textTracks;
+  return list && typeof list.length === 'number' ? list : null;
+ }
+
+ function computeTrackSignature(): string {
+  const audio = getAudioList();
+  const text = getTextList();
+  let sig = 'a:' + (audio ? audio.length : 'none');
+  if (audio) {
+   for (let i = 0; i < audio.length; i++) {
+    const t = audio[i];
+    sig += '_' + (t && t.enabled ? '1' : '0') + '_' + (t && t.language ? t.language : '');
+   }
+  }
+  sig += '|t:' + (text ? text.length : 'none');
+  if (text) {
+   for (let i = 0; i < text.length; i++) {
+    const t = text[i];
+    sig += '_' + (t && t.mode ? t.mode : '') + '_' + (t && t.language ? t.language : '');
+   }
+  }
+  return sig;
+ }
+
+ function onTracksChange(): void {
+  const nextSig = computeTrackSignature();
+  if (nextSig !== lastTrackSignature) {
+   lastTrackSignature = nextSig;
+   if (listener && typeof listener.ontrackschanged === 'function') {
+    listener.ontrackschanged();
+   }
+  }
+ }
+
+ function wireTrackListeners(): void {
+  const audio = getAudioList();
+  if (audio && audio !== wiredAudioList) {
+   wiredAudioList = audio;
+   if (typeof audio.addEventListener === 'function') {
+    audio.addEventListener('change', onTracksChange);
+    audio.addEventListener('addtrack', onTracksChange);
+    audio.addEventListener('removetrack', onTracksChange);
+   }
+  }
+  const text = getTextList();
+  if (text && text !== wiredTextList) {
+   wiredTextList = text;
+   if (typeof text.addEventListener === 'function') {
+    text.addEventListener('change', onTracksChange);
+    text.addEventListener('addtrack', onTracksChange);
+    text.addEventListener('removetrack', onTracksChange);
+   }
+  }
+ }
+
+ function evaluateNativeCues(): void {
+  if (!selectedTextTrack || !video) return;
+  const cues = selectedTextTrack.cues;
+  if (cues === null || typeof cues === 'undefined') {
+   return;
+  }
+  const currentMs = Math.round(video.currentTime * 1000);
+  const targetMs = currentMs - subtitleOffsetMs;
+  let activeCue: CueLike | null = null;
+  for (let i = 0; i < cues.length; i++) {
+   const cue = cues[i];
+   if (!cue) continue;
+   const startMs = Math.round(cue.startTime * 1000);
+   const endMs = Math.round(cue.endTime * 1000);
+   if (startMs <= targetMs && targetMs <= endMs) {
+    activeCue = cue;
+    break;
+   }
+  }
+  const duration = activeCue ? Math.round((activeCue.endTime - activeCue.startTime) * 1000) : 0;
+  const text = activeCue && typeof activeCue.text === 'string' ? activeCue.text : '';
+  const key = duration + ':' + text;
+  if (key !== lastForwardedKey) {
+   lastForwardedKey = key;
+   if (listener && typeof listener.onsubtitlechange === 'function') {
+    listener.onsubtitlechange(duration, text);
+   }
+  }
+ }
+
  function teardownVideo(): void {
+  if (wiredAudioList && typeof wiredAudioList.removeEventListener === 'function') {
+   wiredAudioList.removeEventListener('change', onTracksChange);
+   wiredAudioList.removeEventListener('addtrack', onTracksChange);
+   wiredAudioList.removeEventListener('removetrack', onTracksChange);
+  }
+  if (wiredTextList && typeof wiredTextList.removeEventListener === 'function') {
+   wiredTextList.removeEventListener('change', onTracksChange);
+   wiredTextList.removeEventListener('addtrack', onTracksChange);
+   wiredTextList.removeEventListener('removetrack', onTracksChange);
+  }
+  wiredAudioList = null;
+  wiredTextList = null;
+  selectedTextTrack = null;
+  subtitleOffsetMs = 0;
+  lastForwardedKey = null;
+  lastTrackSignature = '';
   if (video) {
    video.pause();
    video.removeAttribute('src');
@@ -138,9 +290,41 @@ export function createAVPlay(): WebOSAVPlay {
    el.style.width = '100%';
    el.style.height = '100%';
    el.preload = 'auto';
-   video = el;
+   const targetVideo: AVMediaElement = el as AVMediaElement;
+   let audioBacking: TrackListLike<AudioTrackLike> | undefined = targetVideo.audioTracks;
+   let textBacking: TrackListLike<TextTrackLike> | undefined = targetVideo.textTracks;
+
+   if (!audioBacking) {
+    Object.defineProperty(el, 'audioTracks', {
+     configurable: true,
+     enumerable: true,
+     get: function() { return audioBacking; },
+     set: function(val: TrackListLike<AudioTrackLike> | undefined) {
+      audioBacking = val;
+      wireTrackListeners();
+      onTracksChange();
+     },
+    });
+   }
+
+   if (!textBacking) {
+    Object.defineProperty(el, 'textTracks', {
+     configurable: true,
+     enumerable: true,
+     get: function() { return textBacking; },
+     set: function(val: TrackListLike<TextTrackLike> | undefined) {
+      textBacking = val;
+      wireTrackListeners();
+      onTracksChange();
+     },
+    });
+   }
+
+   video = targetVideo;
    applyDisplayMethod();
    shell.appendChild(el);
+   wireTrackListeners();
+   lastTrackSignature = computeTrackSignature();
 
    let prepareSettled = false;
 
@@ -175,6 +359,7 @@ export function createAVPlay(): WebOSAVPlay {
     if (listener && typeof listener.oncurrentplaytime === 'function') {
      listener.oncurrentplaytime(Math.round(el.currentTime * 1000));
     }
+    evaluateNativeCues();
    });
 
    // Buffering start
@@ -296,6 +481,7 @@ export function createAVPlay(): WebOSAVPlay {
    endedFired = false;
    const targetSeconds = Math.max(0, Number(milliseconds || 0) / 1000);
    video.currentTime = targetSeconds;
+   evaluateNativeCues();
   },
 
   stop(): void {
@@ -322,36 +508,160 @@ export function createAVPlay(): WebOSAVPlay {
   },
 
   getTotalTrackInfo(): RawTrack[] {
-   // Chromium 53 does not expose standard HTMLMediaElement track collections.
-   // Returns an honest empty collection rather than fabricated entries.
-   return [];
+   wireTrackListeners();
+   const result: RawTrack[] = [];
+   const audio = getAudioList();
+   if (audio) {
+    for (let i = 0; i < audio.length; i++) {
+     const t = audio[i];
+     if (!t) continue;
+     result.push({
+      index: i,
+      type: 'AUDIO',
+      extra_info: {
+       track_lang: t.language || t.languageCode || '',
+       track_title: t.title || t.label || '',
+       codec: '',
+      },
+     });
+    }
+   }
+   const text = getTextList();
+   if (text) {
+    for (let i = 0; i < text.length; i++) {
+     const t = text[i];
+     if (!t) continue;
+     result.push({
+      index: i,
+      type: 'TEXT',
+      extra_info: {
+       track_lang: t.language || t.languageCode || '',
+       track_title: t.title || t.label || '',
+       codec: '',
+      },
+     });
+    }
+   }
+   return result;
   },
 
-  setSelectTrack(_type: 'AUDIO' | 'TEXT', _index: number): void {
-   throw new RangeError('Track selection not supported: no track collections exposed');
+  setSelectTrack(type: 'AUDIO' | 'TEXT', index: number): void {
+   if (!video) {
+    throw new RangeError('Track selection not supported: no media prepared');
+   }
+   if (type !== 'AUDIO' && type !== 'TEXT') {
+    throw new RangeError('Unknown track type: ' + String(type));
+   }
+   wireTrackListeners();
+   if (type === 'AUDIO') {
+    const list = getAudioList();
+    if (!list || typeof list.length !== 'number') {
+     throw new RangeError('Track selection not supported: no track collections exposed');
+    }
+    if (!Number.isInteger(index) || index < 0 || index >= list.length) {
+     throw new RangeError('Track index out of range: ' + index);
+    }
+    const prevEnabled: boolean[] = [];
+    for (let i = 0; i < list.length; i++) {
+     prevEnabled.push(Boolean(list[i] && list[i]?.enabled));
+    }
+    for (let i = 0; i < list.length; i++) {
+     const track = list[i];
+     if (track) {
+      track.enabled = i === index;
+     }
+    }
+    let verified = Boolean(list[index] && list[index]?.enabled);
+    for (let i = 0; i < list.length; i++) {
+     if (i !== index && list[i] && list[i]?.enabled) {
+      verified = false;
+      break;
+     }
+    }
+    if (!verified) {
+     for (let i = 0; i < list.length; i++) {
+      const track = list[i];
+      if (track) {
+       track.enabled = prevEnabled[i];
+      }
+     }
+     throw new Error('webOS refused the audio track selection: flags could not be verified');
+    }
+    lastTrackSignature = computeTrackSignature();
+    return;
+   }
+   if (type === 'TEXT') {
+    const list = getTextList();
+    if (!list || typeof list.length !== 'number') {
+     throw new RangeError('Native subtitle tracks unavailable');
+    }
+    if (!Number.isInteger(index) || index < 0 || index >= list.length) {
+     throw new RangeError('Track index out of range: ' + index);
+    }
+    const prevModes: string[] = [];
+    for (let i = 0; i < list.length; i++) {
+     prevModes.push(String((list[i] && list[i]?.mode) || 'disabled'));
+    }
+    for (let i = 0; i < list.length; i++) {
+     const track = list[i];
+     if (track) {
+      track.mode = i === index ? 'hidden' : 'disabled';
+     }
+    }
+    const targetTrack = list[index];
+    if (!targetTrack || targetTrack.mode !== 'hidden') {
+     for (let i = 0; i < list.length; i++) {
+      const track = list[i];
+      if (track) {
+       track.mode = prevModes[i];
+      }
+     }
+     throw new Error('webOS refused the subtitle track selection: mode could not be verified');
+    }
+    selectedTextTrack = targetTrack;
+    lastForwardedKey = null;
+    lastTrackSignature = computeTrackSignature();
+   }
   },
 
   setSilentSubtitle(silent: boolean): void {
+   const list = getTextList();
    if (silent) {
-    // Native subtitles stay OFF; ensure any HTML tracks stay disabled.
-    if (video && video.textTracks) {
-     for (let i = 0; i < video.textTracks.length; i++) {
-      video.textTracks[i].mode = 'disabled';
+    selectedTextTrack = null;
+    lastForwardedKey = null;
+    if (list) {
+     for (let i = 0; i < list.length; i++) {
+      const track = list[i];
+      if (track) {
+       track.mode = 'disabled';
+      }
      }
     }
+    if (listener && typeof listener.onsubtitlechange === 'function') {
+     listener.onsubtitlechange(0, '');
+    }
+    lastTrackSignature = computeTrackSignature();
     return;
    }
-   // Honest failure: cannot enable native tracks when no collection exists.
-   throw new RangeError('Native subtitle tracks unavailable');
+   if (!list || list.length === 0) {
+    throw new RangeError('Native subtitle tracks unavailable');
+   }
   },
 
-  setSubtitlePosition(_milliseconds: number): void {
-   // Subtitle overlay handles its own cue timing in the shared player;
-   // native text tracks remain disabled.
+  setSubtitlePosition(milliseconds: number): void {
+   const next = Math.round(Number(milliseconds || 0));
+   if (selectedTextTrack && next !== 0) {
+    const cues = selectedTextTrack.cues;
+    if (cues === null || typeof cues === 'undefined') {
+     throw new RangeError('Native cue access unavailable; the requested subtitle shift is unsupported');
+    }
+   }
+   subtitleOffsetMs = next;
+   lastForwardedKey = null;
+   evaluateNativeCues();
   },
  };
 }
-
 if (typeof window !== 'undefined') {
  const win = window as unknown as { webapis?: { avplay?: WebOSAVPlay } };
  win.webapis = win.webapis || {};

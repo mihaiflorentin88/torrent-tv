@@ -1074,6 +1074,124 @@ async function runCleanAndFatal(state, session, errors, appBase, browser, output
  const seekFile = await screenshot(session, outputDir, 'clean-07-seek.png');
  artifacts.screenshots.push(seekFile);
 
+ // -- milestone 8: honest track inventory, audio picker, and subtitle picker interaction
+ const trackProbe = await poll(async () => {
+  const info = await evaluate(session, `(function() {
+   var audioBtn = document.querySelector('[data-player-control="audio"]');
+   var subBtn = document.querySelector('[data-player-control="subtitles"]');
+   var tracks = window.webapis && window.webapis.avplay ? window.webapis.avplay.getTotalTrackInfo() : null;
+   return {
+    audioLabel: audioBtn ? audioBtn.textContent : null,
+    subLabel: subBtn ? subBtn.textContent : null,
+    tracksLength: tracks ? tracks.length : null,
+   };
+  })()`);
+  return {
+   done: info.audioLabel === 'Audio (0)' && info.tracksLength === 0,
+   view: info,
+  };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!trackProbe.done) {
+  throw new SmokeFailure(`case clean FAILED — honest track inventory was not reported on player toolbar (${JSON.stringify(trackProbe.view)})`);
+ }
+
+ // Open Audio picker dialog
+ await evaluate(session, `(function() {
+  var audioBtn = document.querySelector('[data-player-control="audio"]');
+  if (audioBtn) audioBtn.click();
+ })()`);
+ const audioDialogProbe = await poll(async () => {
+  const info = await evaluate(session, `(function() {
+   var dialog = document.querySelector('.player-dialog');
+   var h2 = dialog ? dialog.querySelector('h2') : null;
+   var refreshBtn = dialog ? dialog.querySelector('[data-focus-key="player-audio-refresh"]') : null;
+   return {
+    hasDialog: Boolean(dialog),
+    title: h2 ? h2.textContent : null,
+    hasRefresh: Boolean(refreshBtn),
+   };
+  })()`);
+  return {
+   done: info.hasDialog && info.title === 'Audio track' && info.hasRefresh,
+   view: info,
+  };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!audioDialogProbe.done) {
+  throw new SmokeFailure(`case clean FAILED — audio track picker dialog did not render correctly (${JSON.stringify(audioDialogProbe.view)})`);
+ }
+ const audioPickerFile = await screenshot(session, outputDir, 'clean-08-audio-picker.png');
+ artifacts.screenshots.push(audioPickerFile);
+
+ // Close Audio dialog via Close button
+ await evaluate(session, `(function() {
+  var closeBtn = document.querySelector('[data-focus-key="player-menu-close"]');
+  if (closeBtn) closeBtn.click();
+ })()`);
+ const audioDialogCloseProbe = await poll(async () => {
+  const dialog = await evaluate(session, `Boolean(document.querySelector('.player-dialog'))`);
+  return { done: !dialog, view: { dialog } };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!audioDialogCloseProbe.done) {
+  throw new SmokeFailure(`case clean FAILED — audio track picker dialog did not close`);
+ }
+
+ // Open Subtitles picker dialog
+ await evaluate(session, `(function() {
+  var subBtn = document.querySelector('[data-player-control="subtitles"]');
+  if (subBtn) subBtn.click();
+ })()`);
+ const subDialogProbe = await poll(async () => {
+  const info = await evaluate(session, `(function() {
+   var dialog = document.querySelector('.player-dialog');
+   var h2 = dialog ? dialog.querySelector('h2') : null;
+   var offBtn = dialog ? dialog.querySelector('[data-focus-key="player-subtitles-off"]') : null;
+   var findBtn = dialog ? dialog.querySelector('[data-focus-key="player-subtitles-find"]') : null;
+   return {
+    hasDialog: Boolean(dialog),
+    title: h2 ? h2.textContent : null,
+    hasOff: Boolean(offBtn),
+    hasFind: Boolean(findBtn),
+   };
+  })()`);
+  return {
+   done: info.hasDialog && info.title === 'Subtitles' && info.hasOff && info.hasFind,
+   view: info,
+  };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!subDialogProbe.done) {
+  throw new SmokeFailure(`case clean FAILED — subtitles picker dialog did not render correctly (${JSON.stringify(subDialogProbe.view)})`);
+ }
+ const subPickerFile = await screenshot(session, outputDir, 'clean-09-subtitles-picker.png');
+ artifacts.screenshots.push(subPickerFile);
+
+ // Click Off button
+ await evaluate(session, `(function() {
+  var offBtn = document.querySelector('[data-focus-key="player-subtitles-off"]');
+  if (offBtn) offBtn.click();
+ })()`);
+ const subOffProbe = await poll(async () => {
+  const info = await evaluate(session, `(function() {
+   var dialog = document.querySelector('.player-dialog');
+   var msg = document.querySelector('.player-message');
+   var extSub = document.querySelector('.external-subtitle');
+   return {
+    dialogClosed: !dialog,
+    message: msg ? msg.textContent : '',
+    noOverlaySubtitle: !extSub || !extSub.textContent,
+   };
+  })()`);
+  return {
+   done: info.dialogClosed && info.message === 'Subtitles off' && info.noOverlaySubtitle,
+   view: info,
+  };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!subOffProbe.done) {
+  throw new SmokeFailure(`case clean FAILED — selecting Off in subtitles dialog did not complete (${JSON.stringify(subOffProbe.view)})`);
+ }
+ const subOffFile = await screenshot(session, outputDir, 'clean-10-subtitles-off.png');
+ artifacts.screenshots.push(subOffFile);
+ console.log('case clean: audio/subtitle picker PASS — honest empty inventory Audio (0), audio dialog opened/closed, subtitles dialog Off cleared overlay.');
+
  await pressKey(session, 'Escape');
  const exitProbe = await poll(async () => {
   const info = await evaluate(session, `(function() {

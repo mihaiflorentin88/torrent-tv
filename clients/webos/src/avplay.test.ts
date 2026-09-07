@@ -29,6 +29,7 @@ function createRecordedListener(): RecordedListener {
   oncurrentplaytime: record('oncurrentplaytime'),
   onsubtitlechange: record('onsubtitlechange'),
   onerror: record('onerror'),
+  ontrackschanged: record('ontrackschanged'),
  };
 }
 
@@ -385,5 +386,252 @@ describe('webOS avplay adapter', () => {
   fire(video, 'loadedmetadata');
   expect(ok).toHaveBeenCalledTimes(1);
   expect(fail).not.toHaveBeenCalled();
+ });
+});
+type FakeAudioTrack = { enabled: boolean; language?: string; title?: string; stuck?: boolean };
+type FakeTextTrack = { mode: string; cues?: Array<{ startTime: number; endTime: number; text: string }> | null; language?: string };
+type FakeTrackList<T> = {
+ length: number;
+ addEventListener: (type: string, fn: () => void) => void;
+ removeEventListener: (type: string, fn: () => void) => void;
+ dispatch: (type: string) => void;
+} & Record<number, T>;
+
+function fakeTrackList<T>(tracks: T[]): FakeTrackList<T> {
+ const listeners: Record<string, Array<() => void>> = {};
+ const list: FakeTrackList<T> = {
+  length: tracks.length,
+  addEventListener: (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); },
+  removeEventListener: () => undefined,
+  dispatch: (type) => { for (const fn of listeners[type] || []) fn(); },
+ } as FakeTrackList<T>;
+ tracks.forEach((track, index) => { list[index] = track; });
+ return list;
+}
+type VideoWithAudioTracks = HTMLVideoElement & { audioTracks?: FakeTrackList<FakeAudioTrack> };
+
+function attachAudioTracks(video: HTMLVideoElement, tracks: FakeAudioTrack[]): FakeTrackList<FakeAudioTrack> {
+ const list = fakeTrackList(tracks);
+ const target: VideoWithAudioTracks = video;
+ target.audioTracks = list;
+ return list;
+}
+
+function attachTextTracks(video: HTMLVideoElement, tracks: FakeTextTrack[]): FakeTrackList<FakeTextTrack> {
+ const list = fakeTrackList(tracks);
+ Object.defineProperty(video, 'textTracks', { configurable: true, value: list });
+ return list;
+}
+
+function setTime(video: HTMLVideoElement, seconds: number): void {
+ Object.defineProperty(video, 'currentTime', { configurable: true, value: seconds });
+ fire(video, 'timeupdate');
+}
+
+describe('honest track selection and native subtitles', () => {
+ it('inventories real audio and text tracks from the live element with per-type indices', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  attachAudioTracks(video, [
+   { enabled: true, language: 'eng', title: 'English' },
+   { enabled: false, language: 'ron' },
+  ]);
+  attachTextTracks(video, [{ mode: 'disabled', cues: [], language: 'ron' }]);
+  expect(av.getTotalTrackInfo()).toEqual([
+   { index: 0, type: 'AUDIO', extra_info: { track_lang: 'eng', track_title: 'English', codec: '' } },
+   { index: 1, type: 'AUDIO', extra_info: { track_lang: 'ron', track_title: '', codec: '' } },
+   { index: 0, type: 'TEXT', extra_info: { track_lang: 'ron', track_title: '', codec: '' } },
+  ]);
+ });
+
+ it('throws RangeError for selection when the element exposes no audioTracks collection', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  openPrepared(av, recorded);
+  expect(() => av.setSelectTrack('AUDIO', 0)).toThrow(RangeError);
+ });
+
+ it('throws RangeError for an unsupported track type even with collections present', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  const audio = attachAudioTracks(video, [{ enabled: true }]);
+  expect(() => av.setSelectTrack('VIDEO' as 'AUDIO', 0)).toThrow(RangeError);
+  expect(audio[0].enabled).toBe(true);
+ });
+
+ it('throws RangeError for an out-of-range audio index and keeps the previous selection', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  const audio = attachAudioTracks(video, [
+   { enabled: true, language: 'eng' },
+   { enabled: false, language: 'ron' },
+  ]);
+  expect(() => av.setSelectTrack('AUDIO', 7)).toThrow(RangeError);
+  expect(audio[0].enabled).toBe(true);
+  expect(audio[1].enabled).toBe(false);
+ });
+
+ it('successful audio selection enables exactly the chosen track', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  const audio = attachAudioTracks(video, [
+   { enabled: true, language: 'eng' },
+   { enabled: false, language: 'ron' },
+   { enabled: false, language: 'jpn' },
+  ]);
+  av.setSelectTrack('AUDIO', 2);
+  expect(audio[0].enabled).toBe(false);
+  expect(audio[1].enabled).toBe(false);
+  expect(audio[2].enabled).toBe(true);
+  expect([audio[0], audio[1], audio[2]].filter(track => track.enabled)).toHaveLength(1);
+ });
+
+ it('restores the previous audio selection and rethrows when the engine refuses the change', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  const stuck = { enabled: false, language: 'jpn', stuck: true };
+  const audio = attachAudioTracks(video, [
+   { enabled: true, language: 'eng' },
+   { enabled: false, language: 'ron' },
+   stuck,
+  ]);
+  Object.defineProperty(stuck, 'enabled', {
+   configurable: true,
+   get: () => false,
+   set: () => { /* the engine ignores writes: the flag never sticks */ },
+  });
+  expect(() => av.setSelectTrack('AUDIO', 2)).toThrow(/refused|did not apply|selection/i);
+  expect(audio[0].enabled).toBe(true);
+  expect(audio[1].enabled).toBe(false);
+ });
+
+ it('hides the chosen native text track and forwards cue text with real durations', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  const text = attachTextTracks(video, [
+   { mode: 'disabled', cues: [{ startTime: 1, endTime: 3, text: 'Salut!' }], language: 'ron' },
+  ]);
+  av.setSelectTrack('TEXT', 0);
+  expect(text[0].mode).toBe('hidden');
+  setTime(video, 2);
+  expect(recorded.calls.onsubtitlechange).toEqual([[2000, 'Salut!']]);
+ });
+
+ it('treats the cue end boundary inclusively at ms precision and clears the overlay after it', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  attachTextTracks(video, [{ mode: 'disabled', cues: [{ startTime: 1.5, endTime: 3, text: 'Bine' }] }]);
+  av.setSelectTrack('TEXT', 0);
+  setTime(video, 3);
+  setTime(video, 3.001);
+  expect(recorded.calls.onsubtitlechange?.[0]).toEqual([1500, 'Bine']);
+  expect(recorded.calls.onsubtitlechange?.[1]).toEqual([0, '']);
+ });
+
+ it('throws RangeError for TEXT selection without a collection or with an out-of-range index', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  expect(() => av.setSelectTrack('TEXT', 0)).toThrow(RangeError);
+  const text = attachTextTracks(video, [{ mode: 'disabled', cues: [] }]);
+  expect(() => av.setSelectTrack('TEXT', 3)).toThrow(RangeError);
+  expect(text[0].mode).toBe('disabled');
+ });
+
+ it('setSubtitlePosition shifts native cue evaluation by the shared delay and re-evaluates on seek and delay change', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  attachTextTracks(video, [
+   { mode: 'disabled', cues: [{ startTime: 1, endTime: 3, text: 'A' }, { startTime: 4, endTime: 6, text: 'B' }] },
+  ]);
+  av.setSelectTrack('TEXT', 0);
+  setTime(video, 3.5);
+  expect(recorded.calls.onsubtitlechange).toEqual([[0, '']]);
+  av.setSubtitlePosition(-500);
+  expect(recorded.calls.onsubtitlechange?.[1]).toEqual([2000, 'B']);
+  setTime(video, 1);
+  expect(recorded.calls.onsubtitlechange?.[2]).toEqual([2000, 'A']);
+  av.setSubtitlePosition(0);
+  expect(recorded.calls.onsubtitlechange?.[3]).toEqual([2000, 'A']);
+ });
+
+ it('reports an unsupported shift instead of faking it when native cue access is unavailable', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  attachTextTracks(video, [{ mode: 'disabled', cues: null }]);
+  av.setSelectTrack('TEXT', 0);
+  expect(() => av.setSubtitlePosition(500)).toThrow(/cue|shift|unsupported/i);
+  expect(() => av.setSubtitlePosition(0)).not.toThrow();
+ });
+
+ it('Off disables every native text track and stops cue forwarding', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  const text = attachTextTracks(video, [
+   { mode: 'disabled', cues: [{ startTime: 0, endTime: 100, text: 'A' }] },
+   { mode: 'disabled', cues: [] },
+  ]);
+  av.setSelectTrack('TEXT', 0);
+  expect(text[0].mode).toBe('hidden');
+  av.setSilentSubtitle(true);
+  expect(text[0].mode).toBe('disabled');
+  expect(text[1].mode).toBe('disabled');
+  const before = recorded.calls.onsubtitlechange?.length || 0;
+  setTime(video, 50);
+  expect(recorded.calls.onsubtitlechange?.length).toBe(before);
+ });
+
+ it('fires ontrackschanged once per real inventory change and never claims audible output', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  const audio = attachAudioTracks(video, [{ enabled: false, language: 'eng' }]);
+  audio.dispatch('change');
+  expect(recorded.calls.ontrackschanged).toHaveLength(1);
+  // A redundant change event with an unchanged inventory stays silent.
+  audio.dispatch('change');
+  expect(recorded.calls.ontrackschanged).toHaveLength(1);
+  // A real late arrival (second track) notifies exactly once.
+  audio[1] = { enabled: false, language: 'ron' };
+  audio.length = 2;
+  audio.dispatch('change');
+  expect(recorded.calls.ontrackschanged).toHaveLength(2);
+  expect(recorded.calls.onerror).toBeUndefined();
+  expect(recorded.calls.onsubtitlechange).toBeUndefined();
+ });
+
+ it('notifies ontrackschanged when the audio collection arrives after prepare without a manual event', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  expect(recorded.calls.ontrackschanged).toBeUndefined();
+  attachAudioTracks(video, [{ enabled: true, language: 'eng', title: 'English' }]);
+  expect(recorded.calls.ontrackschanged).toHaveLength(1);
+  expect(av.getTotalTrackInfo()).toEqual([
+   { index: 0, type: 'AUDIO', extra_info: { track_lang: 'eng', track_title: 'English', codec: '' } },
+  ]);
+ });
+
+ it('a refused subtitle shift does not poison subsequent timeupdate playback', () => {
+  const av = createAVPlay();
+  const recorded = createRecordedListener();
+  const video = openPrepared(av, recorded);
+  attachTextTracks(video, [{ mode: 'disabled', cues: null }]);
+  av.setSelectTrack('TEXT', 0);
+  expect(() => av.setSubtitlePosition(500)).toThrow(/cue|shift|unsupported/i);
+  // Subsequent timeupdates must not throw uncaught errors even though
+  // native cue access remains unavailable.
+  expect(() => setTime(video, 10)).not.toThrow();
+  expect(recorded.calls.onerror).toBeUndefined();
  });
 });

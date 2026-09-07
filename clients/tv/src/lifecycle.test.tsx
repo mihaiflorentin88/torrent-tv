@@ -122,6 +122,7 @@ interface MockAVPlayListener {
   oncurrentplaytime?: (time: number) => void;
   onsubtitlechange?: (duration: number, text: string) => void;
   onerror?: (error: string) => void;
+  ontrackschanged?: () => void;
 }
 
 interface MockAVPlayInstance {
@@ -144,6 +145,7 @@ interface MockAVPlayInstance {
   readonly listener: MockAVPlayListener;
   triggerPrepareSuccess(): void;
   triggerPrepareError(msg: string): void;
+  triggerTracksChanged(): void;
 }
 
 function createMockAVPlay(): MockAVPlayInstance {
@@ -175,6 +177,7 @@ function createMockAVPlay(): MockAVPlayInstance {
     get listener() { return listener; },
     triggerPrepareSuccess() { prepareSuccessCallback?.(); },
     triggerPrepareError(msg: string) { prepareErrorCallback?.(msg); },
+    triggerTracksChanged() { listener.ontrackschanged?.(); },
   };
 }
 
@@ -609,5 +612,232 @@ describe('App SSE lifecycle and visible snapshot reconciliation', () => {
     // The stale title was dropped and not applied because generation was bumped by the hidden edge
     const titlesInDOM = container.textContent;
     expect(titlesInDOM).not.toContain('Stale');
+  });
+});
+describe('Player track selection and subtitle behavior honesty', () => {
+  let container: HTMLDivElement;
+  let mockAVPlay: MockAVPlayInstance;
+  let mockApi: API;
+  let onClose: Mock;
+  let onComplete: Mock;
+  let onStateChanged: Mock;
+
+  const mockTracks = [
+    { index: 0, type: 'AUDIO', extra_info: JSON.stringify({ track_lang: 'eng', track_title: 'English' }) },
+    { index: 1, type: 'AUDIO', extra_info: JSON.stringify({ track_lang: 'ron', track_title: 'Romanian' }) },
+    { index: 2, type: 'TEXT', extra_info: JSON.stringify({ track_lang: 'ron', track_title: 'Romanian' }) },
+  ];
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+
+    mockAVPlay = createMockAVPlay();
+    mockAVPlay.getTotalTrackInfo = vi.fn(() => [...mockTracks]);
+    (window as unknown as { webapis?: { avplay: unknown } }).webapis = { avplay: mockAVPlay };
+
+    const testPlatform: TVPlatformHooks = {
+      getNetworkInfo: async () => null,
+      openExternal: async () => false,
+      exit: () => { },
+      onKeyboardVisibility: () => () => { },
+      onVisibility: () => () => { },
+    };
+    window.FileListTVPlatform = testPlatform;
+
+    onComplete = vi.fn();
+    onClose = vi.fn();
+    onStateChanged = vi.fn();
+
+    mockApi = {
+      base: 'http://server.lan:8097',
+      streamURL: (path: string) => `http://server.lan:8097${path}`,
+      updatePlayback: vi.fn().mockResolvedValue({}),
+      playbackPreferences: vi.fn().mockResolvedValue(defaultPreferences),
+      updatePlaybackPreferences: vi.fn().mockResolvedValue({}),
+      downloads: vi.fn().mockResolvedValue({ items: [mockDownload], nextCursor: null, total: 1 }),
+      subtitles: vi.fn().mockResolvedValue({ items: [] }),
+      prepareSubtitle: vi.fn().mockResolvedValue({ url: '/sub.vtt' }),
+      diagnostic: vi.fn().mockResolvedValue(undefined),
+      call: vi.fn().mockResolvedValue({}),
+    } as unknown as API;
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+    delete (window as unknown as { webapis?: unknown }).webapis;
+    delete window.FileListTVPlatform;
+  });
+
+  it('audio selection failure surfaces a visible message without saving preferences or success toast', async () => {
+    render(
+      h(Player, {
+        api: mockApi,
+        download: mockDownload,
+        resumeMs: 0,
+        preferences: { ...defaultPreferences, subtitleMode: 'off' },
+        onClose,
+        onStateChanged,
+        onComplete,
+      }),
+      container
+    );
+    await tick();
+    mockAVPlay.triggerPrepareSuccess();
+    await tick(10);
+
+    // Open audio menu
+    const audioBtn = container.querySelector<HTMLButtonElement>('[data-player-control="audio"]')!;
+    expect(audioBtn).not.toBeNull();
+    audioBtn.click();
+    await tick(10);
+
+    const dialog = container.querySelector('.player-dialog');
+    expect(dialog).not.toBeNull();
+
+    // Configure setSelectTrack to fail
+    mockAVPlay.setSelectTrack.mockImplementationOnce(() => {
+      throw new RangeError('refused by webOS');
+    });
+
+    // Select Romanian audio track (index 1)
+    const trackBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="player-audio-1"]')!;
+    expect(trackBtn).not.toBeNull();
+    trackBtn.click();
+    await tick(10);
+
+    // Visible failure message must surface
+    const message = container.querySelector('.player-message');
+    expect(message?.textContent).toBe('Could not select the audio track: refused by webOS');
+
+    // Menu must be closed
+    expect(container.querySelector('.player-dialog')).toBeNull();
+
+    // Preferences must NOT be saved
+    expect(mockApi.updatePlaybackPreferences).not.toHaveBeenCalled();
+
+    // No success toast should appear later
+    await tick(150);
+    expect(container.querySelector('.player-message')?.textContent).toBe('Could not select the audio track: refused by webOS');
+  });
+
+  it('subtitle selection failure surfaces the subtitle message without preference save or success toast', async () => {
+    render(
+      h(Player, {
+        api: mockApi,
+        download: mockDownload,
+        resumeMs: 0,
+        preferences: { ...defaultPreferences, subtitleMode: 'off' },
+        onClose,
+        onStateChanged,
+        onComplete,
+      }),
+      container
+    );
+    await tick();
+    mockAVPlay.triggerPrepareSuccess();
+    await tick(10);
+
+    // Open subtitles menu
+    const subBtn = container.querySelector<HTMLButtonElement>('[data-player-control="subtitles"]')!;
+    expect(subBtn).not.toBeNull();
+    subBtn.click();
+    await tick(10);
+
+    const dialog = container.querySelector('.player-dialog');
+    expect(dialog).not.toBeNull();
+
+    // Configure setSelectTrack to fail for TEXT
+    mockAVPlay.setSelectTrack.mockImplementationOnce(() => {
+      throw new RangeError('Native subtitle tracks unavailable');
+    });
+
+    // Select native subtitle track (index 2)
+    const nativeBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="player-native-subtitle-2"]')!;
+    expect(nativeBtn).not.toBeNull();
+    nativeBtn.click();
+    await tick(10);
+
+    // Visible failure message must surface
+    const message = container.querySelector('.player-message');
+    expect(message?.textContent).toBe('Could not select the subtitle: Native subtitle tracks unavailable');
+
+    // Menu must be closed
+    expect(container.querySelector('.player-dialog')).toBeNull();
+
+    // Preferences must NOT be saved
+    expect(mockApi.updatePlaybackPreferences).not.toHaveBeenCalled();
+  });
+
+  it('successful audio selection persists preferences and shows the selected toast', async () => {
+    render(
+      h(Player, {
+        api: mockApi,
+        download: mockDownload,
+        resumeMs: 0,
+        preferences: defaultPreferences,
+        onClose,
+        onStateChanged,
+        onComplete,
+      }),
+      container
+    );
+    await tick();
+    mockAVPlay.triggerPrepareSuccess();
+    await tick(10);
+
+    const audioBtn = container.querySelector<HTMLButtonElement>('[data-player-control="audio"]')!;
+    audioBtn.click();
+    await tick(10);
+
+    const trackBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="player-audio-1"]')!;
+    trackBtn.click();
+    await tick(10);
+
+    expect(mockAVPlay.setSelectTrack).toHaveBeenCalledWith('AUDIO', 1);
+    expect(mockApi.updatePlaybackPreferences).toHaveBeenCalledWith('dl-test-1', expect.objectContaining({
+      audioTrackIndex: 1,
+      audioLanguage: 'ron',
+    }));
+    expect(container.querySelector('.player-message')?.textContent).toContain('selected');
+  });
+
+  it('delayed audio-track arrival after metadata triggers exactly one refreshTracks', async () => {
+    let tracksAvailable: Array<{ index: number; type: string; extra_info: string }> = [];
+    mockAVPlay.getTotalTrackInfo = vi.fn(() => [...tracksAvailable]);
+
+    render(
+      h(Player, {
+        api: mockApi,
+        download: mockDownload,
+        resumeMs: 0,
+        preferences: defaultPreferences,
+        onClose,
+        onStateChanged,
+        onComplete,
+      }),
+      container
+    );
+    await tick();
+    mockAVPlay.triggerPrepareSuccess();
+    await tick(10);
+
+    // Initially no audio tracks
+    const audioBtn = container.querySelector<HTMLButtonElement>('[data-player-control="audio"]')!;
+    expect(audioBtn.textContent).toBe('Audio (0)');
+
+    const callsBefore = (mockAVPlay.getTotalTrackInfo as Mock).mock.calls.length;
+
+    // Late track arrival: populate tracks and trigger change event
+    tracksAvailable = [
+      { index: 0, type: 'AUDIO', extra_info: JSON.stringify({ track_lang: 'eng', track_title: 'English' }) },
+    ];
+    mockAVPlay.triggerTracksChanged();
+    await tick(10);
+
+    // Exactly one refreshTracks occurred
+    expect((mockAVPlay.getTotalTrackInfo as Mock).mock.calls.length).toBe(callsBefore + 1);
+    expect(container.querySelector<HTMLButtonElement>('[data-player-control="audio"]')?.textContent).toBe('Audio (1)');
   });
 });
