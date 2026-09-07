@@ -12,6 +12,9 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.exoplayer.ExoPlayer
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The native half of the AVPlay shape: receives the web app's player
@@ -111,23 +114,40 @@ class AvPlayBridge(private val surface: SurfaceView, private val dispatch: (Stri
 
     fun setSelectTrack(type: String, index: Int): Boolean {
         if (type != "AUDIO") return false
-        val exo = player ?: return false
-        var audioIndex = 0
-        for (group in exo.currentTracks.groups) {
-            if (group.type != C.TRACK_TYPE_AUDIO) continue
-            for (trackIndex in 0 until group.mediaTrackGroup.length) {
-                if (audioIndex == index) {
-                    onMain {
-                        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
-                            .build()
+        // The JS bridge calls this on the WebView JavaBridge thread while
+        // ExoPlayer state is only legal on the application looper, so the
+        // track scan and the selection override both run on the main thread
+        // and the Boolean verdict is ferried back through a latch — the JS
+        // side stays synchronous and false still means a refused selection.
+        val applied = AtomicBoolean(false)
+        val failure = AtomicReference<Throwable?>(null)
+        val done = CountDownLatch(1)
+        onMain {
+            try {
+                val exo = player ?: return@onMain
+                var audioIndex = 0
+                for (group in exo.currentTracks.groups) {
+                    if (group.type != C.TRACK_TYPE_AUDIO) continue
+                    for (trackIndex in 0 until group.mediaTrackGroup.length) {
+                        if (audioIndex == index) {
+                            exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                                .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+                                .build()
+                            applied.set(true)
+                            return@onMain
+                        }
+                        audioIndex++
                     }
-                    return true
                 }
-                audioIndex++
+            } catch (error: Throwable) {
+                failure.set(error)
+            } finally {
+                done.countDown()
             }
         }
-        return false
+        done.await()
+        failure.get()?.let { throw it }
+        return applied.get()
     }
 
     fun setSilentSubtitle(silent: Boolean) {
