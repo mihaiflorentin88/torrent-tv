@@ -116,8 +116,9 @@ button.primary {
 }
 
 .tv-brand>span {
-   display: grid;
-   place-items: center;
+   display: flex;
+   align-items: center;
+   justify-content: center;
    min-width: 66px;
    height: 52px;
    border-radius: 8px;
@@ -168,8 +169,9 @@ button.primary {
 }
 
 .tv-sidebar button i {
-   display: grid;
-   place-items: center;
+   display: flex;
+   align-items: center;
+   justify-content: center;
    width: 52px;
    min-width: 52px;
    color: #aebbc2;
@@ -332,8 +334,9 @@ button.primary {
    height: 300px;
    object-fit: cover;
    background: linear-gradient(145deg, #234049, #11181d);
-   display: grid;
-   place-items: center;
+   display: flex;
+   align-items: center;
+   justify-content: center;
    font-size: 90px;
    color: #60978d
 }
@@ -1678,4 +1681,25 @@ button.primary {
    background: #8f2f3e;
    color: #fff;
    border-color: #fff
+}
+
+
+@supports not (display: grid) {
+  .tv-app { display: flex; }
+  .tv-sidebar { flex: 0 0 104px; width: 104px; }
+  .tv-app.menu-open .tv-sidebar { flex-basis: 350px; width: 350px; }
+  .tv-app > main { flex: 1 1 0; min-width: 0; }
+  .poster-rail { display: flex; }
+  .poster-rail > * { flex: 0 0 280px; }
+  .tv-library-grid { display: flex; flex-wrap: wrap; }
+  .tv-library-grid > * { flex: 0 0 280px; }
+  .season-pack-grid { display: flex; align-items: flex-start; }
+  .season-pack-grid > * { flex: 0 0 456px; }
+  .setup-results { display: flex; flex-wrap: wrap; }
+  .setup-results > * { flex: 0 0 calc(50% - 14px); min-width: 0; box-sizing: border-box; }
+  .tv-list article { display: flex; align-items: center; }
+  .tv-list article > :first-child { flex: 1 1 0; min-width: 0; }
+  .job-log-expanded dl { display: flex; flex-wrap: wrap; }
+  .job-log-expanded dt { flex: 0 0 calc(148px - 8px); }
+  .job-log-expanded dd { flex: 1 1 calc(100% - 148px); min-width: 0; }
 }

@@ -87,11 +87,54 @@ function isTextInput(element: Element | null): element is HTMLInputElement | HTM
   return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement;
 }
 
+const supportsScrollIntoViewOptions = typeof document !== 'undefined'
+  && typeof document.documentElement?.style !== 'undefined'
+  && 'scrollBehavior' in document.documentElement.style;
+
+// Engines that ignore scrollIntoView options (such as Chromium 53 on webOS 4.x)
+// treat the options argument as truthy and align the target to the container top.
+// This fallback walks scrollable ancestors, computes item bounds relative to each
+// scrollport, and adjusts only the axes needed: nearest vertical movement and
+// centered horizontal rail movement, clamped to scroll bounds.
+export function revealElement(element: HTMLElement | null): void {
+  if (!element) return;
+  if (supportsScrollIntoViewOptions) {
+    element.scrollIntoView({ block: 'nearest', inline: 'center' });
+    return;
+  }
+  const ancestors: HTMLElement[] = [];
+  for (let parent = element.parentElement; parent && parent !== document.body && parent !== document.documentElement; parent = parent.parentElement) {
+    const style = parent.ownerDocument?.defaultView?.getComputedStyle(parent);
+    if (!style) continue;
+    const canScrollX = /(auto|scroll)/.test(style.overflowX) && parent.scrollWidth > parent.clientWidth;
+    const canScrollY = /(auto|scroll)/.test(style.overflowY) && parent.scrollHeight > parent.clientHeight;
+    if (canScrollX || canScrollY) ancestors.push(parent);
+  }
+  ancestors.reverse();
+  for (const parent of ancestors) {
+    const style = parent.ownerDocument?.defaultView?.getComputedStyle(parent);
+    if (!style) continue;
+    const box = parent.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    if (parent.scrollHeight > parent.clientHeight && /(auto|scroll)/.test(style.overflowY)) {
+      if (rect.height > box.height || rect.top < box.top) {
+        parent.scrollTop = Math.max(0, Math.min(parent.scrollTop + (rect.top - box.top), parent.scrollHeight - parent.clientHeight));
+      } else if (rect.bottom > box.bottom) {
+        parent.scrollTop = Math.max(0, Math.min(parent.scrollTop + (rect.bottom - box.bottom), parent.scrollHeight - parent.clientHeight));
+      }
+    }
+    if (parent.scrollWidth > parent.clientWidth && /(auto|scroll)/.test(style.overflowX)) {
+      const delta = (rect.left + rect.width / 2) - (box.left + parent.clientWidth / 2);
+      parent.scrollLeft = Math.max(0, Math.min(parent.scrollLeft + delta, parent.scrollWidth - parent.clientWidth));
+    }
+  }
+}
+
 export function focusElement(element: HTMLElement | null): void {
   if (!element) return;
   if (isTextInput(element) && element.dataset.tvEditing !== 'true') element.readOnly = true;
   element.focus();
-  element.scrollIntoView({block: 'nearest', inline: 'center'});
+  revealElement(element);
 }
 
 export function useTVNavigation(options: {
@@ -114,7 +157,7 @@ export function useTVNavigation(options: {
     const focus = (event: FocusEvent) => {
       const element = event.target as HTMLElement | null;
       if (!element) return;
-      element.scrollIntoView({block: 'nearest', inline: 'center'});
+      revealElement(element);
       const key = element.dataset.focusKey;
       if (key) latest.current.onFocusKey?.(key);
     };
