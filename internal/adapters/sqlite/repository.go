@@ -124,7 +124,7 @@ CREATE INDEX IF NOT EXISTS job_logs_created ON job_logs(created_at);`)
 
 func filelistCategory(name string) (id string, browseClass string, excluded bool) {
 	for _, c := range domain.Categories {
-		if strings.EqualFold(c.Name, name) {
+		if strings.EqualFold(c.Name, name) || strconv.Itoa(c.ID) == name {
 			class := "other"
 			if strings.HasPrefix(c.Name, "Games") {
 				class = "games"

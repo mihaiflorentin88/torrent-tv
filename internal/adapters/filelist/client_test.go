@@ -82,3 +82,58 @@ func TestOpenTorrentSurfacesHTTPStatus(t *testing.T) {
 		t.Fatalf("HTTP failures must keep their status in the error, got %v", err)
 	}
 }
+
+func TestAcquireReturnsMetainfo(t *testing.T) {
+	torrent := "d4:infod6:lengthi1e4:name4:teste6:lengthi0ee"
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(torrent))
+	})
+	acq, err := c.Acquire(context.Background(), "972366")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acq.Magnet != "" {
+		t.Fatalf("filelist acquisition must have empty magnet, got %q", acq.Magnet)
+	}
+	if string(acq.Metainfo) != torrent {
+		t.Fatalf("expected metainfo %q, got %q", torrent, string(acq.Metainfo))
+	}
+	if err := acq.Validate(); err != nil {
+		t.Fatalf("acquisition must validate: %v", err)
+	}
+}
+
+func TestAcquirePropagatesTorrentRemoved(t *testing.T) {
+	page := "\n<!DOCTYPE html><html><body>Nu pot gasi fisierul .torrent</body></html>"
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(page))
+	})
+	_, err := c.Acquire(context.Background(), "972366")
+	if err == nil || !errors.Is(err, domain.ErrTorrentRemoved) {
+		t.Fatalf("expected ErrTorrentRemoved, got %v", err)
+	}
+}
+
+func TestListPopulatesProvenanceFields(t *testing.T) {
+	rawJSON := `[{"id":"123","name":"Some.Movie.2024.1080p","category":"Movies HD","size":1000,"seeders":10,"leechers":5}]`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(rawJSON))
+	})
+	releases, err := c.Latest(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(releases) != 1 {
+		t.Fatalf("expected 1 release, got %d", len(releases))
+	}
+	r := releases[0]
+	if r.TrackerID != "filelist" || r.TrackerName != "FileList" {
+		t.Fatalf("unexpected tracker identity: %s/%s", r.TrackerID, r.TrackerName)
+	}
+	if r.ProviderID != "123" {
+		t.Fatalf("unexpected provider ID: %s", r.ProviderID)
+	}
+	if r.CategoryID != "4" || r.BrowseClass != "video" || r.DiscoveryExcluded {
+		t.Fatalf("unexpected category fields: catID=%s class=%s excluded=%v", r.CategoryID, r.BrowseClass, r.DiscoveryExcluded)
+	}
+}

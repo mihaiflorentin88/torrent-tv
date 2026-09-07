@@ -29,7 +29,8 @@ type Client struct {
 func New(settings func() (string, string, string)) *Client {
 	return &Client{settings: settings, http: &http.Client{Timeout: 45 * time.Second}}
 }
-func (c *Client) ID() string { return "filelist" }
+func (c *Client) ID() string   { return "filelist" }
+func (c *Client) Name() string { return "FileList" }
 func (c *Client) Capabilities() application.TrackerCapabilities {
 	return application.TrackerCapabilities{IMDbSearch: true, SeasonFilter: true, EpisodeFilter: true, Categories: true}
 }
@@ -77,7 +78,32 @@ func (c *Client) list(ctx context.Context, path string) ([]domain.TorrentRelease
 		if !ok {
 			continue
 		}
-		x := domain.TorrentRelease{ID: str(m, "id", "torrent_id", "guid"), Name: str(m, "name", "title"), Category: str(m, "category", "type"), SizeBytes: i64(m, "size", "size_bytes"), IMDbID: imdb(str(m, "imdb")), Seeders: i(m, "seeders"), Leechers: i(m, "leechers"), TimesCompleted: i(m, "times_completed"), Freeleech: b(m, "freeleech"), DoubleUp: b(m, "doubleup"), Internal: b(m, "internal"), Moderated: b(m, "moderated"), SmallDescription: str(m, "small_description"), FileCount: i(m, "files"), Comments: i(m, "comments")}
+		id := str(m, "id", "torrent_id", "guid")
+		catName := str(m, "category", "type")
+		catID, browseClass, excluded := filelistCategory(catName)
+		x := domain.TorrentRelease{
+			ID:                id,
+			TrackerID:         "filelist",
+			TrackerName:       "FileList",
+			ProviderID:        id,
+			CategoryID:        catID,
+			BrowseClass:       browseClass,
+			DiscoveryExcluded: excluded,
+			Name:              str(m, "name", "title"),
+			Category:          catName,
+			SizeBytes:         i64(m, "size", "size_bytes"),
+			IMDbID:            imdb(str(m, "imdb")),
+			Seeders:           i(m, "seeders"),
+			Leechers:          i(m, "leechers"),
+			TimesCompleted:    i(m, "times_completed"),
+			Freeleech:         b(m, "freeleech"),
+			DoubleUp:          b(m, "doubleup"),
+			Internal:          b(m, "internal"),
+			Moderated:         b(m, "moderated"),
+			SmallDescription:  str(m, "small_description"),
+			FileCount:         i(m, "files"),
+			Comments:          i(m, "comments"),
+		}
 		if t, err := time.Parse("2006-01-02 15:04:05", str(m, "upload_date")); err == nil {
 			u := t.UTC()
 			x.UploadedAt = &u
@@ -114,6 +140,49 @@ func (c *Client) OpenTorrent(ctx context.Context, id string) (io.ReadCloser, err
 		return nil, fmt.Errorf("FileList returned a non-torrent response (HTTP %d) for this release", r.StatusCode)
 	}
 	return io.NopCloser(bytes.NewReader(raw)), nil
+}
+
+func (c *Client) Acquire(ctx context.Context, providerID string) (domain.TorrentAcquisition, error) {
+	rc, err := c.OpenTorrent(ctx, providerID)
+	if err != nil {
+		return domain.TorrentAcquisition{}, err
+	}
+	defer rc.Close()
+	raw, err := io.ReadAll(rc)
+	if err != nil {
+		return domain.TorrentAcquisition{}, fmt.Errorf("read torrent metainfo: %w", err)
+	}
+	acq := domain.TorrentAcquisition{Metainfo: raw}
+	if err := acq.Validate(); err != nil {
+		return domain.TorrentAcquisition{}, err
+	}
+	return acq, nil
+}
+
+func filelistCategory(name string) (id string, browseClass string, excluded bool) {
+	for _, c := range domain.Categories {
+		if strings.EqualFold(c.Name, name) || strconv.Itoa(c.ID) == name {
+			class := "other"
+			if strings.HasPrefix(c.Name, "Games") {
+				class = "games"
+			} else if c.Name == "XXX" {
+				class = "adult"
+			} else {
+				switch c.Artwork {
+				case "movies", "animation", "television", "sport":
+					class = "video"
+				case "music":
+					class = "audio"
+				case "software":
+					class = "software"
+				default:
+					class = "other"
+				}
+			}
+			return strconv.Itoa(c.ID), class, c.DefaultBlacklisted
+		}
+	}
+	return name, "other", false
 }
 
 func (c *Client) request(ctx context.Context, path string) (*http.Response, error) {
