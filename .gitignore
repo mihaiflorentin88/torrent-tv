@@ -25,6 +25,8 @@ internal/gui/static/assets/
 web/dist/
 clients/tv/dist/
 clients/tizen/.build/
+clients/webos/dist/
+clients/webos/.build/
 *.wgt
 *.exe
 *.test
