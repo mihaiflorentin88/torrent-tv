@@ -403,6 +403,47 @@ class WebosIpkTests(unittest.TestCase):
             content = sha_file.read_text(encoding="utf-8")
             self.assertEqual(f"{digest}  torrent-tv-0.5.11-webos.ipk\n", content)
 
+    def test_rejects_module_launcher_tags_in_packaged_html(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for tag, desc in (
+                (b'<script type="module" src="app.js"></script>', "module_script"),
+                (b'<link rel="modulepreload" href="app.js">', "modulepreload"),
+            ):
+                bad_html = b"<!doctype html><html><head>" + tag + b"</head></html>"
+                bad = self.write_ipk_file(
+                    self.make_ipk(extra_data={"usr/palm/applications/com.torrenttv.app/index.html": bad_html}),
+                    root,
+                    name=f"bad_{desc}.ipk",
+                )
+                with self.subTest(desc=desc):
+                    with self.assertRaisesRegex(webos_ipk.WebosIpkError, "must use classic scripts, not ES module launcher tags"):
+                        webos_ipk.validate_archive(bad)
+
+    def test_find_ares_package_with_valid_version_stub(self):
+        with tempfile.TemporaryDirectory() as td:
+            stub = Path(td) / "fake-ares-package"
+            stub.write_text("#!/bin/sh\necho 'Version: 3.2.5'\n")
+            stub.chmod(0o755)
+            cmd = webos_ipk.find_ares_package(str(stub))
+            self.assertEqual([str(stub)], cmd)
+
+    def test_find_ares_package_rejects_wrong_version_stub(self):
+        with tempfile.TemporaryDirectory() as td:
+            stub = Path(td) / "fake-ares-package"
+            stub.write_text("#!/bin/sh\necho 'Version: 1.0.0'\n")
+            stub.chmod(0o755)
+            with self.assertRaisesRegex(webos_ipk.WebosIpkError, "must report version 3.2.5.*got '1.0.0'"):
+                webos_ipk.find_ares_package(str(stub))
+
+    def test_find_ares_package_rejects_unrecognizable_output(self):
+        with tempfile.TemporaryDirectory() as td:
+            stub = Path(td) / "fake-ares-package"
+            stub.write_text("#!/bin/sh\necho 'unrecognized output'\n")
+            stub.chmod(0o755)
+            with self.assertRaisesRegex(webos_ipk.WebosIpkError, "did not report a recognizable version"):
+                webos_ipk.find_ares_package(str(stub))
+
 
 if __name__ == "__main__":
     unittest.main()

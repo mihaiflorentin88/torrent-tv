@@ -22,6 +22,13 @@ MAX_UNCOMPRESSED_SIZE = 128 * 1024 * 1024
 PACKAGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9]+)+$")
 PROHIBITED_ID_PREFIXES = ("com.palm.", "com.webos.", "com.lge.")
 
+# Exact pin of @webos-tools/cli in clients/webos/package.json. Every
+# ares-package binary used for packing must self-report this version; any
+# other CLI (global install, newer/older release) must fail loudly instead
+# of silently producing a package with different tooling behavior.
+ARES_CLI_VERSION = "3.2.5"
+ARES_VERSION_PATTERN = re.compile(r"Version:\s*(\S+)")
+
 REQUIRED_APPINFO_FIELDS: frozenset[str] = frozenset({
     "id",
     "version",
@@ -67,6 +74,9 @@ ICON_DIMENSIONS: dict[str, tuple[int, int] | tuple[tuple[int, int], ...]] = {
     "splashBackground.png": (1920, 1080),
     "bgImage.png": ((1920, 1080), (960, 540)),
 }
+
+MODULE_SCRIPT = re.compile(rb"<script\b[^>]*\btype\s*=\s*[\"']module[\"']", re.I)
+MODULE_PRELOAD = re.compile(rb"<link\b[^>]*\brel\s*=\s*[\"']modulepreload[\"']", re.I)
 
 ES_MODULE_PATTERNS: tuple[re.Pattern[bytes], ...] = (
     re.compile(rb"^\s*export\s+(?:default|const|let|var|function|class|async|\*|\{)", re.M),
@@ -362,6 +372,14 @@ def validate_archive(
     for sdk_file in VENDORED_SDK_FILES:
         if sdk_file not in app_files:
             raise WebosIpkError(f"vendored SDK file {sdk_file!r} is missing from package")
+    main_entry = appinfo.get("main", "index.html")
+    if main_entry in app_files:
+        main_content = app_files[main_entry]
+        if MODULE_SCRIPT.search(main_content) or MODULE_PRELOAD.search(main_content):
+            raise WebosIpkError(
+                f"{main_entry} must use classic scripts, not ES module launcher tags"
+            )
+
 
     for filename, content in app_files.items():
         if filename.endswith(".js"):
@@ -390,32 +408,66 @@ def write_checksum(file: Path) -> str:
     return digest
 
 
+def query_ares_version(cmd: list[str]) -> str:
+    try:
+        res = subprocess.run(
+            [*cmd, "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise WebosIpkError(f"failed to execute ares-package at {cmd[0]}: {exc}") from exc
+
+    combined = (res.stdout + "\n" + res.stderr).strip()
+    match = ARES_VERSION_PATTERN.search(combined)
+    if not match:
+        match = re.search(r"\b([0-9]+\.[0-9]+\.[0-9]+)\b", combined)
+    if not match:
+        raise WebosIpkError(
+            f"ares-package at {cmd[0]} did not report a recognizable version; output was {combined!r}"
+        )
+    return match.group(1)
+
+
 def find_ares_package(custom_bin: str | None = None) -> list[str]:
     if custom_bin:
         custom_path = Path(custom_bin)
-        if custom_path.is_file() and os.access(custom_path, os.X_OK):
-            return [str(custom_path)]
-        return [custom_bin]
+        cmd = [str(custom_path)] if custom_path.is_file() and os.access(custom_path, os.X_OK) else [custom_bin]
+        version = query_ares_version(cmd)
+        if version != ARES_CLI_VERSION:
+            raise WebosIpkError(
+                f"ares-package at {cmd[0]} must report version {ARES_CLI_VERSION} (pinned @webos-tools/cli), got {version!r}"
+            )
+        return cmd
 
     repo_root = Path(__file__).resolve().parents[1]
-    candidates = [
+    candidates: list[Path] = [
         repo_root / "clients/webos/node_modules/.bin/ares-package",
         repo_root / "node_modules/.bin/ares-package",
     ]
-    for candidate in candidates:
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return [str(candidate)]
-
     which = shutil.which("ares-package")
     if which:
-        return [which]
+        candidates.append(Path(which))
 
-    npx = shutil.which("npx")
-    if npx:
-        return [npx, "ares-package"]
+    tested: list[str] = []
+    for candidate in candidates:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            cmd = [str(candidate)]
+            try:
+                version = query_ares_version(cmd)
+            except WebosIpkError as exc:
+                tested.append(f"{candidate} (error: {exc})")
+                continue
+            if version == ARES_CLI_VERSION:
+                return cmd
+            tested.append(f"{candidate} (version {version!r} != {ARES_CLI_VERSION!r})")
 
+    details = "; ".join(tested) if tested else "no candidate binaries found"
     raise WebosIpkError(
-        "ares-package CLI not found; install @webos-tools/cli via npm install in clients/webos"
+        f"ares-package CLI matching pinned version {ARES_CLI_VERSION} not found ({details}); "
+        "install the pinned @webos-tools/cli via npm install in clients/webos"
     )
 
 
