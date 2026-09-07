@@ -31,6 +31,9 @@ type Client struct {
 	ready    sync.Map
 	logged   bool
 	authless bool
+
+	gateMu    sync.Mutex
+	hashGates map[string]*hashGate
 }
 
 func New(settings func() (string, string, string)) *Client {
@@ -155,6 +158,9 @@ func (c *Client) Add(ctx context.Context, reader io.Reader, savePath string) (st
 	if err != nil {
 		return "", err
 	}
+	gate := c.acquireHashGate(hash)
+	defer c.releaseHashGate(hash, gate)
+
 	// A torrent re-added with the same info hash must receive a fresh streaming
 	// scheduler setup even when this client prepared an earlier instance.
 	c.ready.Delete(hash)
