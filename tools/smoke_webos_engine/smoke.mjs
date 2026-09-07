@@ -256,10 +256,134 @@ function createServer(state, root) {
    res.end(JSON.stringify(fixed()));
    return;
   }
+  if (req.method === 'GET' && pathname.startsWith('/api/v1/catalog/titles/')) {
+   const id = pathname.split('/').pop();
+   const title = TITLES.find(t => t.id === id) || smokeTitle(0);
+   const release = {
+    id: `smoke-release-${title.id}`,
+    name: `${title.title} 1080p`,
+    category: 'smoke',
+    sizeBytes: title.largestSizeBytes,
+    seeders: title.bestSeeders,
+    leechers: 1,
+    freeleech: false,
+   };
+   const source = {
+    release,
+    fileIndex: 0,
+    streamUrl: '/api/v1/stream/smoke-stream.mp4',
+    parsed: { resolution: '1080p', quality: 'BluRay', videoCodec: 'H.264', audio: 'AAC' },
+    libraryState: {
+     downloadId: `smoke-download-${title.id}`,
+     downloadState: 'downloaded',
+     transferState: 'completed',
+     watchState: 'unwatched',
+     progress: 1.0,
+    },
+   };
+   state.requests.push({ pathname, status: 200 });
+   res.writeHead(200, { 'Content-Type': MIME['.json'] });
+   res.end(JSON.stringify({
+    title,
+    seasons: [],
+    sources: [source],
+   }));
+   return;
+  }
   if (req.method === 'GET' && pathname.startsWith('/api/v1/catalog/titles')) {
    state.requests.push({ pathname, status: 200 });
    res.writeHead(200, { 'Content-Type': MIME['.json'] });
    res.end(JSON.stringify({ items: TITLES, nextCursor: null, total: TITLES.length }));
+   return;
+  }
+  if (pathname === '/api/v1/stream/smoke-stream.mp4') {
+   const videoPath = path.resolve('tools/smoke_webos_engine/fixture-video.mp4');
+   const stat = fs.statSync(videoPath);
+   const range = req.headers.range;
+   if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+    res.writeHead(206, {
+     'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+     'Accept-Ranges': 'bytes',
+     'Content-Length': (end - start) + 1,
+     'Content-Type': 'video/mp4',
+    });
+    fs.createReadStream(videoPath, { start, end }).pipe(res);
+   } else {
+    res.writeHead(200, {
+     'Content-Length': stat.size,
+     'Accept-Ranges': 'bytes',
+     'Content-Type': 'video/mp4',
+    });
+    fs.createReadStream(videoPath).pipe(res);
+   }
+   return;
+  }
+  if (req.method === 'POST' && pathname.includes('/prepare')) {
+   let body = '';
+   req.on('data', chunk => { body += chunk; });
+   req.on('end', () => {
+    state.requests.push({ pathname, status: 200 });
+    res.writeHead(200, { 'Content-Type': MIME['.json'] });
+    res.end(JSON.stringify({
+     id: 'smoke-download-1',
+     sourceId: 'smoke-source-1',
+     releaseId: 'smoke-release-1',
+     fileIndex: 0,
+     filePath: '/smoke/smoke.mp4',
+     sizeBytes: 78848,
+     downloadedBytes: 78848,
+     progress: 1.0,
+     state: 'completed',
+     playbackMode: 'direct',
+     streamUrl: '/api/v1/stream/smoke-stream.mp4',
+     createdAt: '2026-09-07T00:00:00Z',
+     updatedAt: '2026-09-07T00:00:00Z',
+    }));
+   });
+   return;
+  }
+  if (req.method === 'GET' && pathname.startsWith('/api/v1/playback/')) {
+   state.requests.push({ pathname, status: 200 });
+   res.writeHead(200, { 'Content-Type': MIME['.json'] });
+   if (pathname.endsWith('/preferences')) {
+    res.end(JSON.stringify({
+     sourceId: 'smoke-download-1',
+     audioLanguage: 'en',
+     audioTrackIndex: 0,
+     subtitleMode: 'off',
+     subtitleLanguage: '',
+     subtitleProvider: '',
+     subtitleCandidateId: '',
+     subtitleDelay: 0,
+    }));
+   } else {
+    res.end(JSON.stringify({
+     sourceId: 'smoke-download-1',
+     positionMs: 0,
+     durationMs: 15000,
+     watched: false,
+     updatedAt: '2026-09-07T00:00:00Z',
+    }));
+   }
+   return;
+  }
+  if (req.method === 'PUT' && pathname.startsWith('/api/v1/playback/')) {
+   let body = '';
+   req.on('data', chunk => { body += chunk; });
+   req.on('end', () => {
+    state.requests.push({ pathname, status: 200 });
+    res.writeHead(200, { 'Content-Type': MIME['.json'] });
+    res.end('{}');
+   });
+   return;
+  }
+  if (pathname.includes('/subtitles')) {
+   state.requests.push({ pathname, status: 200 });
+   res.writeHead(200, { 'Content-Type': MIME['.json'] });
+   res.end(JSON.stringify({ items: [] }));
    return;
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -279,8 +403,13 @@ function createServer(state, root) {
     return;
    }
    state.requests.push({ pathname, status: 200 });
-   res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
-   res.end(req.method === 'HEAD' ? undefined : data);
+   let body = data;
+   if (pathname === '/index.html' || pathname === '/') {
+    const stub = '<script>if(!window.PalmServiceBridge){window.PalmServiceBridge=function(){this.onservicecallback=null;};window.PalmServiceBridge.prototype.call=function(){var s=this;setTimeout(function(){if(s.onservicecallback)s.onservicecallback(JSON.stringify({returnValue:true,isInternetConnectionAvailable:true,wired:{state:"connected",ipAddress:"127.0.0.1",netmask:"255.255.255.0"}}));},0);};window.PalmServiceBridge.prototype.cancel=function(){};}</script>';
+    body = Buffer.from(data.toString('utf8').replace('<head>', '<head>' + stub));
+   }
+   res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Content-Length': body.length });
+   res.end(req.method === 'HEAD' ? undefined : body);
   });
  });
 }
@@ -542,7 +671,7 @@ async function poll(check, timeoutMs) {
  return { done: false, last };
 }
 
-const KEY_CODES = { ArrowLeft: 37, ArrowRight: 39, ArrowUp: 38, ArrowDown: 40, Enter: 13 };
+const KEY_CODES = { ArrowLeft: 37, ArrowRight: 39, ArrowUp: 38, ArrowDown: 40, Enter: 13, Escape: 27 };
 
 async function pressKey(session, key) {
  const params = { key, code: key, windowsVirtualKeyCode: KEY_CODES[key], nativeVirtualKeyCode: KEY_CODES[key] };
@@ -870,6 +999,103 @@ async function runCleanAndFatal(state, session, errors, appBase, browser, output
  const belowFoldFile = await screenshot(session, outputDir, 'clean-05-below-fold-revealed.png');
  artifacts.screenshots.push(belowFoldFile);
  console.log(`case clean: scroll regression PASS — off-right poster (col 6) and the below-fold Favorites row were revealed exactly; vertical and horizontal scrollports stayed independent.`);
+ // -- milestone 7: webOS playback and seek through the AVPlay seam
+ await pressKey(session, 'Enter');
+ const detailProbe = await poll(async () => {
+  const active = await evaluate(session, `document.activeElement ? document.activeElement.getAttribute('data-focus-key') : null`);
+  return { done: active === 'detail-back' || active === 'detail-playback', view: { active } };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!detailProbe.done) {
+  const recent = (state.requests || []).slice(-10).map(r => `${r.status} ${r.pathname}`).join(', ');
+  const diag = JSON.stringify(state.diagnosticsPosts || []);
+  throw new SmokeFailure(`case clean FAILED — Enter on Favorites card did not focus TitleDetail (${JSON.stringify(detailProbe.last?.view || detailProbe.view)}; requests: [${recent}]; diag: ${diag})`);
+ }
+
+ const currentActive = detailProbe.view?.active || detailProbe.last?.view?.active;
+ if (currentActive !== 'detail-playback') {
+  await pressKey(session, 'ArrowDown');
+ }
+ const playBtnActive = await poll(async () => {
+  const active = await evaluate(session, `document.activeElement ? document.activeElement.getAttribute('data-focus-key') : null`);
+  return { done: active === 'detail-playback', view: { active } };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!playBtnActive.done) {
+  throw new SmokeFailure(`case clean FAILED — could not focus detail-playback button (${JSON.stringify(playBtnActive.last?.view || playBtnActive.view)})`);
+ }
+
+ await pressKey(session, 'Enter');
+ const playbackProbe = await poll(async () => {
+  const info = await evaluate(session, `(function() {
+   var shell = document.querySelector('.player-shell');
+   var video = shell ? shell.querySelector('video') : null;
+   var obj = document.getElementById('av-player');
+   return {
+    hasShell: Boolean(shell),
+    hasVideo: Boolean(video),
+    objHidden: obj ? obj.style.display === 'none' : false,
+    position: video ? video.style.position : null,
+    currentTime: video ? video.currentTime : 0,
+    duration: video ? video.duration : 0,
+    paused: video ? video.paused : true,
+   };
+  })()`);
+  return {
+   done: info.hasVideo && info.objHidden && info.currentTime > 0.05,
+   view: info,
+  };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!playbackProbe.done) {
+  throw new SmokeFailure(`case clean FAILED — media playback never started (${JSON.stringify(playbackProbe.view)})`);
+ }
+
+ const playFile = await screenshot(session, outputDir, 'clean-06-playback.png');
+ artifacts.screenshots.push(playFile);
+
+ await evaluate(session, `(function() {
+  if (window.webapis && window.webapis.avplay) {
+   window.webapis.avplay.seekTo(5000);
+  }
+ })()`);
+
+ const seekProbe = await poll(async () => {
+  const info = await evaluate(session, `(function() {
+   var video = document.querySelector('.player-shell video');
+   return { currentTime: video ? video.currentTime : 0 };
+  })()`);
+  return {
+   done: info.currentTime >= 4.5,
+   view: info,
+  };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!seekProbe.done) {
+  throw new SmokeFailure(`case clean FAILED — seekTo(5000) did not advance video currentTime (${JSON.stringify(seekProbe.view)})`);
+ }
+
+ const seekFile = await screenshot(session, outputDir, 'clean-07-seek.png');
+ artifacts.screenshots.push(seekFile);
+
+ await pressKey(session, 'Escape');
+ const exitProbe = await poll(async () => {
+  const info = await evaluate(session, `(function() {
+   var video = document.querySelector('video');
+   var shell = document.querySelector('.player-shell');
+   var obj = document.getElementById('av-player');
+   return {
+    hasVideo: Boolean(video),
+    hasShell: Boolean(shell),
+    objRestored: obj ? obj.style.display !== 'none' : true,
+   };
+  })()`);
+  return {
+   done: !info.hasVideo && !info.hasShell,
+   view: info,
+  };
+ }, MILESTONE_TIMEOUT_MS);
+ if (!exitProbe.done) {
+  throw new SmokeFailure(`case clean FAILED — Escape did not exit player and unmount video (${JSON.stringify(exitProbe.last?.view)})`);
+ }
+
+ console.log('case clean: playback and seek PASS — video element mounted in .player-shell, #av-player hidden, direct Range stream played, seekTo advanced currentTime, exit restored shell.');
 
  if (errors.length > 0) {
   reportErrors('clean', errors);
