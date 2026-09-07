@@ -592,16 +592,23 @@ const SCROLL_AUDIT_JS = `(function () {
     return { index: index, scrollLeft: rail.scrollLeft, scrollWidth: rail.scrollWidth, clientWidth: rail.clientWidth };
   });
   var rect = active && active.getBoundingClientRect ? active.getBoundingClientRect() : null;
+  var railElement = active && active.closest ? active.closest('.poster-rail') : null;
+  var railRect = railElement ? railElement.getBoundingClientRect() : null;
+  var centerDelta = (railElement && railRect && rect)
+    ? Math.abs((rect.left + rect.width / 2) - (railRect.left + railElement.clientWidth / 2))
+    : null;
   return {
     focusKey: active ? active.getAttribute('data-focus-key') : null,
     col: active ? active.getAttribute('data-focus-col') : null,
-    rect: rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null,
+    rect: rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height } : null,
     viewport: { width: window.innerWidth, height: window.innerHeight },
     contentScrollTop: content ? content.scrollTop : null,
     contentScrollLeft: content ? content.scrollLeft : null,
-    rails: rails
+    rails: rails,
+    activeRail: railElement ? { centerDelta: centerDelta } : null
   };
 })()`;
+
 
 async function scrollAudit(session) {
  return evaluate(session, SCROLL_AUDIT_JS);
@@ -835,9 +842,13 @@ async function runCleanAndFatal(state, session, errors, appBase, browser, output
  if (!overflowingRailAfter || overflowingRailAfter.scrollLeft <= 0) {
   throw new SmokeFailure(`case clean FAILED — the overflowing rail did not scroll horizontally(scrollLeft ${overflowingRailAfter ? overflowingRailAfter.scrollLeft : 'n/a'}); the off - right poster was not revealed`);
  }
- if (audit.contentScrollTop !== contentTopBaseline) {
-  throw new SmokeFailure(`case clean FAILED — horizontal rail movement changed the vertical scroll of.tv - content(${contentTopBaseline} -> ${audit.contentScrollTop}); unrelated axis was reset`);
+ if (audit.activeRail?.centerDelta !== null && audit.activeRail.centerDelta > 15) {
+  throw new SmokeFailure(`case clean FAILED — off-right poster is not centered in the rail (center delta ${audit.activeRail.centerDelta.toFixed(1)}px > 15px; centered horizontal rail movement not honored)`);
  }
+ if (audit.contentScrollTop !== contentTopBaseline) {
+  throw new SmokeFailure(`case clean FAILED — horizontal rail movement changed the vertical scroll of .tv-content (${contentTopBaseline} -> ${audit.contentScrollTop}); unrelated axis was reset`);
+ }
+
  const railFile = await screenshot(session, outputDir, 'clean-04-rail-revealed.png');
  artifacts.screenshots.push(railFile);
 
@@ -846,8 +857,12 @@ async function runCleanAndFatal(state, session, errors, appBase, browser, output
  assertCleanViewport(audit, 'below-fold row');
  assertFullyVisible(audit, 'below-fold row reveal', 'vertical');
  if (!(audit.contentScrollTop > contentTopBaseline)) {
-  throw new SmokeFailure(`case clean FAILED — focusing the below - fold Favorites rail did not scroll.tv - content down(${contentTopBaseline} -> ${audit.contentScrollTop})`);
+  throw new SmokeFailure(`case clean FAILED — focusing the below-fold Favorites rail did not scroll .tv-content down (${contentTopBaseline} -> ${audit.contentScrollTop})`);
  }
+ if (audit.rect.top < 250) {
+  throw new SmokeFailure(`case clean FAILED — below-fold row top is at y=${audit.rect.top.toFixed(1)}px (slammed to container top); nearest vertical movement was not honored`);
+ }
+
  const overflowingRailFinal = audit.rails.find(rail => rail.scrollWidth - rail.clientWidth === recentRail.scrollWidth - recentRail.clientWidth);
  if (overflowingRailFinal && overflowingRailFinal.scrollLeft !== overflowingRailAfter.scrollLeft) {
   throw new SmokeFailure(`case clean FAILED — the vertical move reset the overflowing rail's horizontal position (${overflowingRailAfter.scrollLeft} -> ${overflowingRailFinal.scrollLeft})`);
@@ -959,7 +974,9 @@ async function main() {
  if (typeof WebSocket !== 'function') {
   throw new SmokeFailure('this smoke needs native WebSocket — use Node >= 22');
  }
- const state = parseArgs(process.argv.slice(2));
+ activeState = parseArgs(process.argv.slice(2));
+ const state = activeState;
+
  const distRoot = path.resolve(state.dist);
  if (!fs.existsSync(path.join(distRoot, 'index.html'))) {
   throw new SmokeFailure(`no index.html under ${state.dist} — build the client first (npm run build:webos)`);
@@ -1029,16 +1046,15 @@ async function main() {
   cleanup(state);
  }
 }
-
-const state = parseArgs(process.argv.slice(2));
+let activeState = null;
 for (const signal of ['SIGINT', 'SIGTERM']) {
  process.on(signal, () => {
-  cleanup(state);
+  if (activeState) cleanup(activeState);
   process.exit(1);
  });
 }
 main().catch(error => {
- cleanup(state);
+ if (activeState) cleanup(activeState);
  console.error(`smoke-webos-engine: ${error?.message || error}`);
  process.exit(error instanceof SmokeFailure ? error.code : 1);
 });
