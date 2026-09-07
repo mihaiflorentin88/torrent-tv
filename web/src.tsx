@@ -531,7 +531,7 @@ export function App() {
     const err = error as Error & { status?: number };
     setPreparing({ ...origin, error: err.message || 'Preparation failed.', settingsHint: err.status === 409 });
   };
-  const navigate = (next: View) => { setDetail(null); setView(next); setJobDeepId(undefined); pushRoute({ view: next, query: next === 'search' ? query : '' }) };
+  const navigate = (next: View) => { prepareAbort.current?.abort(); setDetail(null); setView(next); setJobDeepId(undefined); pushRoute({ view: next, query: next === 'search' ? query : '' }) };
   // Sidebar navigation away from a dirty Settings page asks first; Settings
   // reports dirtiness through the ref so the check stays synchronous.
   const settingsDirty = useRef(false); const viewRef = useRef(view); viewRef.current = view;
@@ -543,6 +543,7 @@ export function App() {
   // Every history entry — popped, or replayed after a canceled pop — lands
   // through this one applier.
   const applyRoute = (route: Route) => {
+    prepareAbort.current?.abort();
     if (route.view === 'watch') { if (route.id && playerRef.current?.download.id !== route.id) void startWatch(route.id, route.source, route.t); return }
     setPlayer(null);
     if (route.view === 'title') { if (route.id && detailRef.current?.title.id !== route.id) void loadDetail(route.id); return }
@@ -563,7 +564,7 @@ export function App() {
   // app pushed, so Back never escapes the app; a cold-loaded overlay URL is
   // replaced with the section route instead.
   const closeOverlay = (clear: () => void) => { if ((window.history.state as { filelist?: boolean } | null)?.filelist === true) { window.history.back(); return } clear(); replaceRoute({ view, query: view === 'search' ? query : '' }) };
-  const closeDetail = () => closeOverlay(() => setDetail(null));
+  const closeDetail = () => closeOverlay(() => { prepareAbort.current?.abort(); setDetail(null) });
   const closePlayer = () => closeOverlay(() => setPlayer(null));
   const closeJobDetail = () => closeOverlay(() => { });
   const openJobDetail = (id: string) => { setJobDeepId(id); pushRoute({ view: 'jobs', id }) };
@@ -638,9 +639,9 @@ export function App() {
   }
   async function openTitle(title: CatalogTitle, target: DetailTarget = {}) { await loadDetail(title.id, target, title) }
   async function openLibraryItem(item: HouseholdItem) { const id = item.titleId || item.catalog?.id; if (!id) { setError('This library item is not linked to a catalog title yet. Refresh the catalog and try again.'); return } const title = item.catalog || { id, title: item.release.name, kind: 'movie', categories: [], resolutions: [], sourceCount: 1, bestSeeders: item.release.seeders, largestSizeBytes: item.release.sizeBytes, trackers: item.release.trackerId ? [{ id: item.release.trackerId, name: item.release.trackerName }] : [], libraryState: { downloadState: 'none', watchState: 'unwatched' } } as CatalogTitle; await openTitle(title, { season: item.seasonNumber, episode: item.episodeNumber }) }
-  async function prepare(source: CatalogSource, resumeMs = 0) { try { setPicker(null); const d = await api.prepare(source.release.id, source.fileIndex ?? -1); if (!resumeMs) resumeMs = await api.playback(d.id).then(p => p.watched ? 0 : p.positionMs).catch(() => 0); setPlayer({ download: d, resumeMs }); pushRoute(watchRoute(d, resumeMs)); } catch (e) { setError((e as Error).message) } }
+  async function prepare(source: CatalogSource, resumeMs = 0) { const origin = { trackerName: source.release.trackerName || 'Unknown tracker', label: source.release.name }; const controller = beginPrepare(origin.trackerName, origin.label); try { setPicker(null); const d = await api.prepare(source.release.id, source.fileIndex ?? -1, controller.signal); if (prepareAbort.current !== controller) return; if (!resumeMs) resumeMs = await api.playback(d.id).then(p => p.watched ? 0 : p.positionMs).catch(() => 0); setPreparing(null); setPlayer({ download: d, resumeMs }); pushRoute(watchRoute(d, resumeMs)); } catch (e) { notePrepareFailure(origin, controller)(e) } }
   function playDetail(d: CatalogDetail) { const sources = d.title.kind === 'movie' ? d.sources : d.seasons[0]?.episodes[0]?.sources || []; if (sources.length === 1) void prepare(sources[0]); else setPicker(sources) }
-  async function playLegacy(item: HouseholdItem) { try { const d = await api.prepare(item.release.id, item.fileIndex); const resumeMs = item.watched ? 0 : item.positionMs; setPlayer({ download: d, resumeMs }); pushRoute(watchRoute(d, resumeMs)) } catch (e) { setError((e as Error).message) } }
+  async function playLegacy(item: HouseholdItem) { const origin = { trackerName: item.release.trackerName || 'Unknown tracker', label: item.release.name }; const controller = beginPrepare(origin.trackerName, origin.label); try { const d = await api.prepare(item.release.id, item.fileIndex, controller.signal); if (prepareAbort.current !== controller) return; const resumeMs = item.watched ? 0 : item.positionMs; setPreparing(null); setPlayer({ download: d, resumeMs }); pushRoute(watchRoute(d, resumeMs)) } catch (e) { notePrepareFailure(origin, controller)(e) } }
   async function playDownload(download: Download) { const resumeMs = await api.playback(download.id).then(value => value.watched ? 0 : value.positionMs).catch(() => 0); setPlayer({ download, resumeMs }); pushRoute(watchRoute(download, resumeMs)) }
   // Cold watch deep link: resolve the Managed download by id, honor an
   // explicit Source index in the URL by re-preparing only when it differs
@@ -657,7 +658,7 @@ export function App() {
     } catch (e) { setError((e as Error).message) }
   }
   async function advanceEpisode(preferences: PlaybackPreferences) { if (!player) return; try { const next = await api.nextEpisode(player.download.id); await Promise.all([loadState(), loadDownloads()]); if (next) { setPlayer({ download: next, resumeMs: 0, preferences: { ...preferences, sourceId: next.id, subtitleMode: preferences.subtitleMode === 'off' ? 'off' : 'auto', subtitleProvider: '', subtitleCandidateId: '' } }); replaceRoute(watchRoute(next, 0)) } else closePlayer() } catch (e) { setError(`Could not start the next episode: ${(e as Error).message}`); closePlayer() } }
-  async function downloadSeason(source: CatalogSource, season: number) { try { await api.prepareSeason(source.release.id, season); await loadDownloads(); if (detailRef.current) { const next = await api.title(detailRef.current.title.id); setDetail(next); setDetailTarget({ season }) } } catch (e) { setError((e as Error).message) } }
+  async function downloadSeason(source: CatalogSource, season: number) { const origin = { trackerName: source.release.trackerName || 'Unknown tracker', label: source.release.name }; const controller = beginPrepare(origin.trackerName, origin.label); try { await api.prepareSeason(source.release.id, season, controller.signal); if (prepareAbort.current !== controller) return; setPreparing(null); await loadDownloads(); if (detailRef.current) { const next = await api.title(detailRef.current.title.id); setDetail(next); setDetailTarget({ season }) } } catch (e) { notePrepareFailure(origin, controller)(e) } }
   async function manageSeasonPack(source: CatalogSource, season: number, action: 'download' | 'pause' | 'resume' | 'retry' | 'delete') { try { if (action === 'download' || (action === 'retry' && !source.libraryState?.downloadId)) { await downloadSeason(source, season); return } const id = source.libraryState?.downloadId; if (!id) throw new Error('This season download is not registered yet. Refresh the title and try again.'); if (action === 'delete') await api.deleteDownload(id); else await api.call(`/downloads/${encodeURIComponent(id)}/${action}`, { method: 'POST' }); await loadDownloads(); if (detailRef.current) setDetail(await api.title(detailRef.current.title.id)) } catch (e) { setError((e as Error).message); throw e } }
   async function remove(d: Download) { try { await api.deleteDownload(d.id); await loadDownloads() } catch (e) { setError((e as Error).message); throw e } }
   async function manageDownload(d: Download, action: DownloadTransferAction) { try { await api.call(`/downloads/${encodeURIComponent(d.id)}/${action}`, { method: 'POST' }); await loadDownloads() } catch (e) { setError((e as Error).message); throw e } }
