@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { render } from 'preact';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { API, CatalogFacets, HouseholdState, PortalState, UpdateStatus } from '@torrent-tv/shared';
 import type { TVPlatformHooks } from './platform';
 // Static import cannot work here: main.tsx bootstraps and asserts the presence
@@ -270,5 +270,123 @@ describe('Setup and link handoff behavioral regressions', () => {
     // Refusal message appears in TVSettings message region
     const updateMsg = container.querySelector<HTMLParagraphElement>('.tv-settings p[aria-live="polite"]');
     expect(updateMsg?.textContent).toBe(`Open this address on another device: ${releaseUrl}`);
+  });
+
+  it('traps focus in the preparing acquisition dialog and invokes onCancelPrepare on Back', async () => {
+    const onCancel = vi.fn();
+    const mockApi = {
+      titles: async () => ({ items: [], nextCursor: null }),
+      ensureMetadata: async () => ({ queued: 0 }),
+      streamURL: (p: string) => p,
+      call: async () => ({}),
+    } as unknown as API;
+
+    render(
+      <Catalog
+        api={mockApi}
+        status="Online"
+        titles={[]}
+        facets={{} as CatalogFacets}
+        household={{ favorites: [], continueWatching: [], recent: [], watched: [] }}
+        downloads={[]}
+        jobs={[]}
+        restoreFocus={null}
+        portal={null}
+        updateStatus={null}
+        onUpdateStatus={() => { }}
+        onFocus={() => { }}
+        onRetry={() => { }}
+        onChangeServer={() => { }}
+        onForgetServer={() => { }}
+        onPlay={() => { }}
+        onPlayDownload={() => { }}
+        onManageDownload={async () => { }}
+        onManageSeasonPack={async () => { }}
+        onRefreshDownloads={async () => { }}
+        onFavorite={() => { }}
+        preparing={{ trackerName: 'The Pirate Bay', label: 'Big.Buck.Bunny.1080p.mkv' }}
+        onCancelPrepare={onCancel}
+      />,
+      container
+    );
+
+    await new Promise(r => setTimeout(r, 20));
+
+    const dialog = container.querySelector<HTMLElement>('.tv-prepare-confirm');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Preparing from The Pirate Bay');
+    expect(dialog?.textContent).toContain('Big.Buck.Bunny.1080p.mkv');
+
+    const cancelBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="prepare-cancel"]');
+    expect(cancelBtn).not.toBeNull();
+
+    // Press back (e.g. Android TV back / Escape)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers visible retry and close actions when acquisition fails with metadata or disabled error', async () => {
+    const onCancel = vi.fn();
+    const onRetry = vi.fn();
+    const mockApi = {
+      titles: async () => ({ items: [], nextCursor: null }),
+      ensureMetadata: async () => ({ queued: 0 }),
+      streamURL: (p: string) => p,
+      call: async () => ({}),
+    } as unknown as API;
+
+    render(
+      <Catalog
+        api={mockApi}
+        status="Online"
+        titles={[]}
+        facets={{} as CatalogFacets}
+        household={{ favorites: [], continueWatching: [], recent: [], watched: [] }}
+        downloads={[]}
+        jobs={[]}
+        restoreFocus={null}
+        portal={null}
+        updateStatus={null}
+        onUpdateStatus={() => { }}
+        onFocus={() => { }}
+        onRetry={() => { }}
+        onChangeServer={() => { }}
+        onForgetServer={() => { }}
+        onPlay={() => { }}
+        onPlayDownload={() => { }}
+        onManageDownload={async () => { }}
+        onManageSeasonPack={async () => { }}
+        onRefreshDownloads={async () => { }}
+        onFavorite={() => { }}
+        preparing={{
+          trackerName: 'FileList',
+          label: 'Sintel.2010.720p.mkv',
+          error: 'tracker is disabled: tracker "FileList" is disabled',
+          hint: 'Check tracker settings or choose another available version.',
+        }}
+        onCancelPrepare={onCancel}
+        onRetryPrepare={onRetry}
+      />,
+      container
+    );
+
+    await new Promise(r => setTimeout(r, 20));
+
+    const dialog = container.querySelector<HTMLElement>('.tv-prepare-confirm');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Could not start this download');
+    expect(dialog?.textContent).toContain('FileList: tracker is disabled');
+    expect(dialog?.textContent).toContain('Check tracker settings');
+
+    const retryBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="prepare-retry"]');
+    const closeBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="prepare-close"]');
+    expect(retryBtn).not.toBeNull();
+    expect(closeBtn).not.toBeNull();
+
+    retryBtn?.click();
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    closeBtn?.click();
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

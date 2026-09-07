@@ -15,9 +15,17 @@ export const PROJECTS_MENU_ROW = 33;
 // never leaves the region of the focused element, which is the trap.
 export const UPDATE_DIALOG_REGION = 'update-dialog';
 
-// TVSettings rows appended after the existing rows 1-15.
-export const UPDATE_CHECK_ROW = 16;
-export const UPDATE_APPLY_ROW = 17;
+// TVSettings focus rows. Rows 1-6 stay the safe playback fields; the two
+// tracker toggles follow (7-8), then the two Pirate Bay URL inputs (9-10),
+// the save control (11), six connection tests (12-17), and change/forget
+// server (18-19). The update controls append after them so inserting a row
+// renumbers only these constants.
+export const SETTINGS_SAVE_ROW = 11;
+export const SETTINGS_TEST_FIRST_ROW = 12;
+export const SETTINGS_CHANGE_SERVER_ROW = 18;
+export const SETTINGS_FORGET_SERVER_ROW = 19;
+export const UPDATE_CHECK_ROW = 20;
+export const UPDATE_APPLY_ROW = 21;
 
 // The promotion slot exists only while the server advertises ads and the
 // household is not a donor; a donor hides the slot entirely, and an absent

@@ -7,6 +7,8 @@ import type { TVPlatformHooks } from './platform';
 const mockDownload: Download = {
   id: 'dl-test-1',
   releaseId: 'rel-test-1',
+  trackerId: 'filelist',
+  trackerName: 'FileList',
   engineId: 'engine-1',
   fileIndex: 0,
   filePath: 'video.mkv',

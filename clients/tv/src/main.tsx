@@ -1,13 +1,14 @@
 import { Fragment, render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { API, canonicalHouseholdItems, canonicalLanguage, ControlsVisibility, subtitleRank, CatalogDetail, CatalogFacets, CatalogSource, CatalogTitle, Download, DownloadSort, downloadTransferActions, DownloadTransferAction, formatBytes, HouseholdItem, HouseholdState, Job, JobLog, LibraryCategory, MediaState, orderDownloadIDs, PlaybackPreferences, PortalPromotion, PortalState, promotionScreenTimeMs, reconcileDownloads, Release, resumeActionLabel, resumeForTitle, resumeSummary, seasonPackActionLabel, SettingsField, SubtitleCandidate, subtitleItemLabel, subtitleMenuGroups, UpdateStatus } from '@torrent-tv/shared';
+import { API, canonicalHouseholdItems, canonicalLanguage, ControlsVisibility, subtitleRank, CatalogDetail, CatalogFacets, CatalogSource, CatalogTitle, Download, DownloadSort, downloadTransferActions, DownloadTransferAction, formatBytes, HouseholdItem, HouseholdState, Job, JobLog, LibraryCategory, MediaState, orderDownloadIDs, PlaybackPreferences, PortalPromotion, PortalState, promotionScreenTimeMs, reconcileDownloads, Release, resumeActionLabel, resumeForTitle, resumeSummary, seasonPackActionLabel, SettingsField, SubtitleCandidate, subtitleItemLabel, subtitleMenuGroups, TrackerStatus, UpdateStatus } from '@torrent-tv/shared';
 import { chooseStructuredTarget, focusElement, remoteAction, useTVNavigation } from './navigation';
-import { PROJECTS_MENU_ROW, UPDATE_APPLY_ROW, UPDATE_CHECK_ROW, UPDATE_DIALOG_REGION, confirmDialogStale, dialogRestoreKey, promotionsVisible, recoverySettles, snapshotEventAllowed, updateApplyDisabled, updateApplyOutcome, updateNoticeVisible } from './portal';
+import { PROJECTS_MENU_ROW, SETTINGS_CHANGE_SERVER_ROW, SETTINGS_FORGET_SERVER_ROW, SETTINGS_SAVE_ROW, SETTINGS_TEST_FIRST_ROW, UPDATE_APPLY_ROW, UPDATE_CHECK_ROW, UPDATE_DIALOG_REGION, confirmDialogStale, dialogRestoreKey, promotionsVisible, recoverySettles, snapshotEventAllowed, updateApplyDisabled, updateApplyOutcome, updateNoticeVisible } from './portal';
 import { AVTrack, clampSeek, formatTime, hiddenKeyRoute, isDownloadComplete, normalizeTrack, parseVTT, playerAction, preferredAudio, SubtitleCue, subtitleAt } from './player';
 import { householdSections, trackerCategories } from './catalog-data';
 import { discoverServers, DiscoveredServer, normalizeServerURL } from './discovery';
 import { appIdentity } from './app-name';
 import { exitApplication, getNetworkInfo, onAppVisibilityChange, openExternalURL, registerMediaKeys } from './platform';
+import { detectCapabilities } from './capability';
 import './tv.css';
 import './performance.css';
 
@@ -399,7 +400,7 @@ export function Player({ api, download, resumeMs, preferences, onClose, onStateC
       {menu === 'subtitles' && <><h2>Subtitles</h2><button data-focus-region="player-menu" data-focus-row="0" data-focus-col="0" data-focus-key="player-subtitles-off" onClick={() => chooseTrack('TEXT', null)}>Off</button>{subtitleRows.map(item => <Fragment key={item.key}>{item.heading ? <h3>{item.heading}</h3> : null}<button data-focus-region="player-menu" data-focus-row={item.row} data-focus-col="0" data-focus-key={item.key} onClick={() => void installSubtitle(item.candidate)}><strong>{subtitleItemLabel(item.candidate, item.position)}</strong>{item.detail ? <><br /><small>{item.detail}</small></> : null}</button></Fragment>)}{subtitleTracks.length > 0 && <><h3>Native AVPlay fallback</h3>{subtitleTracks.map((track, index) => <button data-focus-region="player-menu" data-focus-row={subtitleRows.length + index + 1} data-focus-col="0" data-focus-key={`player-native-subtitle-${track.index}`} onClick={() => chooseTrack('TEXT', track.index)}>{track.label}</button>)}</>}<button data-focus-region="player-menu" data-focus-row={subtitleRows.length + subtitleTracks.length + 1} data-focus-col="0" data-focus-key="player-subtitles-find" onClick={() => void findSubtitles(false, 'remote')}>Find online subtitles…</button></>}
       {menu === 'find-subtitles' && <><h2>Download subtitles</h2>{foundRows.length === 0 ? <p>No matching provider subtitles are available.</p> : foundRows.map(item => <Fragment key={item.key}>{item.heading ? <h3>{item.heading}</h3> : null}<button data-focus-region="player-menu" data-focus-row={item.row} data-focus-col="0" data-focus-key={item.key} onClick={() => void installSubtitle(item.candidate)}><strong>{subtitleItemLabel(item.candidate, item.position)}</strong>{item.detail ? <><br /><small>{item.detail}</small></> : null}{item.candidate.releaseName ? <><br /><small>{item.candidate.releaseName}</small></> : null}</button></Fragment>)}</>}
       {menu === 'options' && <><h2>Playback options</h2><button data-focus-region="player-menu" data-focus-row="0" data-focus-col="0" data-focus-key="player-subtitle-earlier" onClick={() => changeDelay(-500)}>Subtitle earlier (−0.5s)</button><button data-focus-region="player-menu" data-focus-row="1" data-focus-col="0" data-focus-key="player-subtitle-later" onClick={() => changeDelay(500)}>Subtitle later (+0.5s)</button><button data-focus-region="player-menu" data-focus-row="2" data-focus-col="0" data-focus-key="player-subtitle-reset" onClick={() => changeDelay(-subtitleDelay)}>Reset subtitle delay ({subtitleDelay / 1000}s)</button><button data-focus-region="player-menu" data-focus-row="3" data-focus-col="0" data-focus-key="player-aspect-auto" onClick={() => changeAspect('PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO')}>Aspect: Auto</button><button data-focus-region="player-menu" data-focus-row="4" data-focus-col="0" data-focus-key="player-aspect-letterbox" onClick={() => changeAspect('PLAYER_DISPLAY_MODE_LETTER_BOX')}>Aspect: Letterbox</button><button data-focus-region="player-menu" data-focus-row="5" data-focus-col="0" data-focus-key="player-aspect-full" onClick={() => changeAspect('PLAYER_DISPLAY_MODE_FULL_SCREEN')}>Aspect: Full screen</button><button data-focus-region="player-menu" data-focus-row="6" data-focus-col="0" data-focus-key="player-info" onClick={() => openMenu('info', 'options')}>Playback information</button></>}
-      {menu === 'info' && <><h2>Playback information</h2><p>{download.mimeType}</p><p>{formatBytes(download.sizeBytes)} · {tracks.length} tracks</p><p>{formatTime(position)} / {formatTime(total)} · {aspect.replace('PLAYER_DISPLAY_MODE_', '')}</p><button data-focus-region="player-menu" data-focus-row="0" data-focus-col="0" data-focus-key="player-info-back" onClick={() => switchMenu('options', 'player-info')}>Back to options</button></>}
+      {menu === 'info' && <><h2>Playback information</h2><p>Tracker: {download.trackerName}</p><p>{download.mimeType}</p><p>{formatBytes(download.sizeBytes)} · {tracks.length} tracks</p><p>{formatTime(position)} / {formatTime(total)} · {aspect.replace('PLAYER_DISPLAY_MODE_', '')}</p><button data-focus-region="player-menu" data-focus-row="0" data-focus-col="0" data-focus-key="player-info-back" onClick={() => switchMenu('options', 'player-info')}>Back to options</button></>}
       <button data-focus-region="player-menu" data-focus-row="99" data-focus-col="0" data-focus-key="player-menu-close" onClick={closeMenu}>Close</button>
     </div>}
   </div></div>;
@@ -454,7 +455,14 @@ const menuGroups: Array<{ label: string; items: Array<{ id: TVRoute; label: stri
   { label: '', items: [{ id: 'jobs', label: 'Jobs', icon: '↻' }, { id: 'events', label: 'Events', icon: '!' }, { id: 'settings', label: 'Settings', icon: '⚙' }] },
 ];
 
-export function Catalog({ api, status, titles, facets, household, downloads, jobs, restoreFocus, portal, updateStatus, onUpdateStatus, onFocus, onRetry, onChangeServer, onForgetServer, onPlay, onPlayDownload, onManageDownload, onManageSeasonPack, onRefreshDownloads, onFavorite }: { api: API; status: string; titles: CatalogTitle[]; facets: CatalogFacets; household: HouseholdState; downloads: Download[]; jobs: Job[]; restoreFocus: string | null; portal: PortalState | null; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; onFocus: (key: string) => void; onRetry: () => void; onChangeServer: () => void; onForgetServer: () => void; onPlay: (release: Release, fileIndex?: number, resumeMs?: number) => void; onPlayDownload: (download: Download) => void; onManageDownload: (download: Download, action: string) => Promise<void>; onManageSeasonPack: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onRefreshDownloads: () => Promise<void>; onFavorite: (title: CatalogTitle, value: boolean) => void }) {
+export type TVPreparingState = {
+  trackerName: string;
+  label: string;
+  error?: string;
+  hint?: string;
+};
+
+export function Catalog({ api, status, titles, facets, household, downloads, jobs, restoreFocus, portal, updateStatus, onUpdateStatus, onFocus, onRetry, onChangeServer, onForgetServer, onPlay, onPlayDownload, onManageDownload, onManageSeasonPack, onRefreshDownloads, onFavorite, preparing, onCancelPrepare, onRetryPrepare }: { api: API; status: string; titles: CatalogTitle[]; facets: CatalogFacets; household: HouseholdState; downloads: Download[]; jobs: Job[]; restoreFocus: string | null; portal: PortalState | null; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; onFocus: (key: string) => void; onRetry: () => void; onChangeServer: () => void; onForgetServer: () => void; onPlay: (release: Release, fileIndex?: number, resumeMs?: number) => void; onPlayDownload: (download: Download) => void; onManageDownload: (download: Download, action: string) => Promise<void>; onManageSeasonPack: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onRefreshDownloads: () => Promise<void>; onFavorite: (title: CatalogTitle, value: boolean) => void; preparing?: TVPreparingState | null; onCancelPrepare?: () => void; onRetryPrepare?: () => void }) {
   const [route, setRoute] = useState<TVRoute>('home');
   const [menuOpen, setMenuOpen] = useState(false);
   const [projectsMessage, setProjectsMessage] = useState('');
@@ -485,7 +493,7 @@ export function Catalog({ api, status, titles, facets, household, downloads, job
   useEffect(() => setRemoteTitles(current => current.map(item => titles.find(updated => updated.id === item.id) || item)), [titles]);
   const fetchPage = (cursor = '', remember = false) => api.titles({ search: query.trim().length >= 3 ? query.trim() : undefined, category, sort, pageSize: 12, cursor }).then(page => { if (remember) setPreviousCursors(current => [...current, pageCursor].slice(-20)); setPageCursor(cursor); setRemoteTitles(page.items); setNextCursor(page.nextCursor); void api.ensureMetadata(page.items.map(item => item.id)); return page; });
   useEffect(() => { setPreviousCursors([]); setPageNumber(1); void fetchPage('').catch(() => { }) }, [query, category, sort]);
-  useEffect(() => { const refresh = (event: Event) => { const searched = String((event as CustomEvent).detail?.query || '').toLowerCase(); if (query && searched === query.toLowerCase()) { setDetailMessage('FileList search completed.'); void fetchPage('').catch(error => setDetailMessage((error as Error).message)); } }; window.addEventListener('catalog-search-completed', refresh); return () => window.removeEventListener('catalog-search-completed', refresh) }, [query, category, sort]);
+  useEffect(() => { const refresh = (event: Event) => { const searched = String((event as CustomEvent).detail?.query || '').toLowerCase(); if (query && searched === query.toLowerCase()) { setDetailMessage('Catalog search completed.'); void fetchPage('').catch(error => setDetailMessage((error as Error).message)); } }; window.addEventListener('catalog-search-completed', refresh); return () => window.removeEventListener('catalog-search-completed', refresh) }, [query, category, sort]);
   const submitSearch = async () => { const value = draftQuery.trim(); setSearching(true); try { if (value) { const page = await api.searchTitles(value); setRemoteTitles(page.items); setNextCursor(page.nextCursor); void api.ensureMetadata(page.items.map(item => item.id)).catch(() => { }); } setQuery(value); setPreviousCursors([]); setPageNumber(1); } catch (error) { setDetailMessage((error as Error).message); } finally { setSearching(false) } };
   const nextPage = () => { if (!nextCursor) return; void fetchPage(nextCursor, true).then(() => setPageNumber(value => value + 1)).catch(() => { }) };
   const previousPage = () => { const cursor = previousCursors[previousCursors.length - 1]; if (cursor === undefined) return; setPreviousCursors(current => current.slice(0, -1)); void fetchPage(cursor).then(() => setPageNumber(value => Math.max(1, value - 1))).catch(() => { }) };
@@ -493,8 +501,22 @@ export function Catalog({ api, status, titles, facets, household, downloads, job
   useEffect(() => { const titleId = detail?.title.kind === 'series' ? detail.title.id : ''; if (!titleId) return; let stopped = false; let running = false; const refresh = async () => { if (stopped || running) return; running = true; try { const next = await api.title(titleId); if (!stopped && detailRef.current?.title.id === titleId) { setDetail(next); setDetailMessage(needsEpisodeExpansion(next) ? 'Preparing the individual episode list…' : '') } } catch (error) { if (!stopped) setDetailMessage((error as Error).message) } finally { running = false } }; const timer = window.setInterval(() => void refresh(), 3000); return () => { stopped = true; window.clearInterval(timer) } }, [api, detail?.title.id]);
   useEffect(() => { if (route !== 'downloads') return; let stopped = false; let running = false; const refresh = async () => { if (stopped || running) return; running = true; try { await refreshDownloadsRef.current() } finally { running = false } }; void refresh(); const timer = window.setInterval(() => void refresh(), 3000); return () => { stopped = true; window.clearInterval(timer) } }, [route]);
   const openTitle = async (title: CatalogTitle, target: DetailTarget = {}) => { setDetailMessage('Loading versions…'); setDetailTarget(target); try { const next = await api.title(title.id); setDetail(next); if (needsEpisodeExpansion(next)) { setDetailMessage('Preparing the individual episode list…'); void api.refreshTitle(title.id, title.title).catch(error => setDetailMessage((error as Error).message)) } else setDetailMessage(''); } catch (error) { setDetailMessage((error as Error).message); } };
-  const openLibraryItem = async (item: HouseholdItem) => { const id = item.titleId || item.catalog?.id; if (!id) { setDetailMessage('This library item is not linked to a catalog title yet. Refresh the catalog and try again.'); return } const title = item.catalog || { id, title: item.release.name, kind: 'movie', categories: [], resolutions: [], sourceCount: 1, bestSeeders: item.release.seeders, largestSizeBytes: item.release.sizeBytes } as CatalogTitle; await openTitle(title, { season: item.seasonNumber, episode: item.episodeNumber }) };
-  const manageSeasonPack = async (source: CatalogSource, season: number, action: SeasonPackAction) => { setDetailMessage(action === 'download' ? `Starting season ${season}…` : `Updating season ${season} download…`); try { await onManageSeasonPack(source, season, action); if (detailRef.current) { const next = await api.title(detailRef.current.title.id); setDetail(next); setDetailTarget({ season }) } setDetailMessage(action === 'delete' ? `Season ${season} download deleted.` : action === 'pause' ? `Season ${season} download paused.` : action === 'resume' ? `Season ${season} download resumed.` : `Season ${season} is downloading. Episode tiles will update here.`) } catch (error) { setDetailMessage((error as Error).message); throw error } };
+  const openLibraryItem = async (item: HouseholdItem) => { const id = item.titleId || item.catalog?.id; if (!id) { setDetailMessage('This library item is not linked to a catalog title yet. Refresh the catalog and try again.'); return } const title = item.catalog || { id, title: item.release.name, kind: 'movie', trackers: item.release.trackerId ? [{ id: item.release.trackerId, name: item.release.trackerName }] : [], categories: [], resolutions: [], sourceCount: 1, bestSeeders: item.release.seeders, largestSizeBytes: item.release.sizeBytes } as CatalogTitle; await openTitle(title, { season: item.seasonNumber, episode: item.episodeNumber }) };
+  const manageSeasonPack = async (source: CatalogSource, season: number, action: SeasonPackAction) => {
+    const isAcquire = action === 'download' || (action === 'retry' && !source.libraryState?.downloadId);
+    if (!isAcquire) setDetailMessage(`Updating season ${season} download…`);
+    try {
+      await onManageSeasonPack(source, season, action);
+      if (detailRef.current) {
+        const next = await api.title(detailRef.current.title.id).catch(() => null);
+        if (next) { setDetail(next); setDetailTarget({ season }); }
+      }
+      if (isAcquire) setDetailMessage(`Season ${season} is downloading. Episode tiles will update here.`);
+      else setDetailMessage(action === 'delete' ? `Season ${season} download deleted.` : action === 'pause' ? `Season ${season} download paused.` : `Season ${season} download resumed.`);
+    } catch (error) {
+      if (!isAcquire) { setDetailMessage((error as Error).message); throw error; }
+    }
+  };
   const chooseRoute = (next: TVRoute) => { setRoute(next); setDetail(null); setMenuOpen(false); window.setTimeout(() => focusElement(document.querySelector<HTMLElement>('[data-focus-region="content"]')), 0); };
   // Projects route: activation hands the link to the platform browser. When
   // no browser takes it (several ATV boxes ship none) the address stays on
@@ -519,7 +541,39 @@ export function Catalog({ api, status, titles, facets, household, downloads, job
   const restoreAfterDialog = (key: string) => { const target = document.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(key)}"]`); window.setTimeout(() => focusElement(target || document.querySelector<HTMLElement>('[data-focus-region="content"]')), 0) };
   const openUpdateConfirm = () => { updateReturnKey.current = document.activeElement instanceof HTMLElement ? document.activeElement.dataset.focusKey || null : null; setUpdateConfirm(true); window.setTimeout(() => focusElement(document.querySelector<HTMLElement>('[data-focus-key="update-confirm-cancel"]')), 0) };
   const closeUpdateConfirm = () => { setUpdateConfirm(false); restoreAfterDialog(dialogRestoreKey(updateReturnKey.current, 'update-apply')) };
-  const onBack = () => { if (updateConfirm) { closeUpdateConfirm(); return; } if (detail) { setDetail(null); window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(lastContent.current ? `[data-focus-key="${lastContent.current}"]` : '[data-focus-region="content"]')), 0); return; } if (menuOpen) { setMenuOpen(false); window.setTimeout(() => focusElement(lastContent.current ? document.querySelector<HTMLElement>(`[data-focus-key="${lastContent.current}"]`) : document.querySelector<HTMLElement>('[data-focus-region="content"]')), 0); return; } setMenuOpen(true); window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(`[data-menu-route="${route}"]`)), 0); };
+  const prepareCancelRef = useRef<HTMLButtonElement>(null);
+  const prepareRetryRef = useRef<HTMLButtonElement>(null);
+  const prepareCloseRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!preparing) return;
+    const timer = window.setTimeout(() => {
+      focusElement(preparing.error ? prepareRetryRef.current : prepareCancelRef.current);
+    }, 0);
+    const key = (event: KeyboardEvent) => {
+      const action = remoteAction(event.key, event.keyCode);
+      if (!action || action === 'ime-done' || action === 'ime-cancel') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (action === 'back') { onCancelPrepare?.(); return; }
+      if (action === 'enter') {
+        const active = document.activeElement;
+        if (active instanceof HTMLButtonElement) active.click();
+        return;
+      }
+      if (action === 'left' || action === 'right' || action === 'up' || action === 'down') {
+        if (!preparing.error) {
+          focusElement(prepareCancelRef.current);
+          return;
+        }
+        const active = document.activeElement;
+        if (active === prepareCloseRef.current) focusElement(prepareRetryRef.current);
+        else focusElement(prepareCloseRef.current);
+      }
+    };
+    document.addEventListener('keydown', key, true);
+    return () => { window.clearTimeout(timer); document.removeEventListener('keydown', key, true); };
+  }, [preparing?.error, preparing?.label, onCancelPrepare]);
+  const onBack = () => { if (preparing) { onCancelPrepare?.(); return; } if (updateConfirm) { closeUpdateConfirm(); return; } if (detail) { setDetail(null); window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(lastContent.current ? `[data-focus-key="${lastContent.current}"]` : '[data-focus-region="content"]')), 0); return; } if (menuOpen) { setMenuOpen(false); window.setTimeout(() => focusElement(lastContent.current ? document.querySelector<HTMLElement>(`[data-focus-key="${lastContent.current}"]`) : document.querySelector<HTMLElement>('[data-focus-region="content"]')), 0); return; } setMenuOpen(true); window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(`[data-menu-route="${route}"]`)), 0); };
   useTVNavigation({
     getInitialFocus: () => first.current || document.querySelector<HTMLElement>('[data-focus-region="content"]'), restoreKey: restoreFocus, onFocusKey: key => { onFocus(key); if (document.activeElement instanceof HTMLElement && document.activeElement.dataset.focusRegion === 'content') lastContent.current = key; }, onBack, onLongBack: exitApplication, onDirection: (direction, current) => {
       if (detail || updateConfirm) return false;
@@ -540,12 +594,29 @@ export function Catalog({ api, status, titles, facets, household, downloads, job
   const rows: Array<{ key: string; title: string; items: CatalogTitle[] }> = route === 'home' ? [
     { key: 'new', title: 'Recently added', items: titles.slice(0, 12) },
   ] : route === 'tracker' ? [{ key: 'tracker-new', title: 'Recently added', items: visible.slice(0, 6) }, { key: 'tracker-seeded', title: 'Strong swarms', items: [...visible].sort((a, b) => b.bestSeeders - a.bestSeeders).slice(0, 6) }] : ['continue', 'favorites', 'watched', 'library', 'downloads', 'library-categories', 'jobs', 'events', 'settings', 'categories'].includes(route) ? [] : [{ key: route, title: heading, items: visible.slice(0, 12) }];
-  if (detail) return <TitleDetail key={`${detail.title.id}:${detailTarget.season || 0}:${detailTarget.episode || 0}`} api={api} detail={detail} target={detailTarget} message={detailMessage} resume={resumeForTitle(household.continueWatching, detail.title.id)} favorite={favoriteIDs.has(detail.title.id)} onClose={onBack} onFavorite={onFavorite} onResume={item => onPlay(item.release, item.fileIndex, item.positionMs)} onPlay={onPlay} onPackAction={manageSeasonPack} />;
+  const preparingModal = preparing ? (
+    <section role="dialog" aria-modal="true" aria-labelledby="tv-prepare-heading" class="tv-settings tv-removal-confirm tv-prepare-confirm">
+      <h2 id="tv-prepare-heading">{preparing.error ? 'Could not start this download' : `Preparing from ${preparing.trackerName}`}</h2>
+      <strong class="release-name">{preparing.label}</strong>
+      {preparing.error ? <>
+        <p class="supporting">{preparing.trackerName}: {preparing.error}</p>
+        {preparing.hint && <p class="supporting">{preparing.hint}</p>}
+        <div class="tv-prepare-actions">
+          <button ref={prepareRetryRef} data-focus-region="prepare-dialog" data-focus-row="0" data-focus-col="0" data-focus-key="prepare-retry" onClick={onRetryPrepare}>Retry</button>
+          <button ref={prepareCloseRef} data-focus-region="prepare-dialog" data-focus-row="0" data-focus-col="1" data-focus-key="prepare-close" onClick={onCancelPrepare}>Close</button>
+        </div>
+      </> : <>
+        <p class="supporting">Reading {preparing.trackerName} metadata. Playback opens only when the server returns a download.</p>
+        <button ref={prepareCancelRef} data-focus-region="prepare-dialog" data-focus-row="0" data-focus-col="0" data-focus-key="prepare-cancel" onClick={onCancelPrepare}>Cancel</button>
+      </>}
+    </section>
+  ) : null;
+  if (detail) return <><TitleDetail key={`${detail.title.id}:${detailTarget.season || 0}:${detailTarget.episode || 0}`} api={api} detail={detail} target={detailTarget} message={detailMessage} resume={resumeForTitle(household.continueWatching, detail.title.id)} favorite={favoriteIDs.has(detail.title.id)} onClose={onBack} onFavorite={onFavorite} onResume={item => onPlay(item.release, item.fileIndex, item.positionMs)} onPlay={onPlay} onPackAction={manageSeasonPack} />{preparingModal}</>;
   return <div class={`tv-app ${menuOpen ? 'menu-open' : ''}`}>
     <aside class="tv-sidebar"><div class="tv-brand"><span>{appIdentity().monogram}</span><b>{appIdentity().name}</b></div>{menuGroups.map((group, groupIndex) => <div class="tv-menu-group">{group.label && <small>{group.label}</small>}{group.items.map((item, index) => <button data-menu-route={item.id} data-focus-region="sidebar" data-focus-row={groupIndex * 10 + index} data-focus-col="0" data-focus-key={`menu-${item.id}`} class={route === item.id ? 'active' : ''} onClick={() => chooseRoute(item.id)}><i>{item.icon}</i><span>{item.label}</span></button>)}</div>)}{portal && portal.links.length > 0 && <button data-menu-route="projects" data-focus-region="sidebar" data-focus-row={PROJECTS_MENU_ROW} data-focus-col="0" data-focus-key="menu-projects" class={route === 'projects' ? 'active' : ''} onClick={() => chooseRoute('projects')}><i>↗</i><span>Other projects</span></button>}</aside>
     <main class="tv-content">
       <header class="tv-top"><div><small>{route === 'home' ? 'PRIVATE SCREENING ARCHIVE' : appIdentity().name.toUpperCase()}</small><h1>{heading}</h1></div><span aria-live="polite">{status}</span><button data-focus-region="content" data-focus-row="0" data-focus-col="0" data-focus-key="header-retry" onClick={onRetry}>Refresh</button></header>
-      {route === 'search' && <div class="tv-search"><input readOnly data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="search-input" value={draftQuery} onInput={event => setDraftQuery(event.currentTarget.value)} placeholder="Search FileList; press OK to type" /><button data-focus-region="content" data-focus-row="1" data-focus-col="1" data-focus-key="search-submit" class="primary" disabled={searching} onClick={() => void submitSearch()}>{searching ? 'Searching…' : 'Search'}</button>{query && <button data-focus-region="content" data-focus-row="1" data-focus-col="2" data-focus-key="search-clear" onClick={() => { setDraftQuery(''); setQuery('') }}>Clear</button>}</div>}
+      {route === 'search' && <div class="tv-search"><input readOnly data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="search-input" value={draftQuery} onInput={event => setDraftQuery(event.currentTarget.value)} placeholder="Search titles; press OK to type" /><button data-focus-region="content" data-focus-row="1" data-focus-col="1" data-focus-key="search-submit" class="primary" disabled={searching} onClick={() => void submitSearch()}>{searching ? 'Searching…' : 'Search'}</button>{query && <button data-focus-region="content" data-focus-row="1" data-focus-col="2" data-focus-key="search-clear" onClick={() => { setDraftQuery(''); setQuery('') }}>Clear</button>}</div>}
       {['tracker', 'browse', 'categories', 'search'].includes(route) && <div class="tv-filters"><button data-focus-region="content" data-focus-row="2" data-focus-col="0" data-focus-key="sort-newest" class={sort === 'newest' ? 'active' : ''} onClick={() => setSort('newest')}>Newest</button><button data-focus-region="content" data-focus-row="2" data-focus-col="1" data-focus-key="sort-seeders" class={sort === 'seeders' ? 'active' : ''} onClick={() => setSort('seeders')}>Most seeded</button><button data-focus-region="content" data-focus-row="2" data-focus-col="2" data-focus-key="sort-rating" class={sort === 'rating' ? 'active' : ''} onClick={() => setSort('rating')}>Rating</button><button data-focus-region="content" data-focus-row="2" data-focus-col="3" data-focus-key="sort-title" class={sort === 'title' ? 'active' : ''} onClick={() => setSort('title')}>A–Z</button>{category && <button data-focus-region="content" data-focus-row="2" data-focus-col="4" data-focus-key="clear-category" onClick={() => setCategory('')}>Clear {category}</button>}</div>}
       {route === 'projects' ? <section class="tv-projects"><p class="tv-muted">Project sites published with this server. Press OK on a card to open it; the full address stays on the card.</p>{portal && portal.links.length > 0 ? portal.links.map((link, index) => <button class="tv-project" key={link.id} data-focus-region="content" data-focus-row={3 + index} data-focus-col="0" data-focus-key={`project-${link.id}`} onClick={() => openProjectLink(link)}><strong>{link.title}</strong>{link.description && <p>{link.description}</p>}<code>{link.url}</code></button>) : <div class="tv-empty"><h2>Nothing here yet</h2><p>No projects are published right now.</p></div>}{projectsMessage && <p class="focus-hint" aria-live="polite">{projectsMessage}</p>}</section> : route === 'settings' ? <TVSettings api={api} onChangeServer={onChangeServer} onForgetServer={onForgetServer} updateStatus={updateStatus} onUpdateStatus={onUpdateStatus} confirmOpen={updateConfirm} onConfirmOpen={openUpdateConfirm} onConfirmClose={closeUpdateConfirm} /> : route === 'events' ? <TVEvents api={api} /> : route === 'downloads' ? <TVDownloads items={downloads} onPlay={onPlayDownload} onManage={onManageDownload} /> : route === 'library-categories' ? <TVLibraryCategories api={api} onOpen={openLibraryItem} /> : route === 'jobs' ? <TVJobs api={api} items={jobs} /> : route === 'categories' ? <section class="tv-category-grid">{trackerCategories(facets).map((name, index) => <button data-focus-region="content" data-focus-row={3 + Math.floor(index / 4)} data-focus-col={index % 4} data-focus-key={`category-${name}`} onClick={() => { setCategory(name); setRoute('browse') }}><strong>{name}</strong><span>Browse titles</span></button>)}</section> : <>
         {route === 'home' && hero && <section class="tv-hero" style={hero.backdropUrl ? { backgroundImage: `linear-gradient(90deg,#090d10 3%,rgba(9,13,16,.82) 42%,rgba(9,13,16,.15)),url(${api.streamURL(hero.backdropUrl)})` } : undefined}><div><span class="eyebrow">{hero.kind === 'series' ? 'Series' : 'Movie'} · {hero.year || 'Year unknown'}</span><h2>{hero.title}</h2><p>{hero.overview || `${hero.sourceCount} available version${hero.sourceCount === 1 ? '' : 's'} · up to ${hero.bestSeeders} seeders`}</p><button ref={first} data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key={`hero-${hero.id}`} class="primary" onClick={() => void openTitle(hero)}>View versions</button></div></section>}
@@ -557,6 +628,7 @@ export function Catalog({ api, status, titles, facets, household, downloads, job
       </>}
     </main>
     {route === 'home' && promotionsVisible(portal) && <TVPromotions api={api} />}
+    {preparingModal}
   </div>;
 }
 
@@ -567,7 +639,7 @@ function HouseholdRail({ api, title, items, row, onOpen }: { api: API; title: st
     const progress = item.durationMs > 0 ? Math.max(0, Math.min(100, Math.round(item.positionMs / item.durationMs * 100))) : 0;
     const metadata = [item.catalog?.year, item.catalog?.resolutions?.[0], item.release.category].filter(Boolean).join(' · ');
     const status = item.watched ? 'Watched' : item.positionMs > 0 ? `${progress}% watched` : 'Ready to play';
-    return <button class="poster-card library-poster-card" data-focus-region="content" data-focus-row={row} data-focus-col={col} data-focus-key={`library-${item.titleId || item.catalog?.id || item.release.id}-${item.seasonNumber || 0}-${item.episodeNumber || 0}-${col}`} onClick={() => onOpen(item)}>{item.catalog?.posterUrl ? <img src={api.streamURL(item.catalog.posterUrl)} alt="" loading="lazy" /> : <div class="poster-fallback">{label.slice(0, 1)}</div>}<TVStateBadges state={item.catalog?.libraryState} /><div class="poster-copy"><strong>{label}</strong><span>{metadata || status}</span><small>{item.seasonNumber && item.episodeNumber ? `S${String(item.seasonNumber).padStart(2, '0')}E${String(item.episodeNumber).padStart(2, '0')} · ` : ''}{metadata ? status : item.filePath || item.release.name}</small></div>{item.positionMs > 0 && !item.watched && <i class="tv-card-progress" aria-label={`${progress}% watched`}><b style={{ width: `${progress}%` }} /></i>}</button>
+    return <button class="poster-card library-poster-card" data-focus-region="content" data-focus-row={row} data-focus-col={col} data-focus-key={`library-${item.titleId || item.catalog?.id || item.release.id}-${item.seasonNumber || 0}-${item.episodeNumber || 0}-${col}`} onClick={() => onOpen(item)}>{item.catalog?.posterUrl ? <img src={api.streamURL(item.catalog.posterUrl)} alt="" loading="lazy" /> : <div class="poster-fallback">{label.slice(0, 1)}</div>}<TVStateBadges state={item.catalog?.libraryState} /><div class="poster-copy"><strong>{label}</strong><span>{metadata || status}</span><small>{item.seasonNumber && item.episodeNumber ? `S${String(item.seasonNumber).padStart(2, '0')}E${String(item.episodeNumber).padStart(2, '0')} · ` : ''}{[item.release.trackerName, metadata ? status : item.filePath || item.release.name].filter(Boolean).join(' · ')}</small></div>{item.positionMs > 0 && !item.watched && <i class="tv-card-progress" aria-label={`${progress}% watched`}><b style={{ width: `${progress}%` }} /></i>}</button>
   })}</div></section>
 }
 
@@ -609,12 +681,12 @@ function TVDownloads({ items, onPlay, onManage }: { items: Download[]; onPlay: (
   const cycleSort = () => { const values: DownloadSort[] = ['recent', 'title', 'progress', 'size', 'speed']; const next = values[(values.indexOf(sort) + 1) % values.length]; setSort(next); setOrder(orderDownloadIDs(items, next)) };
   const runAction = async (download: Download, action: DownloadTransferAction) => { if (busyAction) return; setBusyAction(`${download.id}:${action}`); try { await onManage(download, action) } finally { setBusyAction('') } };
   const confirmRemoval = async () => { if (!pending || removing) return; setRemoving(true); try { await onManage(pending, 'remove'); setPending(null); window.setTimeout(() => focusElement(document.querySelector<HTMLElement>('[data-focus-key="downloads-search"]')), 0) } finally { setRemoving(false) } };
-  if (pending) return <section role="dialog" aria-modal="true" aria-labelledby="download-delete-heading" aria-describedby="download-delete-description" class="tv-settings tv-removal-confirm"><h2 id="download-delete-heading">Delete download?</h2><strong>{pending.releaseName || pending.filePath}</strong><p>Selected file: {pending.filePath}</p><p>{formatBytes(pending.sizeBytes)} · FileList release {pending.releaseId}</p><p id="download-delete-description">This removes the torrent from qBittorrent and permanently deletes its incomplete and downloaded files.</p><button ref={cancelButton} disabled={removing} data-focus-region="download-dialog" data-focus-row="1" data-focus-col="0" data-focus-key="download-cancel" onClick={closeConfirmation}>Cancel</button><button ref={confirmButton} disabled={removing} class="danger-button" data-focus-region="download-dialog" data-focus-row="2" data-focus-col="0" data-focus-key="download-confirm" onClick={() => void confirmRemoval()}>{removing ? 'Deleting…' : 'Delete download'}</button></section>;
+  if (pending) return <section role="dialog" aria-modal="true" aria-labelledby="download-delete-heading" aria-describedby="download-delete-description" class="tv-settings tv-removal-confirm"><h2 id="download-delete-heading">Delete download?</h2><strong>{pending.releaseName || pending.filePath}</strong><p>Selected file: {pending.filePath}</p><p>{formatBytes(pending.sizeBytes)} · {pending.trackerName} release {pending.releaseId}</p><p id="download-delete-description">This removes the torrent from qBittorrent and permanently deletes its incomplete and downloaded files.</p><button ref={cancelButton} disabled={removing} data-focus-region="download-dialog" data-focus-row="1" data-focus-col="0" data-focus-key="download-cancel" onClick={closeConfirmation}>Cancel</button><button ref={confirmButton} disabled={removing} class="danger-button" data-focus-region="download-dialog" data-focus-row="2" data-focus-col="0" data-focus-key="download-confirm" onClick={() => void confirmRemoval()}>{removing ? 'Deleting…' : 'Delete download'}</button></section>;
   const filterLabel = { all: 'All', streaming: 'Still downloading', complete: 'Downloaded', paused: 'Paused', errors: 'Needs attention' }[filter];
   const sortLabel = { recent: 'Recent', title: 'Title A–Z', progress: 'Progress', size: 'File size', speed: 'Speed' }[sort];
-  return <section class="tv-list tv-download-list"><h2>Application downloads</h2><div class="tv-filters tv-download-tools"><input readOnly data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="downloads-search" value={query} onInput={event => setQuery(event.currentTarget.value)} placeholder="Search downloads; press OK to type" /><button data-focus-region="content" data-focus-row="1" data-focus-col="1" data-focus-key="downloads-filter" onClick={() => cycle(filter, ['all', 'streaming', 'complete', 'paused', 'errors'], setFilter)}>Filter: {filterLabel}</button><button data-focus-region="content" data-focus-row="1" data-focus-col="2" data-focus-key="downloads-sort" onClick={cycleSort}>Sort: {sortLabel}</button></div><p class="tv-download-count" aria-live="polite">{visible.length} of {items.length} downloads shown</p>{visible.length === 0 ? <p>{items.length === 0 ? 'No managed downloads yet.' : 'No downloads match this search and filter.'}</p> : visible.map((download, index) => <article key={download.id} data-download-id={download.id} class="tv-download-row"><div><strong title={download.displayTitle || download.filePath}>{download.displayTitle || download.filePath}</strong><span class="tv-release-name" title={download.releaseName || download.filePath}>{download.releaseName || download.filePath}</span><span class={`tv-stream-mode ${download.playbackMode}`}>{download.playbackMode === 'progressive' ? 'Progressive stream' : 'Downloaded file'}</span><small>{[download.parsed?.resolution, download.parsed?.quality, download.parsed?.videoCodec, download.parsed?.audio, download.category].filter(Boolean).join(' · ') || 'Source details unavailable'}</small><small title={download.filePath}>Selected file: {download.filePath} · index {download.fileIndex} · {formatBytes(download.sizeBytes)}</small><small>Complete torrent: FileList release {download.releaseId} · {download.trackerSeeders ?? '—'} tracker seeders{download.releaseSizeBytes ? ` · ${formatBytes(download.releaseSizeBytes)} total` : ''}</small><span class="tv-download-telemetry">{download.state} · {(download.progress * 100).toFixed(1)}% · {formatBytes(download.downloadedBytes)} / {formatBytes(download.sizeBytes)} selected</span><small class="tv-download-telemetry">{formatBytes(download.speedBytesPerSecond)}/s · {download.seeds} connected seeds · {download.peers} peers</small><small class={`tv-download-error ${download.error ? 'visible' : ''}`}>{download.error || 'No download error'}</small></div><div><button data-focus-region="content" data-focus-row={2 + index} data-focus-col="0" data-focus-key={`download-${download.id}-play`} class="primary" onClick={() => onPlay(download)}>Play</button>{downloadTransferActions(download).map(item => <button key={item.action} disabled={busyAction.startsWith(download.id + ':')} data-focus-region="content" data-focus-row={2 + index} data-focus-col="1" data-focus-key={`download-${download.id}-${item.action}`} onClick={() => void runAction(download, item.action)}>{busyAction === download.id + ':' + item.action ? item.pendingLabel : item.label}</button>)}<button class="danger-button" data-focus-region="content" data-focus-row={2 + index} data-focus-col="2" data-focus-key={`download-${download.id}-delete`} onClick={() => setPending(download)}>Delete download</button></div></article>)}</section>
+  return <section class="tv-list tv-download-list"><h2>Application downloads</h2><div class="tv-filters tv-download-tools"><input readOnly data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="downloads-search" value={query} onInput={event => setQuery(event.currentTarget.value)} placeholder="Search downloads; press OK to type" /><button data-focus-region="content" data-focus-row="1" data-focus-col="1" data-focus-key="downloads-filter" onClick={() => cycle(filter, ['all', 'streaming', 'complete', 'paused', 'errors'], setFilter)}>Filter: {filterLabel}</button><button data-focus-region="content" data-focus-row="1" data-focus-col="2" data-focus-key="downloads-sort" onClick={cycleSort}>Sort: {sortLabel}</button></div><p class="tv-download-count" aria-live="polite">{visible.length} of {items.length} downloads shown</p>{visible.length === 0 ? <p>{items.length === 0 ? 'No managed downloads yet.' : 'No downloads match this search and filter.'}</p> : visible.map((download, index) => <article key={download.id} data-download-id={download.id} class="tv-download-row"><div><strong title={download.displayTitle || download.filePath}>{download.displayTitle || download.filePath}</strong><span class="tv-release-name" title={download.releaseName || download.filePath}>{download.releaseName || download.filePath}</span><span class={`tv-stream-mode ${download.playbackMode}`}>{download.playbackMode === 'progressive' ? 'Progressive stream' : 'Downloaded file'}</span><small>Tracker: {download.trackerName}</small><small>{[download.parsed?.resolution, download.parsed?.quality, download.parsed?.videoCodec, download.parsed?.audio, download.category].filter(Boolean).join(' · ') || 'Source details unavailable'}</small><small title={download.filePath}>Selected file: {download.filePath} · index {download.fileIndex} · {formatBytes(download.sizeBytes)}</small><small>Complete torrent: {download.trackerName} release {download.releaseId} · {download.trackerSeeders ?? '—'} tracker seeders{download.releaseSizeBytes ? ` · ${formatBytes(download.releaseSizeBytes)} total` : ''}</small><span class="tv-download-telemetry">{download.state} · {(download.progress * 100).toFixed(1)}% · {formatBytes(download.downloadedBytes)} / {formatBytes(download.sizeBytes)} selected</span><small class="tv-download-telemetry">{formatBytes(download.speedBytesPerSecond)}/s · {download.seeds} connected seeds · {download.peers} peers</small><small class={`tv-download-error ${download.error ? 'visible' : ''}`}>{download.error || 'No download error'}</small></div><div><button data-focus-region="content" data-focus-row={2 + index} data-focus-col="0" data-focus-key={`download-${download.id}-play`} class="primary" onClick={() => onPlay(download)}>Play</button>{downloadTransferActions(download).map(item => <button key={item.action} disabled={busyAction.startsWith(download.id + ':')} data-focus-region="content" data-focus-row={2 + index} data-focus-col="1" data-focus-key={`download-${download.id}-${item.action}`} onClick={() => void runAction(download, item.action)}>{busyAction === download.id + ':' + item.action ? item.pendingLabel : item.label}</button>)}<button class="danger-button" data-focus-region="content" data-focus-row={2 + index} data-focus-col="2" data-focus-key={`download-${download.id}-delete`} onClick={() => setPending(download)}>Delete download</button></div></article>)}</section>
 }
-function TVLibraryCategories({ api, onOpen }: { api: API; onOpen: (item: HouseholdItem) => void }) { const [categories, setCategories] = useState<LibraryCategory[]>([]); const [items, setItems] = useState<HouseholdItem[]>([]); const [selected, setSelected] = useState(''); const [message, setMessage] = useState('Loading library categories…'); useEffect(() => { api.libraryCategories().then(page => { setCategories(page.items as LibraryCategory[]); setMessage('') }).catch(error => setMessage(error.message)) }, []); async function open(name: string) { setSelected(name); setMessage('Loading category…'); try { const page = await api.libraryCategories(name); setItems(canonicalHouseholdItems(page.items as HouseholdItem[])); setMessage('') } catch (error) { setMessage((error as Error).message) } } if (selected) return <section><button data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="library-category-back" onClick={() => { setSelected(''); setItems([]) }}>All categories</button><div class="row-heading"><h2>{selected}</h2><span>{items.length} item{items.length === 1 ? '' : 's'}</span></div>{message && <p aria-live="polite">{message}</p>}<div class="tv-library-grid">{items.map((item, index) => <button class="poster-card" data-focus-region="content" data-focus-row={2 + Math.floor(index / 5)} data-focus-col={index % 5} data-focus-key={`library-item-${item.titleId || item.catalog?.id || item.release.id}`} onClick={() => onOpen(item)}>{item.catalog?.posterUrl ? <img src={api.streamURL(item.catalog.posterUrl)} alt="" loading="lazy" /> : <div class="poster-fallback">{(item.catalog?.title || item.release.name).slice(0, 1)}</div>}<TVStateBadges state={item.catalog?.libraryState} /><div class="poster-copy"><strong>{item.catalog?.title || item.release.name}</strong><span>{[item.catalog?.year, item.catalog?.resolutions?.[0], item.release.category].filter(Boolean).join(' · ')}</span><small>{item.seasonNumber && item.episodeNumber ? `S${String(item.seasonNumber).padStart(2, '0')}E${String(item.episodeNumber).padStart(2, '0')} · ` : ''}{item.watched ? 'Watched' : item.positionMs > 0 ? 'In progress' : `${item.release.seeders} seeders`}</small></div></button>)}</div>{items.length === 0 && !message && <p class="tv-muted">No media remains in this category.</p>}</section>; return <section class="tv-category-grid">{message && <p aria-live="polite">{message}</p>}{categories.map((category, index) => <button data-focus-region="content" data-focus-row={1 + Math.floor(index / 4)} data-focus-col={index % 4} data-focus-key={`library-category-${category.name}`} onClick={() => void open(category.name)}><strong>{category.name}</strong><span>{category.count} item{category.count === 1 ? '' : 's'}</span></button>)}</section> }
+function TVLibraryCategories({ api, onOpen }: { api: API; onOpen: (item: HouseholdItem) => void }) { const [categories, setCategories] = useState<LibraryCategory[]>([]); const [items, setItems] = useState<HouseholdItem[]>([]); const [selected, setSelected] = useState(''); const [message, setMessage] = useState('Loading library categories…'); useEffect(() => { api.libraryCategories().then(page => { setCategories(page.items as LibraryCategory[]); setMessage('') }).catch(error => setMessage(error.message)) }, []); async function open(name: string) { setSelected(name); setMessage('Loading category…'); try { const page = await api.libraryCategories(name); setItems(canonicalHouseholdItems(page.items as HouseholdItem[])); setMessage('') } catch (error) { setMessage((error as Error).message) } } if (selected) return <section><button data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="library-category-back" onClick={() => { setSelected(''); setItems([]) }}>All categories</button><div class="row-heading"><h2>{selected}</h2><span>{items.length} item{items.length === 1 ? '' : 's'}</span></div>{message && <p aria-live="polite">{message}</p>}<div class="tv-library-grid">{items.map((item, index) => <button class="poster-card" data-focus-region="content" data-focus-row={2 + Math.floor(index / 5)} data-focus-col={index % 5} data-focus-key={`library-item-${item.titleId || item.catalog?.id || item.release.id}`} onClick={() => onOpen(item)}>{item.catalog?.posterUrl ? <img src={api.streamURL(item.catalog.posterUrl)} alt="" loading="lazy" /> : <div class="poster-fallback">{(item.catalog?.title || item.release.name).slice(0, 1)}</div>}<TVStateBadges state={item.catalog?.libraryState} /><div class="poster-copy"><strong>{item.catalog?.title || item.release.name}</strong><span>{[item.catalog?.year, item.catalog?.resolutions?.[0], item.release.category].filter(Boolean).join(' · ')}</span><small>{item.seasonNumber && item.episodeNumber ? `S${String(item.seasonNumber).padStart(2, '0')}E${String(item.episodeNumber).padStart(2, '0')} · ` : ''}{[item.release.trackerName, item.watched ? 'Watched' : item.positionMs > 0 ? 'In progress' : `${item.release.seeders} seeders`].filter(Boolean).join(' · ')}</small></div></button>)}</div>{items.length === 0 && !message && <p class="tv-muted">No media remains in this category.</p>}</section>; return <section class="tv-category-grid">{message && <p aria-live="polite">{message}</p>}{categories.map((category, index) => <button data-focus-region="content" data-focus-row={1 + Math.floor(index / 4)} data-focus-col={index % 4} data-focus-key={`library-category-${category.name}`} onClick={() => void open(category.name)}><strong>{category.name}</strong><span>{category.count} item{category.count === 1 ? '' : 's'}</span></button>)}</section> }
 function TVJobs({ api, items: initial }: { api: API; items: Job[] }) {
   const [items, setItems] = useState(initial); const [query, setQuery] = useState(''); const [state, setState] = useState(''); const [kind, setKind] = useState(''); const [retryable, setRetryable] = useState(''); const [updatedHours, setUpdatedHours] = useState(''); const [cursor, setCursor] = useState(''); const [next, setNext] = useState<string | null>(null); const [history, setHistory] = useState<string[]>([]); const [message, setMessage] = useState(''); const [detail, setDetail] = useState<{ job: Job; logs: JobLog[]; next: string | null } | null>(null);
   async function load(target = '', remember = false) { try { const page = await api.jobs({ search: query, state, kind, retryable, updatedHours, pageSize: 12, cursor: target }); if (remember) setHistory(value => [...value, cursor]); setCursor(target); setItems(page.items); setNext(page.nextCursor) } catch (error) { setMessage((error as Error).message) } }
@@ -634,20 +706,52 @@ function TVJobDetail({ detail, onBack, onOlder }: { detail: { job: Job; logs: Jo
 
 function TVEvents({ api }: { api: API }) { const [message, setMessage] = useState(''); const [coverage, setCoverage] = useState<Record<string, unknown> | null>(null); useEffect(() => { api.call<Record<string, unknown>>('/catalog/status').then(setCoverage).catch(error => setMessage(error.message)) }, []); async function run(mode: 'latest' | 'rebuild') { try { const job = await api.syncCatalog(mode); setMessage(`${job.label} queued. Follow it on Jobs.`) } catch (error) { setMessage((error as Error).message) } } return <section class="tv-settings"><h2>Server events</h2>{coverage && <><p><strong>{Number(coverage.observedReleases).toLocaleString()}</strong> releases retained · <strong>{Number(coverage.discoverableReleases).toLocaleString()}</strong> currently seeded</p><p>{Number(coverage.hiddenZeroSeeders).toLocaleString()} zero-seeder releases are retained but hidden from discovery.</p></>}<p>Run the same safe catalog actions available in the browser.</p><button data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="event-latest" class="primary" onClick={() => void run('latest')}>Fetch latest data</button><button data-focus-region="content" data-focus-row="2" data-focus-col="0" data-focus-key="event-rebuild" onClick={() => void run('rebuild')}>Rebuild catalog cache</button><p aria-live="polite">{message}</p></section> }
 
+const TEST_NAMES: Record<string, string> = {
+  filelist: 'FileList',
+  qbittorrent: 'qBittorrent',
+  storage: 'storage',
+  tmdb: 'TMDB',
+  subdl: 'SubDL',
+  piratebay: 'Pirate Bay',
+};
+
 export function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, onUpdateStatus, confirmOpen, onConfirmOpen, onConfirmClose }: { api: API; onChangeServer: () => void; onForgetServer: () => void; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; confirmOpen: boolean; onConfirmOpen: () => void; onConfirmClose: () => void }) {
   const [value, setValue] = useState<Record<string, unknown> | null>(null); const [managed, setManaged] = useState<Set<string>>(new Set()); const [message, setMessage] = useState('Loading settings…');
+  const [trackers, setTrackers] = useState<TrackerStatus[] | null>(null);
   const [checking, setChecking] = useState(false); const [applying, setApplying] = useState(false); const [updateMessage, setUpdateMessage] = useState('');
   const settingsMounted = useRef(true);
   useEffect(() => () => { settingsMounted.current = false; }, []);
   const openReleaseLink = async (event: MouseEvent, url: string) => { event.preventDefault(); const launched = await openExternalURL(url); if (!settingsMounted.current) return; if (!launched) setUpdateMessage('Open this address on another device: ' + url); };
-  useEffect(() => { Promise.all([api.call<Record<string, unknown>>('/settings'), api.call<{ items: SettingsField[] }>('/settings/schema')]).then(([settings, schema]) => { setValue(settings); setManaged(new Set(schema.items.filter(field => field.readOnly).map(field => field.key))); setMessage('') }).catch(error => setMessage(error.message)) }, []);
+  const refreshTrackers = () => {
+    const promise = typeof api.trackers === 'function' ? api.trackers() : api.call<TrackerStatus[]>('/trackers');
+    return promise.then(list => { if (settingsMounted.current) setTrackers(Array.isArray(list) ? list : null); }).catch(() => { if (settingsMounted.current) setTrackers(null); });
+  };
+  useEffect(() => {
+    Promise.all([api.call<Record<string, unknown>>('/settings'), api.call<{ items: SettingsField[] }>('/settings/schema')]).then(([settings, schema]) => {
+      setValue(settings);
+      setManaged(new Set(schema.items.filter(field => field.readOnly).map(field => field.key)));
+      setMessage('');
+    }).catch(error => setMessage(error.message));
+    void refreshTrackers();
+  }, []);
   useEffect(() => {
     if (!updateStatus?.applying) return;
     const timer = window.setTimeout(() => focusElement(document.querySelector<HTMLElement>('[data-focus-key="update-check"]')), 0);
     return () => window.clearTimeout(timer);
   }, [updateStatus?.applying]);
-  async function save() { if (!value) return; const out = { ...value }; Object.keys(out).filter(key => key.endsWith('Configured') || key === 'settingsPath').forEach(key => delete out[key]); try { await api.call('/settings', { method: 'PUT', body: JSON.stringify(out) }); setMessage('Settings saved. Restart the server to apply worker-limit changes.') } catch (error) { setMessage((error as Error).message) } }
-  async function test(name: string) { setMessage(`Testing ${name}…`); try { const result = await api.call<{ message: string }>(`/dependencies/${name}/test`, { method: 'POST' }); setMessage(result.message) } catch (error) { setMessage((error as Error).message) } }
+  async function save() {
+    if (!value) return;
+    const out = { ...value };
+    Object.keys(out).filter(key => key.endsWith('Configured') || key === 'settingsPath').forEach(key => delete out[key]);
+    try {
+      await api.call('/settings', { method: 'PUT', body: JSON.stringify(out) });
+      setMessage('Settings saved. Restart the server to apply worker-limit changes.');
+      void refreshTrackers();
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  }
+  async function test(name: string) { setMessage(`Testing ${TEST_NAMES[name] || name}…`); try { const result = await api.call<{ message: string }>(`/dependencies/${name}/test`, { method: 'POST' }); setMessage(result.message) } catch (error) { setMessage((error as Error).message) } }
   async function checkUpdate() {
     if (checking) return;
     setChecking(true); setUpdateMessage('Checking for updates…');
@@ -665,6 +769,7 @@ export function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, 
       setUpdateMessage(outcome === 'conflict' ? `Update refused: ${(error as Error).message}` : `Update failed: ${(error as Error).message}`);
     } finally { setApplying(false); onConfirmClose() }
   }
+  const allDisabled = Boolean(trackers && trackers.length > 0 && trackers.every(item => !item.enabled));
   return <section class="tv-settings"><h2>Playback and connection</h2><p>API secrets and filesystem paths stay in browser Settings.</p>{value && <div class="tv-safe-fields">
     <label>Preferred audio language{managed.has('preferredAudioLanguage') && <small>Environment managed</small>}<input disabled={managed.has('preferredAudioLanguage')} data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="setting-audio-primary" value={String(value.preferredAudioLanguage || 'en')} onInput={event => setValue({ ...value, preferredAudioLanguage: event.currentTarget.value })} /></label>
     <label>Preferred subtitle language{managed.has('preferredSubtitleLanguage') && <small>Environment managed</small>}<input disabled={managed.has('preferredSubtitleLanguage')} data-focus-region="content" data-focus-row="2" data-focus-col="0" data-focus-key="setting-subtitle-primary" value={String(value.preferredSubtitleLanguage || '')} onInput={event => setValue({ ...value, preferredSubtitleLanguage: event.currentTarget.value })} /></label>
@@ -672,8 +777,17 @@ export function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, 
     <label>Watched threshold{managed.has('watchedThresholdPercent') && <small>Environment managed</small>}<input disabled={managed.has('watchedThresholdPercent')} type="number" data-focus-region="content" data-focus-row="4" data-focus-col="0" data-focus-key="setting-watched" value={String(value.watchedThresholdPercent || 90)} onInput={event => setValue({ ...value, watchedThresholdPercent: Number(event.currentTarget.value) })} /></label>
     <label>Concurrent background jobs{managed.has('maxConcurrentJobs') && <small>Environment managed</small>}<input disabled={managed.has('maxConcurrentJobs')} type="number" min="1" max="20" data-focus-region="content" data-focus-row="5" data-focus-col="0" data-focus-key="setting-workers" value={String(value.maxConcurrentJobs || 10)} onInput={event => setValue({ ...value, maxConcurrentJobs: Number(event.currentTarget.value) })} /></label>
     <label>Title refresh timeout (minutes){managed.has('titleRefreshTimeoutMinutes') && <small>Environment managed</small>}<input disabled={managed.has('titleRefreshTimeoutMinutes')} type="number" min="5" max="120" data-focus-region="content" data-focus-row="6" data-focus-col="0" data-focus-key="setting-title-timeout" value={String(value.titleRefreshTimeoutMinutes || 30)} onInput={event => setValue({ ...value, titleRefreshTimeoutMinutes: Number(event.currentTarget.value) })} /></label>
-    <button class="primary" data-focus-region="content" data-focus-row="7" data-focus-col="0" data-focus-key="settings-save" onClick={() => void save()}>Save preferences</button>
-  </div>}<div class="tv-test-buttons">{['filelist', 'qbittorrent', 'storage', 'tmdb', 'subdl'].map((name, index) => <button data-focus-region="content" data-focus-row={8 + index} data-focus-col="0" data-focus-key={`test-${name}`} onClick={() => void test(name)}>Test {name}</button>)}</div><button data-focus-region="content" data-focus-row="14" data-focus-col="0" data-focus-key="change-server" onClick={onChangeServer}>Change server address</button><button data-focus-region="content" data-focus-row="15" data-focus-col="0" data-focus-key="forget-server" onClick={onForgetServer}>Forget this server</button>
+    <div class="tv-tracker-controls">
+      <h3>Trackers</h3>
+      <p class="tv-muted">Turning a tracker off hides its discovery. Existing downloads stay listed and playable.</p>
+      <button class={`tv-tracker-toggle ${value.fileListEnabled ? 'active' : ''}`} disabled={managed.has('fileListEnabled')} data-focus-region="content" data-focus-row="7" data-focus-col="0" data-focus-key="setting-filelist-enabled" aria-pressed={Boolean(value.fileListEnabled)} onClick={() => setValue({ ...value, fileListEnabled: !value.fileListEnabled })}>FileList: {value.fileListEnabled ? 'On' : 'Off'}{managed.has('fileListEnabled') && <small> · Environment managed</small>}</button>
+      <button class={`tv-tracker-toggle ${value.pirateBayEnabled ? 'active' : ''}`} disabled={managed.has('pirateBayEnabled')} data-focus-region="content" data-focus-row="8" data-focus-col="0" data-focus-key="setting-piratebay-enabled" aria-pressed={Boolean(value.pirateBayEnabled)} onClick={() => setValue({ ...value, pirateBayEnabled: !value.pirateBayEnabled })}>The Pirate Bay: {value.pirateBayEnabled ? 'On' : 'Off'}{managed.has('pirateBayEnabled') && <small> · Environment managed</small>}</button>
+      <div class="tv-tracker-readiness">{trackers === null ? <span class="tv-tracker-chip disabled">Trackers unavailable</span> : trackers.map(t => <span key={t.id} class={`tv-tracker-chip ${!t.enabled ? 'disabled' : t.configured ? 'ready' : 'setup'}`}>{t.name} · {!t.enabled ? 'disabled' : t.configured ? 'ready' : 'needs setup'}</span>)}{allDisabled && <span class="tv-tracker-zero-note">Zero trackers enabled; Downloads remain reachable.</span>}</div>
+      <label>The Pirate Bay website URL{managed.has('pirateBayWebsiteUrl') && <small>Environment managed</small>}<input disabled={managed.has('pirateBayWebsiteUrl')} data-focus-region="content" data-focus-row="9" data-focus-col="0" data-focus-key="setting-piratebay-website" value={String(value.pirateBayWebsiteUrl || '')} onInput={event => setValue({ ...value, pirateBayWebsiteUrl: event.currentTarget.value })} /></label>
+      <label>The Pirate Bay API URL (advanced){managed.has('pirateBayApiUrl') && <small>Environment managed</small>}<input disabled={managed.has('pirateBayApiUrl')} data-focus-region="content" data-focus-row="10" data-focus-col="0" data-focus-key="setting-piratebay-api" value={String(value.pirateBayApiUrl || '')} onInput={event => setValue({ ...value, pirateBayApiUrl: event.currentTarget.value })} /></label>
+    </div>
+    <button class="primary" data-focus-region="content" data-focus-row={SETTINGS_SAVE_ROW} data-focus-col="0" data-focus-key="settings-save" onClick={() => void save()}>Save preferences</button>
+  </div>}<div class="tv-test-buttons">{['filelist', 'qbittorrent', 'storage', 'tmdb', 'subdl', 'piratebay'].map((name, index) => <button data-focus-region="content" data-focus-row={SETTINGS_TEST_FIRST_ROW + index} data-focus-col="0" data-focus-key={`test-${name}`} onClick={() => void test(name)}>Test {TEST_NAMES[name] || name}</button>)}</div><button data-focus-region="content" data-focus-row={SETTINGS_CHANGE_SERVER_ROW} data-focus-col="0" data-focus-key="change-server" onClick={onChangeServer}>Change server address</button><button data-focus-region="content" data-focus-row={SETTINGS_FORGET_SERVER_ROW} data-focus-col="0" data-focus-key="forget-server" onClick={onForgetServer}>Forget this server</button>
     {updateStatus && <div class="tv-update-panel"><p>Server version {updateStatus.currentVersion}{updateStatus.applying ? ' · installing an update' : ''}</p>{updateNoticeVisible(updateStatus) && <div class="tv-update-notice"><strong>{updateStatus.available ? `Version ${updateStatus.latest} is available.` : 'This server updates only by hand.'}</strong><p>Updates install on the server machine and interrupt playback on every connected player; this TV installs nothing itself.</p><a href={updateStatus.releasesUrl} onClick={event => void openReleaseLink(event, updateStatus.releasesUrl)}>{updateStatus.releasesUrl}</a></div>}</div>}
     <button data-focus-region="content" data-focus-row={UPDATE_CHECK_ROW} data-focus-col="0" data-focus-key="update-check" disabled={checking} onClick={() => void checkUpdate()}>{checking ? 'Checking…' : 'Check for server updates'}</button>
     <button data-focus-region="content" data-focus-row={UPDATE_APPLY_ROW} data-focus-col="0" data-focus-key="update-apply" disabled={updateApplyDisabled(updateStatus, applying)} onClick={onConfirmOpen}>{updateStatus?.applying || applying ? 'Installing…' : 'Install server update'}</button>
@@ -717,11 +831,11 @@ function TVPromotions({ api }: { api: API }) {
 }
 
 function TitleCard({ api, title, row, col, focusRef, onOpen }: { api: API; title: CatalogTitle; row: number; col: number; focusRef?: { current: HTMLButtonElement | null }; onOpen: () => void }) {
-  return <button ref={focusRef} class="poster-card" data-focus-region="content" data-focus-row={row} data-focus-col={col} data-focus-key={`title-${title.id}`} onClick={onOpen}>{title.posterUrl ? <img src={api.streamURL(title.posterUrl)} alt="" loading="lazy" /> : <div class="poster-fallback">{title.title.slice(0, 1)}</div>}<TVStateBadges state={title.libraryState} /><div class="poster-copy"><strong>{title.title}</strong><span>{title.year || '—'} · {title.resolutions[0] || title.kind}{title.ratingVotes ? ` · ★ ${title.rating?.toFixed(1)}` : ''}</span><small>{title.bestSeeders} seeders · {title.sourceCount} source{title.sourceCount === 1 ? '' : 's'}</small></div></button>;
+  return <button ref={focusRef} class="poster-card" data-focus-region="content" data-focus-row={row} data-focus-col={col} data-focus-key={`title-${title.id}`} onClick={onOpen}>{title.posterUrl ? <img src={api.streamURL(title.posterUrl)} alt="" loading="lazy" /> : <div class="poster-fallback">{title.title.slice(0, 1)}</div>}<TVStateBadges state={title.libraryState} /><div class="poster-copy"><strong>{title.title}</strong><span>{title.year || '—'} · {title.resolutions[0] || title.kind}{title.ratingVotes ? ` · ★ ${title.rating?.toFixed(1)}` : ''}</span>{title.trackers && title.trackers.length > 0 && <small class="tracker-names">{title.trackers.map(t => t.name).join(' · ')}</small>}<small>{title.bestSeeders} seeders · {title.sourceCount} source{title.sourceCount === 1 ? '' : 's'}</small></div></button>;
 }
 
 function sourceActionLabel(source: CatalogSource) { return source.libraryState?.downloadState && source.libraryState.downloadState !== 'none' ? 'Play' : 'Play and download' }
-function SourceButton({ source, row, onPlay }: { source: CatalogSource; row: number; onPlay: (release: Release, fileIndex?: number) => void }) { return <button class="source-button" data-focus-region="content" data-focus-row={row} data-focus-col="0" data-focus-key={`source-${source.release.id}-${source.fileIndex ?? -1}`} onClick={() => onPlay(source.release, source.fileIndex)}><span class="source-copy"><strong>{source.parsed.resolution || 'Source'}{source.parsed.hdr ? ` · ${source.parsed.hdr}` : ''}</strong><small class="source-filename">{source.filePath || source.release.name}</small><small>{source.parsed.quality || source.release.category} · {source.parsed.videoCodec || 'codec unknown'}</small></span><span class="source-action"><TVStateBadges state={source.libraryState} /><b class="source-action-label">{sourceActionLabel(source)}</b><small>{formatBytes(source.fileSizeBytes || source.release.sizeBytes)} · {source.release.seeders} seeders</small></span></button> }
+function SourceButton({ source, row, onPlay }: { source: CatalogSource; row: number; onPlay: (release: Release, fileIndex?: number) => void }) { return <button class="source-button" data-focus-region="content" data-focus-row={row} data-focus-col="0" data-focus-key={`source-${source.release.id}-${source.fileIndex ?? -1}`} onClick={() => onPlay(source.release, source.fileIndex)}><span class="source-copy"><strong>{source.parsed.resolution || 'Source'}{source.parsed.hdr ? ` · ${source.parsed.hdr}` : ''}</strong><small class="source-filename">{source.filePath || source.release.name}</small><small>{source.parsed.quality || source.release.category} · {source.parsed.videoCodec || 'codec unknown'}</small><small>Tracker: {source.release.trackerName}</small></span><span class="source-action"><TVStateBadges state={source.libraryState} /><b class="source-action-label">{sourceActionLabel(source)}</b><small>{formatBytes(source.fileSizeBytes || source.release.sizeBytes)} · {source.release.seeders} seeders</small></span></button> }
 
 type SeasonPackAction = 'download' | 'pause' | 'resume' | 'retry' | 'delete';
 function TVSeasonPackCard({ source, season, index, open, onToggle, onAction, onDelete }: { source: CatalogSource; season: number; index: number; open: boolean; onToggle: () => void; onAction: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onDelete: () => void }) {
@@ -729,7 +843,7 @@ function TVSeasonPackCard({ source, season, index, open, onToggle, onAction, onD
   const run = async (action: SeasonPackAction) => { if (busy) return; setBusy(action); try { await onAction(source, season, action) } finally { setBusy('') } };
   return <article class={`season-pack-card ${open ? 'expanded' : ''}`}>
     <button class="season-pack-button" data-focus-region="content" data-focus-row="3" data-focus-col={index} data-focus-key={`season-pack-${source.release.id}`} aria-expanded={open} aria-controls={`tv-pack-${source.release.id}`} onClick={onToggle} aria-label={`${source.parsed.resolution || 'Season pack'} · ${seasonPackActionLabel(state)} · ${open ? 'hide' : 'show'} controls`}>
-      <span class="season-pack-copy"><strong>{source.parsed.resolution || 'Season pack'}{source.parsed.hdr ? ` · ${source.parsed.hdr}` : ''}</strong><small class="source-filename">{source.release.name}</small><small>{[source.parsed.quality, source.parsed.videoCodec, source.parsed.audio].filter(Boolean).join(' · ') || 'Source details unavailable'}</small></span>
+      <span class="season-pack-copy"><strong>{source.parsed.resolution || 'Season pack'}{source.parsed.hdr ? ` · ${source.parsed.hdr}` : ''}</strong><small class="source-filename">{source.release.name}</small><small>{[source.parsed.quality, source.parsed.videoCodec, source.parsed.audio].filter(Boolean).join(' · ') || 'Source details unavailable'}</small><small>Tracker: {source.release.trackerName}</small></span>
       <span class="season-pack-action"><TVStateBadges state={state} /><b>{seasonPackActionLabel(state)}</b><small>{formatBytes(source.release.sizeBytes)} · {source.release.seeders} seeders</small><small>{open ? 'Hide controls' : 'Show controls'}</small></span>
     </button>
     {open && <div id={`tv-pack-${source.release.id}`} class="season-pack-controls"><progress value={state?.progress || 0} max="1" aria-label="Season download progress" />{!managed && <button class="primary" disabled={Boolean(busy)} data-focus-region="content" data-focus-row="4" data-focus-col="0" data-focus-key={`season-pack-${source.release.id}-download`} onClick={() => void run('download')}>{busy ? 'Starting…' : 'Download season'}</button>}{managed && !complete && !error && <button disabled={Boolean(busy)} data-focus-region="content" data-focus-row="4" data-focus-col="0" data-focus-key={`season-pack-${source.release.id}-toggle`} onClick={() => void run(paused ? 'resume' : 'pause')}>{busy ? `${paused ? 'Resuming' : 'Pausing'}…` : paused ? 'Resume' : 'Pause'}</button>}{error && <button class="primary" disabled={Boolean(busy)} data-focus-region="content" data-focus-row="4" data-focus-col="0" data-focus-key={`season-pack-${source.release.id}-retry`} onClick={() => void run('retry')}>{busy ? 'Retrying…' : 'Retry'}</button>}{managed && <button class="danger-button" disabled={Boolean(busy)} data-focus-region="content" data-focus-row="4" data-focus-col="1" data-focus-key={`season-pack-${source.release.id}-delete`} onClick={onDelete}>Delete download</button>}</div>}
@@ -753,6 +867,7 @@ function TitleDetail({ api, detail, target, message, resume, favorite, onClose, 
     <div class="detail-copy">
       <h1>{detail.title.title}</h1>
       <p class="detail-meta">{detail.title.kind} · {detail.title.year || 'Year unknown'}</p>
+      {detail.title.trackers && detail.title.trackers.length > 0 && <p class="detail-meta tracker-names">{detail.title.trackers.map(t => t.name).join(' · ')}</p>}
       <TVStateBadges state={detail.title.libraryState} />
       <p>{detail.title.overview || 'Choose the version that best matches your display and connection.'}</p>
       <div class="detail-actions">
@@ -784,7 +899,7 @@ function TitleDetail({ api, detail, target, message, resume, favorite, onClose, 
       })}
     </section>}
     {detail.seasons.length === 0 && <section class="source-list"><h2>Available versions</h2>{detail.sources.map((source, index) => <SourceButton key={`${source.release.id}:${source.fileIndex ?? -1}`} source={source} row={2 + index} onPlay={onPlay} />)}</section>}
-    {pendingPack && <section role="dialog" aria-modal="true" aria-labelledby="tv-season-pack-delete-heading" class="tv-settings tv-removal-confirm tv-season-pack-confirm"><h2 id="tv-season-pack-delete-heading">Delete season download?</h2><strong>{pendingPack.release.name}</strong><p>This removes the shared season torrent from qBittorrent and permanently deletes every episode file in it.</p><button disabled={deleting} data-focus-region="season-pack-dialog" data-focus-row="0" data-focus-col="0" data-focus-key="season-pack-delete-cancel" onClick={() => setPendingPack(null)}>Cancel</button><button disabled={deleting} class="danger-button" data-focus-region="season-pack-dialog" data-focus-row="1" data-focus-col="0" data-focus-key="season-pack-delete-confirm" onClick={() => void confirmDelete()}>{deleting ? 'Deleting…' : 'Delete download'}</button></section>}
+    {pendingPack && <section role="dialog" aria-modal="true" aria-labelledby="tv-season-pack-delete-heading" class="tv-settings tv-removal-confirm tv-season-pack-confirm"><h2 id="tv-season-pack-delete-heading">Delete season download?</h2><strong>{pendingPack.release.name}</strong><p>Tracker: {pendingPack.release.trackerName}</p><p>This removes the shared season torrent from qBittorrent and permanently deletes every episode file in it.</p><button disabled={deleting} data-focus-region="season-pack-dialog" data-focus-row="0" data-focus-col="0" data-focus-key="season-pack-delete-cancel" onClick={() => setPendingPack(null)}>Cancel</button><button disabled={deleting} class="danger-button" data-focus-region="season-pack-dialog" data-focus-row="1" data-focus-col="0" data-focus-key="season-pack-delete-confirm" onClick={() => void confirmDelete()}>{deleting ? 'Deleting…' : 'Delete download'}</button></section>}
   </main>;
 }
 
@@ -800,16 +915,121 @@ export function App() {
   const [status, setStatus] = useState('');
   const [portal, setPortal] = useState<PortalState | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  type PrepareAttempt =
+    | { kind: 'source'; release: Release; fileIndex: number; resumeMs: number }
+    | { kind: 'season'; source: CatalogSource; season: number };
   const [player, setPlayer] = useState<{ download: Download; resumeMs: number; preferences?: PlaybackPreferences } | null>(null);
+  const [preparing, setPreparing] = useState<TVPreparingState | null>(null);
+  const prepareAttempt = useRef<PrepareAttempt | null>(null);
+  const prepareToken = useRef(0);
+  const prepareController = useRef<AbortController | null>(null);
+  const prepareOriginKey = useRef<string | null>(null);
   const catalogFocus = useRef<string | null>(null);
   const viewportInput = useRef(0);
   const loadState = async (client = api) => { if (client) try { setHousehold(await client.state()); } catch (error) { setStatus((error as Error).message); } };
   async function connect(url = draft) { setStatus('Connecting…'); try { const normalized = normalizeServerURL(url); const client = new API(normalized); const info = await client.info(); const [titlePage, catalogFacets, downloadPage, jobPage] = await Promise.all([client.titles({ pageSize: 12, sort: 'newest' }), client.facets(), client.downloads().catch(() => ({ items: [], nextCursor: null, total: 0 })), client.jobs({ pageSize: 24 }).catch(() => ({ items: [], nextCursor: null, total: 0 }))]); localStorage.setItem(STORAGE, normalized); setServer(normalized); setDraft(normalized); setAPI(client); setStatus(`${info.instanceName || info.name} ${info.version}`); setTitles(titlePage.items); setFacets(catalogFacets); void client.ensureMetadata(titlePage.items.map(item => item.id)); } catch (error) { setStatus((error as Error).message); } }
-  async function play(release: Release, fileIndex = -1, resumeMs = 0) { if (!api) return; setStatus('Preparing source…'); try { const download = await api.prepare(release.id, fileIndex); if (!resumeMs) resumeMs = await api.playback(download.id).then(value => value.watched ? 0 : value.positionMs).catch(() => 0); setPlayer({ download, resumeMs }); } catch (error) { setStatus((error as Error).message); } }
+  async function runPrepare(attempt: PrepareAttempt) {
+    if (!api) return;
+    prepareAttempt.current = attempt;
+    const token = ++prepareToken.current;
+    const capabilities = detectCapabilities();
+    const controller = capabilities.supportsAbortController ? new AbortController() : null;
+    prepareController.current = controller;
+    if (!prepareOriginKey.current && document.activeElement instanceof HTMLElement) {
+      prepareOriginKey.current = document.activeElement.dataset.focusKey || null;
+    }
+    const label = attempt.kind === 'source' ? (attempt.release.name || 'Selected version') : `Season ${attempt.season} · ${attempt.source.release.name}`;
+    setPreparing({ trackerName: attempt.kind === 'source' ? attempt.release.trackerName : attempt.source.release.trackerName, label });
+    try {
+      if (attempt.kind === 'source') {
+        const download = await api.prepare(attempt.release.id, attempt.fileIndex, controller?.signal);
+        if (token !== prepareToken.current) return;
+        prepareController.current = null;
+        prepareAttempt.current = null;
+        prepareOriginKey.current = null;
+        setPreparing(null);
+        let resumeMs = attempt.resumeMs;
+        if (!resumeMs) {
+          resumeMs = await api.playback(download.id).then(v => v.watched ? 0 : v.positionMs).catch(() => 0);
+        }
+        setPlayer({ download, resumeMs });
+      } else {
+        await api.prepareSeason(attempt.source.release.id, attempt.season, controller?.signal);
+        if (token !== prepareToken.current) return;
+        prepareController.current = null;
+        prepareAttempt.current = null;
+        const origin = prepareOriginKey.current;
+        prepareOriginKey.current = null;
+        setPreparing(null);
+        await refreshDownloads();
+        setStatus(`Season ${attempt.season} added to Downloads.`);
+        if (origin) window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(origin)}"]`)), 0);
+      }
+    } catch (error) {
+      if (token !== prepareToken.current) return;
+      prepareController.current = null;
+      const err = error as Error & { status?: number };
+      const canceled = controller?.signal.aborted === true || err.name === 'AbortError';
+      if (canceled) {
+        const origin = prepareOriginKey.current;
+        prepareAttempt.current = null;
+        prepareOriginKey.current = null;
+        setPreparing(null);
+        if (origin) window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(origin)}"]`)), 0);
+        return;
+      }
+      let hint = '';
+      if (err.status === 409) {
+        hint = 'Check tracker settings or choose another available version.';
+      } else if (err.status === 504) {
+        hint = 'Metadata search timed out. Check the swarm health or try again.';
+      }
+      setPreparing(current => current ? { ...current, error: err.message, hint } : current);
+    }
+  }
+  function cancelPrepare() {
+    prepareToken.current++;
+    try { prepareController.current?.abort(); } catch { }
+    prepareController.current = null;
+    prepareAttempt.current = null;
+    const origin = prepareOriginKey.current;
+    prepareOriginKey.current = null;
+    setPreparing(null);
+    if (origin) window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(origin)}"]`) || document.querySelector<HTMLElement>('[data-focus-region="content"]')), 0);
+  }
+  function retryPrepare() {
+    const attempt = prepareAttempt.current;
+    if (attempt) void runPrepare(attempt);
+  }
+  async function play(release: Release, fileIndex = -1, resumeMs = 0) {
+    if (!api) return;
+    prepareOriginKey.current = document.activeElement instanceof HTMLElement ? document.activeElement.dataset.focusKey || null : null;
+    await runPrepare({ kind: 'source', release, fileIndex, resumeMs });
+  }
   async function favorite(title: CatalogTitle, value: boolean) { if (!api) return; try { await api.titleFavorite(title.id, value); await loadState(); } catch (error) { setStatus((error as Error).message); } }
   const refreshDownloads = async () => { if (!api) return; const anchor = captureTVDownloadAnchor(); const inputVersion = viewportInput.current; try { const incoming = (await api.downloads()).items; setDownloads(current => reconcileDownloads(current, incoming)); window.requestAnimationFrame(() => { if (inputVersion === viewportInput.current) restoreTVDownloadAnchor(anchor) }) } catch (error) { setStatus((error as Error).message) } };
-  async function downloadSeason(source: CatalogSource, season: number) { if (!api) throw new Error('Server is not connected.'); setStatus(`Starting season ${season}…`); try { await api.prepareSeason(source.release.id, season); await refreshDownloads(); setStatus(`Season ${season} added to Downloads.`) } catch (error) { setStatus((error as Error).message); throw error } }
-  async function manageSeasonPack(source: CatalogSource, season: number, action: SeasonPackAction) { if (!api) throw new Error('Server is not connected.'); if (action === 'download' || (action === 'retry' && !source.libraryState?.downloadId)) { await downloadSeason(source, season); return } const id = source.libraryState?.downloadId; if (!id) throw new Error('This season download is not registered yet. Refresh the title and try again.'); try { if (action === 'delete') await api.deleteDownload(id); else await api.call(`/downloads/${encodeURIComponent(id)}/${action}`, { method: 'POST' }); await refreshDownloads() } catch (error) { setStatus((error as Error).message); throw error } }
+  async function downloadSeason(source: CatalogSource, season: number) {
+    if (!api) throw new Error('Server is not connected.');
+    prepareOriginKey.current = document.activeElement instanceof HTMLElement ? document.activeElement.dataset.focusKey || null : null;
+    await runPrepare({ kind: 'season', source, season });
+  }
+  async function manageSeasonPack(source: CatalogSource, season: number, action: SeasonPackAction) {
+    if (!api) throw new Error('Server is not connected.');
+    if (action === 'download' || (action === 'retry' && !source.libraryState?.downloadId)) {
+      await downloadSeason(source, season);
+      return;
+    }
+    const id = source.libraryState?.downloadId;
+    if (!id) throw new Error('This season download is not registered yet. Refresh the title and try again.');
+    try {
+      if (action === 'delete') await api.deleteDownload(id);
+      else await api.call(`/downloads/${encodeURIComponent(id)}/${action}`, { method: 'POST' });
+      await refreshDownloads();
+    } catch (error) {
+      setStatus((error as Error).message);
+      throw error;
+    }
+  }
   async function advanceEpisode(preferences: PlaybackPreferences) { if (!api || !player) return; try { const next = await api.nextEpisode(player.download.id); await Promise.all([loadState(), refreshDownloads()]); if (next) setPlayer({ download: next, resumeMs: 0, preferences: { ...preferences, sourceId: next.id, subtitleMode: preferences.subtitleMode === 'off' ? 'off' : 'auto', subtitleProvider: '', subtitleCandidateId: '' } }); else setPlayer(null) } catch (error) { setStatus(`Could not start the next episode: ${(error as Error).message}`); setPlayer(null) } }
   async function manageDownload(download: Download, action: string) { if (!api) throw new Error('Server is not connected.'); try { if (action === 'remove') await api.deleteDownload(download.id); else await api.call(`/downloads/${encodeURIComponent(download.id)}/${action}`, { method: 'POST' }); const incoming = (await api.downloads()).items; setDownloads(current => reconcileDownloads(current, incoming)); } catch (error) { setStatus((error as Error).message); throw error } }
   useEffect(() => { registerMediaKeys(); if (server) void connect(server); }, []);
@@ -889,7 +1109,7 @@ export function App() {
   }, [api]);
   if (player && api) return <Player key={player.download.id} api={api} download={player.download} resumeMs={player.resumeMs} preferences={player.preferences} onStateChanged={() => loadState()} onComplete={advanceEpisode} onClose={() => setPlayer(null)} />;
   if (!api) return <Setup draft={draft} server={server} status={status} onDraft={setDraft} onConnect={url => void connect(url)} onForget={() => { localStorage.removeItem(STORAGE); setServer(''); setDraft(''); setStatus('Saved server forgotten.') }} />;
-  return <Catalog api={api} status={status} titles={titles} facets={facets} household={household} downloads={downloads} jobs={jobs} restoreFocus={catalogFocus.current} portal={portal} updateStatus={updateStatus} onUpdateStatus={setUpdateStatus} onFocus={key => { catalogFocus.current = key; }} onRetry={() => void connect(server)} onChangeServer={() => setAPI(null)} onForgetServer={() => { localStorage.removeItem(STORAGE); setAPI(null); setServer(''); setDraft(''); }} onPlay={play} onPlayDownload={download => void api.playback(download.id).then(value => setPlayer({ download, resumeMs: value.watched ? 0 : value.positionMs })).catch(() => setPlayer({ download, resumeMs: 0 }))} onManageDownload={manageDownload} onManageSeasonPack={manageSeasonPack} onRefreshDownloads={refreshDownloads} onFavorite={favorite} />;
+  return <Catalog api={api} status={status} titles={titles} facets={facets} household={household} downloads={downloads} jobs={jobs} restoreFocus={catalogFocus.current} portal={portal} updateStatus={updateStatus} onUpdateStatus={setUpdateStatus} onFocus={key => { catalogFocus.current = key; }} onRetry={() => void connect(server)} onChangeServer={() => { cancelPrepare(); setAPI(null); }} onForgetServer={() => { cancelPrepare(); localStorage.removeItem(STORAGE); setAPI(null); setServer(''); setDraft(''); }} onPlay={play} onPlayDownload={download => void api.playback(download.id).then(value => setPlayer({ download, resumeMs: value.watched ? 0 : value.positionMs })).catch(() => setPlayer({ download, resumeMs: 0 }))} onManageDownload={manageDownload} onManageSeasonPack={manageSeasonPack} onRefreshDownloads={refreshDownloads} onFavorite={favorite} preparing={preparing} onCancelPrepare={cancelPrepare} onRetryPrepare={retryPrepare} />;
 }
 
 try {

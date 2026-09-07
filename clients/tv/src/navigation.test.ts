@@ -4,7 +4,7 @@ import { useRef } from 'preact/hooks';
 import { describe, expect, it, vi } from 'vitest';
 import { chooseDirectionalTarget, chooseStructuredTarget, RectLike, remoteAction, useTVNavigation } from './navigation';
 import type { TVPlatformHooks } from './platform';
-import { PROJECTS_MENU_ROW, UPDATE_DIALOG_REGION } from './portal';
+import { PROJECTS_MENU_ROW, SETTINGS_CHANGE_SERVER_ROW, SETTINGS_FORGET_SERVER_ROW, SETTINGS_SAVE_ROW, SETTINGS_TEST_FIRST_ROW, UPDATE_APPLY_ROW, UPDATE_CHECK_ROW, UPDATE_DIALOG_REGION } from './portal';
 
 const rect = (left: number, top: number, width = 100, height = 100): RectLike => ({ left, top, right: left + width, bottom: top + height, width, height });
 
@@ -90,10 +90,11 @@ describe('remoteAction', () => {
 
 describe('TVSettings update rows', () => {
   const control = (row: number) => ({ dataset: { focusRegion: 'content', focusRow: String(row), focusCol: '0' } } as unknown as HTMLElement);
-  const forget = control(15);
-  const check = control(16);
-  const apply = control(17);
-  const elements = [control(14), forget, check, apply];
+  const change = control(SETTINGS_CHANGE_SERVER_ROW);
+  const forget = control(SETTINGS_FORGET_SERVER_ROW);
+  const check = control(UPDATE_CHECK_ROW);
+  const apply = control(UPDATE_APPLY_ROW);
+  const elements = [change, forget, check, apply];
   it('walks from the existing rows onto the appended check and apply rows', () => {
     expect(chooseStructuredTarget(forget, elements, 'down')).toBe(check);
     expect(chooseStructuredTarget(check, elements, 'down')).toBe(apply);
@@ -101,6 +102,15 @@ describe('TVSettings update rows', () => {
   it('walks back up without losing the appended rows', () => {
     expect(chooseStructuredTarget(apply, elements, 'up')).toBe(check);
     expect(chooseStructuredTarget(check, elements, 'up')).toBe(forget);
+  });
+  it('maintains continuous vertical order from save through tests and server actions', () => {
+    const save = control(SETTINGS_SAVE_ROW);
+    const firstTest = control(SETTINGS_TEST_FIRST_ROW);
+    const lastTest = control(SETTINGS_TEST_FIRST_ROW + 5);
+    const full = [save, firstTest, lastTest, change, forget, check, apply];
+    expect(chooseStructuredTarget(save, full, 'down')).toBe(firstTest);
+    expect(chooseStructuredTarget(lastTest, full, 'down')).toBe(change);
+    expect(chooseStructuredTarget(change, full, 'down')).toBe(forget);
   });
 });
 
