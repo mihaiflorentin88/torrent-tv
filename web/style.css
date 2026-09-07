@@ -2787,3 +2787,64 @@ progress {
 .update-warning p {
  margin: 0
 }
+
+.tracker-names {
+ display: block;
+ color: var(--accent, #7ee0b8);
+ font-size: 12px;
+ font-weight: 500;
+ margin-top: 2px;
+}
+
+.detail-hero .tracker-names {
+ margin-top: 4px;
+ font-size: 13px;
+}
+
+.tracker-name {
+ display: inline-block;
+ color: var(--accent, #7ee0b8);
+ font-size: 12px;
+ margin-top: 2px;
+}
+
+.tracker-readiness {
+ margin: 0 0 20px;
+ padding: 16px 20px;
+ border: 1px solid var(--line);
+ border-radius: var(--radius);
+ background: var(--panel-2);
+}
+
+.tracker-readiness h2 {
+ margin: 0 0 10px;
+ font-size: 15px;
+}
+
+.tracker-chips,
+.tracker-strip {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 8px;
+}
+
+.tracker-chip {
+ display: inline-flex;
+ align-items: center;
+ padding: 3px 9px;
+ border-radius: 999px;
+ font-size: 12px;
+ border: 1px solid var(--line);
+ color: var(--muted);
+ background: var(--panel);
+}
+
+.tracker-chip.on {
+ border-color: var(--accent, #7ee0b8);
+ color: var(--accent, #7ee0b8);
+}
+
+.tracker-strip {
+ margin-top: 8px;
+ flex-basis: 100%;
+}

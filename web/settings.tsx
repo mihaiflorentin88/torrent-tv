@@ -3,7 +3,7 @@
 // renders these on both the Settings and Events views.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChild } from 'preact';
-import { SettingsField } from '@torrent-tv/shared';
+import { SettingsField, TrackerStatus } from '@torrent-tv/shared';
 import { sharedApi } from './shared-api';
 
 export function Events({ onError, confirmRebuild = false }: { onError: (value: string) => void; confirmRebuild?: boolean }) {
@@ -13,10 +13,35 @@ export function Events({ onError, confirmRebuild = false }: { onError: (value: s
   // The standalone Events page keeps the one-click behavior; the Settings
   // Maintenance tab asks first because the rebuild sweeps every category.
   const requestRebuild = () => { if (confirmRebuild) setPendingRebuild(true); else void run('rebuild') };
-  return <section class="events-page"><p class="supporting">Run safe server maintenance without waiting for the schedule.</p><div class="event-actions"><article><h2>Fetch latest</h2><p>Append the newest FileList releases to the existing catalog.</p><button type="button" class="primary" onClick={() => void run('latest')}>Fetch latest</button></article><article><h2>Rebuild catalog</h2><p>Refresh the maximum API-visible results from every enabled category. Existing discoveries are retained.</p><button type="button" onClick={requestRebuild}>Rebuild catalog</button></article></div>{message && <p role="status" class="success">{message}</p>}{pendingRebuild && <div class="overlay" role="dialog" aria-modal="true" aria-label="Rebuild catalog"><section class="help-modal"><h2>Rebuild catalog?</h2><p>Refreshes every enabled category's latest window and rebuilds local projections. Nothing is removed; the work runs as a background job you can follow on the Jobs page.</p><div class="confirm-actions"><button type="button" onClick={() => setPendingRebuild(false)}>Cancel</button><button type="button" class="primary" onClick={() => void run('rebuild')}>Rebuild now</button></div></section></div>}</section>
+  return <section class="events-page"><p class="supporting">Run safe server maintenance without waiting for the schedule.</p><div class="event-actions"><article><h2>Fetch latest</h2><p>Append the newest releases from every enabled tracker to the existing catalog.</p><button type="button" class="primary" onClick={() => void run('latest')}>Fetch latest</button></article><article><h2>Rebuild catalog</h2><p>Refresh the maximum API-visible results from every enabled category. Existing discoveries are retained.</p><button type="button" onClick={requestRebuild}>Rebuild catalog</button></article></div>{message && <p role="status" class="success">{message}</p>}{pendingRebuild && <div class="overlay" role="dialog" aria-modal="true" aria-label="Rebuild catalog"><section class="help-modal"><h2>Rebuild catalog?</h2><p>Refreshes every enabled category's latest window and rebuilds local projections. Nothing is removed; the work runs as a background job you can follow on the Jobs page.</p><div class="confirm-actions"><button type="button" onClick={() => setPendingRebuild(false)}>Cancel</button><button type="button" class="primary" onClick={() => void run('rebuild')}>Rebuild now</button></div></section></div>}</section>
 }
 
-export function CacheCoverage() { const [status, setStatus] = useState<Record<string, unknown> | null>(null); useEffect(() => { sharedApi().call<Record<string, unknown>>('/catalog/status').then(setStatus).catch(() => { }) }, []); if (!status) return null; return <section class="cache-coverage"><h2>Observed catalog coverage</h2><p><strong>{Number(status.observedReleases).toLocaleString()}</strong> releases retained · <strong>{Number(status.discoverableReleases).toLocaleString()}</strong> currently seeded · {Number(status.hiddenZeroSeeders).toLocaleString()} zero-seeder releases hidden</p><p class="supporting">FileList exposes at most {String(status.fileListLatestWindowLimit)} recent releases per latest request and no historical pagination. Searches and future syncs continue growing this append-only cache.</p></section> }
+export function CacheCoverage() { const [status, setStatus] = useState<Record<string, unknown> | null>(null); useEffect(() => { sharedApi().call<Record<string, unknown>>('/catalog/status').then(setStatus).catch(() => { }) }, []); if (!status) return null; return <section class="cache-coverage"><h2>Observed catalog coverage</h2><p><strong>{Number(status.observedReleases).toLocaleString()}</strong> releases retained · <strong>{Number(status.discoverableReleases).toLocaleString()}</strong> currently seeded · {Number(status.hiddenZeroSeeders).toLocaleString()} zero-seeder releases hidden</p><p class="supporting">Trackers expose a bounded recent-release window per request (FileList: {String(status.fileListLatestWindowLimit)}). Searches and future syncs continue growing this append-only cache.</p></section> }
+
+function TrackerReadiness({ tick }: { tick: number }) {
+  const [trackers, setTrackers] = useState<TrackerStatus[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    sharedApi().trackers().then(value => { if (alive) setTrackers(value); }).catch(() => { if (alive) setTrackers([]); });
+    return () => { alive = false; };
+  }, [tick]);
+  if (!trackers) return null;
+  return (
+    <section class="tracker-readiness">
+      <h2>Tracker readiness</h2>
+      <div class="tracker-chips">
+        {trackers.map((tracker: TrackerStatus) => (
+          <span key={tracker.id} class={`tracker-chip ${tracker.enabled ? 'on' : 'off'}`}>
+            {tracker.name}{tracker.enabled ? (tracker.configured ? ' · ready' : ' · needs setup') : ' · disabled'}
+          </span>
+        ))}
+      </div>
+      {trackers.every((tracker: TrackerStatus) => !tracker.enabled) && (
+        <p class="supporting">No trackers are enabled, so discovery is paused. Downloads you already have stay available under Downloads.</p>
+      )}
+    </section>
+  );
+}
 
 type SettingsRow = [string, string, string?, string?];
 
@@ -25,6 +50,7 @@ type SettingsRow = [string, string, string?, string?];
 // from tests actually run in this session.
 const CONNECTIONS = [
   { name: 'filelist', label: 'FileList', tab: 'tracker' },
+  { name: 'piratebay', label: 'Pirate Bay', tab: 'tracker' },
   { name: 'tmdb', label: 'TMDB', tab: 'tracker' },
   { name: 'qbittorrent', label: 'qBittorrent', tab: 'storage' },
   { name: 'storage', label: 'Storage', tab: 'storage' },
@@ -47,9 +73,12 @@ const TABS: Array<{ id: string; label: string }> = [
 const ACCOUNT_TAB = { id: 'account', label: 'Account' };
 const tabsFor = (accountsEnabled: boolean) => accountsEnabled ? [...TABS.slice(0, 4), ACCOUNT_TAB, ...TABS.slice(4)] : TABS;
 
-const TAB_GROUPS: Record<string, Array<{ title: string; fields: SettingsRow[]; when?: (current: Record<string, unknown>) => boolean }>> = {
+const TAB_GROUPS: Record<string, Array<{ title: string; note?: string; fields: SettingsRow[]; when?: (current: Record<string, unknown>) => boolean }>> = {
   tracker: [
-    { title: 'Tracker and metadata', fields: [['FileList URL', 'fileListUrl'], ['FileList username', 'fileListUsername'], ['FileList passkey', 'fileListPasskey', 'password'], ['TMDB API key or token', 'tmdbApiKey', 'password'], ['Metadata language', 'metadataLanguage'], ['Metadata fallback language', 'metadataFallbackLanguage']] },
+    { title: 'Enabled trackers', note: 'Disabling a tracker hides its discovery. Existing downloads remain listed and playable.', fields: [['FileList enabled', 'fileListEnabled', 'checkbox'], ['The Pirate Bay enabled', 'pirateBayEnabled', 'checkbox']] },
+    { title: 'FileList account', fields: [['FileList URL', 'fileListUrl'], ['FileList username', 'fileListUsername'], ['FileList passkey', 'fileListPasskey', 'password']] },
+    { title: 'The Pirate Bay', fields: [['The Pirate Bay website URL', 'pirateBayWebsiteUrl'], ['The Pirate Bay API URL (advanced)', 'pirateBayApiUrl']] },
+    { title: 'Metadata', fields: [['TMDB API key or token', 'tmdbApiKey', 'password'], ['Metadata language', 'metadataLanguage'], ['Metadata fallback language', 'metadataFallbackLanguage']] },
   ],
   storage: [
     { title: 'Download engine', fields: [['Download engine', 'downloadEngine', 'engine-toggle']] },
@@ -101,6 +130,7 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
   const [help, setHelp] = useState<SettingsField | null>(null);
   const [tests, setTests] = useState<Record<string, string>>({});
   const [connState, setConnState] = useState<Record<string, string>>({});
+  const [readinessTick, setReadinessTick] = useState<number>(0);
   const [tab, setTabState] = useState(() => tabFromHash(accountsEnabled === true));
   // The account tab can disappear under the user (capability loss mid-edit):
   // an unknown tab renders the first one, so no orphan field group remains.
@@ -165,6 +195,7 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
       else await sharedApi().call('/settings', { method: 'PUT', body: JSON.stringify(out) });
       setMessage('Settings saved. Environment-managed values remain controlled by .env.docker.');
       onSaved(merged);
+      setReadinessTick((v: number) => v + 1);
       // The saved tab's draft snaps to the canonical form shape so the tab
       // reads clean immediately — no leave-and-return required.
       const canonical = { ...current };
@@ -213,14 +244,14 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
     if (activeTab === 'maintenance') return <><CacheCoverage /><Events onError={onError} confirmRebuild /></>;
     if (activeTab === 'test') return diagnostics(CONNECTIONS);
     const visibleGroups = () => (TAB_GROUPS[activeTab] || []).filter(group => !group.when || group.when(current));
-    return <>{visibleGroups().map(renderGroup)}{connectionsFor(activeTab).length > 0 && diagnostics(connectionsFor(activeTab))}</>;
+    return <>{activeTab === 'tracker' && <TrackerReadiness tick={readinessTick} />}{visibleGroups().map(renderGroup)}{connectionsFor(activeTab).length > 0 && diagnostics(connectionsFor(activeTab))}</>;
   };
-  const renderGroup = (group: { title: string; fields: SettingsRow[]; when?: (current: Record<string, unknown>) => boolean }) => {
+  const renderGroup = (group: { title: string; note?: string; fields: SettingsRow[]; when?: (current: Record<string, unknown>) => boolean }) => {
     // Switches read best as their own full-width list under the value fields.
     const inputs = group.fields.filter(field => field[2] !== 'checkbox' && field[2] !== 'engine-toggle');
     const switches = group.fields.filter(field => field[2] === 'checkbox');
     const toggles = group.fields.filter(field => field[2] === 'engine-toggle');
-    return <fieldset><legend>{group.title}</legend>{toggles.length > 0 && <div class="fields">{toggles.map(renderField)}</div>}{inputs.length > 0 && <div class="fields">{inputs.map(renderField)}</div>}{switches.length > 0 && <div class="switch-list">{switches.map(renderField)}</div>}</fieldset>;
+    return <fieldset><legend>{group.title}</legend>{group.note && <p class="supporting group-note">{group.note}</p>}{toggles.length > 0 && <div class="fields">{toggles.map(renderField)}</div>}{inputs.length > 0 && <div class="fields">{inputs.map(renderField)}</div>}{switches.length > 0 && <div class="switch-list">{switches.map(renderField)}</div>}</fieldset>;
   };
   return <>
     <form class="settings" onSubmit={save}>

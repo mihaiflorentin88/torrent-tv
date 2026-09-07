@@ -4,7 +4,7 @@ import type { Download } from '@torrent-tv/shared';
 import { watchRoute } from './src';
 
 const download: Download = {
-  id: 'dl-9', releaseId: 'r', engineId: 'qb:x', fileIndex: 2, filePath: 'a.mkv',
+  id: 'dl-9', releaseId: 'r', trackerId: 'filelist', trackerName: 'FileList', engineId: 'qb:x', fileIndex: 2, filePath: 'a.mkv',
   mimeType: 'video/x-matroska', sizeBytes: 1, state: 'downloading', progress: 0.1,
   downloadedBytes: 0, speedBytesPerSecond: 0, etaSeconds: 0, peers: 0, seeds: 0,
   leased: false, streamUrl: '/api/v1/streams/dl-9', playbackMode: 'progressive',

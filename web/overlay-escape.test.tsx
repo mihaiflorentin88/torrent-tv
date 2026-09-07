@@ -10,20 +10,20 @@ import { App } from './src';
 // leave) is owned by player-shortcuts.test.tsx and is not exercised here.
 
 const sourceFixtures: CatalogSource[] = [
-  { release: { id: 'r1', name: 'release-r1', category: 'Movies', sizeBytes: 1024, seeders: 8, leechers: 0, freeleech: false }, parsed: { title: 'Alpha', sortTitle: 'alpha', kind: 'movie', resolution: '1080p' }, filePath: '/data/r1.mkv' },
-  { release: { id: 'r2', name: 'release-r2', category: 'Movies', sizeBytes: 1024, seeders: 3, leechers: 0, freeleech: false }, parsed: { title: 'Alpha', sortTitle: 'alpha', kind: 'movie', resolution: '1080p' }, filePath: '/data/r2.mkv' },
+  { release: { id: 'r1', trackerId: 'filelist', trackerName: 'FileList', providerId: 'r1', categoryId: '4', browseClass: 'video', name: 'release-r1', category: 'Movies', sizeBytes: 1024, seeders: 8, leechers: 0, freeleech: false }, parsed: { title: 'Alpha', sortTitle: 'alpha', kind: 'movie', resolution: '1080p' }, filePath: '/data/r1.mkv' },
+  { release: { id: 'r2', trackerId: 'filelist', trackerName: 'FileList', providerId: 'r2', categoryId: '4', browseClass: 'video', name: 'release-r2', category: 'Movies', sizeBytes: 1024, seeders: 3, leechers: 0, freeleech: false }, parsed: { title: 'Alpha', sortTitle: 'alpha', kind: 'movie', resolution: '1080p' }, filePath: '/data/r2.mkv' },
 ];
 
 // Two sources so the Detail's play action opens the source picker instead of
 // preparing a download and mounting the Browser player.
 const detail: CatalogDetail = {
-  title: { id: 't1', title: 'Alpha', kind: 'movie', categories: ['Movies'], resolutions: ['1080p'], sourceCount: 2, bestSeeders: 8, largestSizeBytes: 2048 },
+  title: { id: 't1', title: 'Alpha', kind: 'movie', categories: ['Movies'], resolutions: ['1080p'], trackers: [{ id: 'filelist', name: 'FileList' }], sourceCount: 2, bestSeeders: 8, largestSizeBytes: 2048 },
   seasons: [],
   sources: sourceFixtures,
 };
 
 const download: Download = {
-  id: 'dl-1', releaseId: 'r1', engineId: 'qb:x', fileIndex: 0, filePath: 'alpha.mkv',
+  id: 'dl-1', releaseId: 'r1', trackerId: 'filelist', trackerName: 'FileList', engineId: 'qb:x', fileIndex: 0, filePath: 'alpha.mkv',
   displayTitle: 'Alpha', releaseName: 'release-r1', category: 'Movies',
   mimeType: 'video/x-matroska', sizeBytes: 1024, state: 'downloading', progress: 0.5,
   playbackMode: 'progressive', downloadedBytes: 512, speedBytesPerSecond: 0, etaSeconds: 0,

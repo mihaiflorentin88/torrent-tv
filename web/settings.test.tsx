@@ -189,13 +189,13 @@ describe('settings tabs', () => {
   expect(sync).toHaveBeenCalledWith('rebuild');
   expect(document.querySelector('.overlay[aria-label="Rebuild catalog"]')).toBeNull();
  });
- it('runs all five connection tests from the Test tab', async () => {
+ it('runs all six connection tests from the Test tab', async () => {
   await openSettings();
   await act(async () => { settingsTabs().find(button => button.textContent === 'Test')!.click() });
   await settle();
   const buttons = Array.from(panel().querySelectorAll<HTMLButtonElement>('button')).filter(button => button.textContent?.startsWith('Test '));
-  expect(buttons.map(button => button.textContent)).toEqual(['Test FileList', 'Test TMDB', 'Test qBittorrent', 'Test Storage', 'Test SubDL']);
-  await act(async () => { buttons[4].click() });
+  expect(buttons.map(button => button.textContent)).toEqual(['Test FileList', 'Test Pirate Bay', 'Test TMDB', 'Test qBittorrent', 'Test Storage', 'Test SubDL']);
+  await act(async () => { buttons[5].click() });
   await settle();
   expect(panel().textContent).toContain('/dependencies/subdl/test ok');
  });
@@ -203,7 +203,7 @@ describe('settings tabs', () => {
  it('places connection tests beside their fields and aggregates them on the Test tab', async () => {
   await openSettings();
   const checkLabels = () => Array.from(panel().querySelectorAll<HTMLButtonElement>('.diagnostics button')).map(button => button.textContent);
-  expect(checkLabels()).toEqual(['Test FileList', 'Test TMDB']);
+  expect(checkLabels()).toEqual(['Test FileList', 'Test Pirate Bay', 'Test TMDB']);
   await act(async () => { settingsTabs()[1].click() });
   await settle();
   expect(checkLabels()).toEqual(['Test qBittorrent', 'Test Storage']);
@@ -212,7 +212,7 @@ describe('settings tabs', () => {
   expect(checkLabels()).toEqual(['Test SubDL']);
   await act(async () => { settingsTabs()[5].click() });
   await settle();
-  expect(checkLabels()).toEqual(['Test FileList', 'Test TMDB', 'Test qBittorrent', 'Test Storage', 'Test SubDL']);
+  expect(checkLabels()).toEqual(['Test FileList', 'Test Pirate Bay', 'Test TMDB', 'Test qBittorrent', 'Test Storage', 'Test SubDL']);
   await act(async () => { settingsTabs()[4].click() });
   await settle();
   expect(panel().querySelectorAll<HTMLButtonElement>('.diagnostics button')).toHaveLength(0);
