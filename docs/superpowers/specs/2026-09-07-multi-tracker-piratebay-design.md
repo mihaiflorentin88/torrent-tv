@@ -1,7 +1,7 @@
 # FileList and Pirate Bay multi-tracker support
 
 Date: 2026-09-07
-Status: Design approved in conversation; written specification awaiting user review.
+Status: Written specification approved by the user on 2026-09-07; implementation planning authorized.
 
 ## Goal
 
@@ -186,6 +186,10 @@ Metadata timeout or temporary peer unavailability is a retryable acquisition fai
 Preserve private-torrent restrictions for FileList while providing appropriate public peer discovery for Pirate Bay. The current private-tracker-oriented native configuration must be reviewed rather than globally relaxed. Private torrent flags govern private-torrent behavior; provider provenance is not permission to leak private swarm discovery. Verify this boundary with the pinned engine library during implementation planning.
 
 Movie playback, explicit file selection, season-pack preparation, episode selection, and resume must work through both engines. Keep existing progressive-playback and compatibility-stream behavior unchanged after preparation.
+
+The user approved a qBittorrent compatibility boundary during planning: new magnet acquisitions require qBittorrent 4.5.0 or newer, whose API supports metadata-received stop conditions and metainfo export. Existing torrent-file acquisition and managed-media playback retain older-version compatibility. Older qBittorrent installations receive an actionable upgrade-or-switch-to-native message for new magnets; no uncontrolled-download fallback or application-side replacement resolver is introduced.
+
+For the native adapter, retain its existing client-wide DHT-disabled posture and include public announce endpoints in Pirate Bay magnets. Do not enable public DHT on the shared FileList session or add another download-engine instance. Metadata availability therefore depends on reachable announced peers rather than a DHT-only discovery path.
 
 ## API and UI contract
 
