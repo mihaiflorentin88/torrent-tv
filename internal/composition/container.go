@@ -669,7 +669,7 @@ func (a filelistAdapter) Categories() []domain.TrackerCategory {
 		out = append(out, domain.TrackerCategory{
 			ID:          strconv.Itoa(c.ID),
 			Name:        c.Name,
-			BrowseClass: c.Artwork,
+			BrowseClass: domain.CategoryBrowseClass(c),
 			Excluded:    c.DefaultBlacklisted,
 		})
 	}

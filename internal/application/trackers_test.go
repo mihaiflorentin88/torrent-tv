@@ -534,6 +534,77 @@ func TestDisabledTrackerManagedEpisodeSiblingRestart(t *testing.T) {
 	}
 }
 
+// TestDisabledOnlyTitleDetailFavoriteNextEpisode proves the household surface
+// for a title whose releases all belong to a disabled tracker: CatalogDetail
+// resolves through the managed download (no 404), SetTitleFavorite succeeds,
+// and NextEpisode materializes the persisted sibling - all without touching
+// the provider.
+func TestDisabledOnlyTitleDetailFavoriteNextEpisode(t *testing.T) {
+	h := newTrackerHarness(t, 4)
+	strict := &strictTracker{}
+	registry := registryOf(t, disabledTrackerRegistration(t, strict))
+
+	repo := h.openRepo(t)
+	release := domain.TorrentRelease{
+		ID: "filelist:pack9", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "pack9",
+		Name: "Other.S01.1080p.WEB-DL", Category: "Series HD", FileCount: 2,
+	}
+	stored, err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{release})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	episodes := []struct {
+		index int
+		name  string
+	}{
+		{0, "Other.S01E01.1080p.mkv"},
+		{1, "Other.S01E02.1080p.mkv"},
+	}
+	files := make([]domain.TorrentFile, len(episodes))
+	for i, episode := range episodes {
+		path := filepath.Join(h.dir, "downloads", episode.name)
+		writeMediaFile(t, path, 1<<20)
+		download := domain.Download{
+			ID: sourceID(stored[0].ID, episode.name), ReleaseID: stored[0].ID, EngineID: "qb:pack9hash",
+			FileIndex: episode.index, FilePath: episode.name, AbsolutePath: path,
+			SizeBytes: 1 << 20, Progress: 1, State: "pausedUP",
+			TrackerID: "filelist", TrackerName: "FileList", CreatedAt: now, UpdatedAt: now,
+		}
+		if err := repo.SaveDownload(context.Background(), download); err != nil {
+			t.Fatal(err)
+		}
+		files[i] = domain.TorrentFile{Index: episode.index, Path: episode.name, SizeBytes: 1 << 20, Playable: true}
+	}
+	if err := repo.SaveTorrentManifest(context.Background(), domain.TorrentManifest{ReleaseID: stored[0].ID, Files: files, Metainfo: []byte("d8:infod5:filesee"), FetchedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	service := h.newService(t, registry, &strictEngine{t: t}, repo)
+	titleID := domain.CatalogTitleID(stored[0], domain.ParseRelease(stored[0]))
+
+	detail, err := service.CatalogDetail(context.Background(), titleID)
+	if err != nil {
+		t.Fatalf("disabled-only managed title must resolve in CatalogDetail: %v", err)
+	}
+	if len(detail.Seasons) == 0 || detail.Seasons[0].EpisodeCount != 2 {
+		t.Fatalf("disabled-only managed title must expose its persisted episodes: %+v", detail.Seasons)
+	}
+	if err := service.SetTitleFavorite(context.Background(), titleID, true); err != nil {
+		t.Fatalf("SetTitleFavorite must succeed for a disabled-only managed title: %v", err)
+	}
+	next, err := service.NextEpisode(context.Background(), sourceID(stored[0].ID, episodes[0].name))
+	if err != nil {
+		t.Fatalf("NextEpisode must materialize the persisted sibling while disabled: %v", err)
+	}
+	if next == nil || next.FileIndex != episodes[1].index {
+		t.Fatalf("NextEpisode returned the wrong sibling: %+v", next)
+	}
+	if strict.calls.Load() != 0 {
+		t.Fatalf("disabled adapter was called %d times on household surfaces", strict.calls.Load())
+	}
+}
+
 func mustRead(t *testing.T, path string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(path)

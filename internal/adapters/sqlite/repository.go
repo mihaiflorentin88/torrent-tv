@@ -125,27 +125,12 @@ CREATE INDEX IF NOT EXISTS job_logs_created ON job_logs(created_at);`)
 func filelistCategory(name string) (id string, browseClass string, excluded bool) {
 	for _, c := range domain.Categories {
 		if strings.EqualFold(c.Name, name) || strconv.Itoa(c.ID) == name {
-			class := "other"
-			if strings.HasPrefix(c.Name, "Games") {
-				class = "games"
-			} else if c.Name == "XXX" {
-				class = "adult"
-			} else {
-				switch c.Artwork {
-				case "movies", "animation", "television", "sport":
-					class = "video"
-				case "music":
-					class = "audio"
-				case "software":
-					class = "software"
-				default:
-					class = "other"
-				}
-			}
-			return strconv.Itoa(c.ID), class, c.DefaultBlacklisted
+			return strconv.Itoa(c.ID), domain.CategoryBrowseClass(c), c.DefaultBlacklisted
 		}
 	}
-	return "", "other", false
+	// Unknown categories fail closed so post-migration re-syncs cannot leak
+	// releases into discovery that the adapter itself would exclude.
+	return "", "other", true
 }
 
 func trackerEligibilityFilter(eligible []string, prefix string) (string, []any) {

@@ -38,7 +38,7 @@ const schemaFields = [
  { key: 'fileListPasskey', label: 'FileList passkey', help: 'Private API credential used for tracker requests.', obtain: 'Sign in at https://filelist.io and copy the passkey from your profile page.', tvVisible: false, sensitive: true, restartRequired: false },
 ];
 
-const catalogStatus = { observedReleases: 1200, discoverableReleases: 800, hiddenZeroSeeders: 400, fileListLatestWindowLimit: 1000 };
+const catalogStatus = { observedReleases: 1200, discoverableReleases: 800, hiddenDiscovery: 400, fileListLatestWindowLimit: 1000 };
 
 const syncJob = { id: 'job-1', kind: 'catalog_sync', state: 'queued', label: 'Fetch latest', dedupeKey: 'catalog:latest', progress: 0, attempt: 0, retryable: false, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' };
 

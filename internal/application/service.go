@@ -771,7 +771,7 @@ func (s *Service) CatalogStatus(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"policy": "append-only observed cache", "observedReleases": total, "discoverableReleases": discoverable, "hiddenZeroSeeders": total - discoverable, "fileListLatestWindowLimit": 100, "historicalPagination": false}, nil
+	return map[string]any{"policy": "append-only observed cache", "observedReleases": total, "discoverableReleases": discoverable, "hiddenDiscovery": total - discoverable, "fileListLatestWindowLimit": 100, "historicalPagination": false}, nil
 }
 
 func (s *Service) QueryJobs(ctx context.Context, search, state, kind, retryable string, updatedSince int64, limit, offset int) (domain.Page[domain.Job], error) {
@@ -2220,6 +2220,20 @@ func (s *Service) SetFavorite(ctx context.Context, releaseID string, favorite bo
 	return s.repo.SetFavorite(ctx, householdProfile, domain.CatalogTitleID(release, parsed), favorite)
 }
 
+// managedTitleIDs resolves the canonical title ID for every managed download
+// from the persisted catalog projection. Downloads do not store title IDs, so
+// disabled-only titles are matched through their release IDs instead of a
+// per-row field.
+func (s *Service) managedTitleIDs(ctx context.Context, downloads []domain.Download) (map[string]string, error) {
+	releaseIDs := make([]string, 0, len(downloads))
+	for _, dl := range downloads {
+		if dl.ReleaseID != "" {
+			releaseIDs = append(releaseIDs, dl.ReleaseID)
+		}
+	}
+	return s.repo.CatalogTitleIDsForReleases(ctx, releaseIDs)
+}
+
 func (s *Service) SetTitleFavorite(ctx context.Context, titleID string, favorite bool) error {
 	sources, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{titleID}, s.eligibleTrackerIDs())
 	if err != nil {
@@ -2231,8 +2245,12 @@ func (s *Service) SetTitleFavorite(ctx context.Context, titleID string, favorite
 		if dlErr != nil {
 			return dlErr
 		}
+		titleIDs, idErr := s.managedTitleIDs(ctx, downloads)
+		if idErr != nil {
+			return idErr
+		}
 		for _, dl := range downloads {
-			if dl.TitleID == titleID {
+			if titleIDs[dl.ReleaseID] == titleID {
 				hasManaged = true
 				break
 			}

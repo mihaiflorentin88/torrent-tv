@@ -20,3 +20,26 @@ func DefaultBlacklistedCategory(name string) bool {
 	}
 	return false
 }
+
+// CategoryBrowseClass maps a FileList category to the broad browsing class
+// used for discovery eligibility: video, audio, software, games, or other.
+// Adapters and the repository projection must agree on this mapping so
+// category descriptors and persisted rows never diverge.
+func CategoryBrowseClass(c Category) string {
+	if strings.HasPrefix(c.Name, "Games") {
+		return "games"
+	}
+	if c.Name == "XXX" {
+		return "adult"
+	}
+	switch c.Artwork {
+	case "movies", "animation", "television", "sport":
+		return "video"
+	case "music":
+		return "audio"
+	case "software":
+		return "software"
+	default:
+		return "other"
+	}
+}

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -44,7 +45,14 @@ func (s *Service) releaseMetainfo(ctx context.Context, release domain.TorrentRel
 	}
 	resolveCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	return s.engine.ResolveMagnet(resolveCtx, acquisition.Magnet, s.settings.Get().DownloadRoot)
+	data, err := s.engine.ResolveMagnet(resolveCtx, acquisition.Magnet, s.settings.Get().DownloadRoot)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			return nil, fmt.Errorf("%w: %w", domain.ErrMetadataDeadline, err)
+		}
+		return nil, err
+	}
+	return data, nil
 }
 
 func parseTorrentManifest(releaseID string, data []byte) (domain.TorrentManifest, error) {
