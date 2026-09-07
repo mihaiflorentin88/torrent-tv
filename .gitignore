@@ -9,6 +9,7 @@ docker-runtime/
 *.db
 *.db-shm
 *.db-wal
+!internal/adapters/sqlite/testdata/*.db
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

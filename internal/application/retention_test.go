@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -64,9 +65,16 @@ func retentionSettings(t *testing.T, store *config.Store, allocationGB, reserveG
 	}
 }
 
+func canonicalReleaseID(id string) string {
+	if strings.HasPrefix(id, "filelist:") {
+		return id
+	}
+	return "filelist:" + id
+}
+
 func seedRetentionDownload(t *testing.T, repo *sqlite.Repository, id, releaseID, engineID string, updated time.Time, leased bool, progress float64) {
 	t.Helper()
-	row := domain.Download{ID: id, ReleaseID: releaseID, EngineID: engineID, FilePath: id + ".mkv", State: "pausedUP", Progress: progress, Leased: leased, CreatedAt: updated, UpdatedAt: updated}
+	row := domain.Download{ID: id, ReleaseID: canonicalReleaseID(releaseID), EngineID: engineID, FilePath: id + ".mkv", State: "pausedUP", Progress: progress, Leased: leased, CreatedAt: updated, UpdatedAt: updated}
 	if err := repo.SaveDownload(context.Background(), row); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +82,9 @@ func seedRetentionDownload(t *testing.T, repo *sqlite.Repository, id, releaseID,
 
 func seedRetentionRelease(t *testing.T, repo *sqlite.Repository, releaseID, name string) {
 	t.Helper()
-	if err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{{ID: releaseID, Name: name, Category: "Series"}}); err != nil {
+	id := canonicalReleaseID(releaseID)
+	providerID := strings.TrimPrefix(releaseID, "filelist:")
+	if _, err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{{ID: id, TrackerID: "filelist", TrackerName: "FileList", ProviderID: providerID, Name: name, Category: "Series"}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -304,11 +314,12 @@ func evictionSettings(t *testing.T, store *config.Store, mutate func(*config.Set
 
 func seedFavorite(t *testing.T, repo *sqlite.Repository, releaseID string) {
 	t.Helper()
-	titles, err := repo.CatalogTitleIDsForReleases(context.Background(), []string{releaseID})
+	cid := canonicalReleaseID(releaseID)
+	titles, err := repo.CatalogTitleIDsForReleases(context.Background(), []string{cid})
 	if err != nil {
 		t.Fatal(err)
 	}
-	titleID := titles[releaseID]
+	titleID := titles[cid]
 	if titleID == "" {
 		t.Fatalf("release %s resolved no canonical title", releaseID)
 	}
@@ -319,7 +330,7 @@ func seedFavorite(t *testing.T, repo *sqlite.Repository, releaseID string) {
 
 func seedPlayback(t *testing.T, repo *sqlite.Repository, downloadID, releaseID string, watched bool, playedAt time.Time) {
 	t.Helper()
-	row := domain.PlaybackState{ProfileID: householdProfile, SourceID: downloadID, ReleaseID: releaseID, PositionMS: 1, DurationMS: 100, Watched: watched, UpdatedAt: playedAt}
+	row := domain.PlaybackState{ProfileID: householdProfile, SourceID: downloadID, ReleaseID: canonicalReleaseID(releaseID), PositionMS: 1, DurationMS: 100, Watched: watched, UpdatedAt: playedAt}
 	if err := repo.SavePlayback(context.Background(), row); err != nil {
 		t.Fatal(err)
 	}

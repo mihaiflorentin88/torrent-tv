@@ -18,11 +18,14 @@ import (
 )
 
 func (s *Service) CatalogTitles(ctx context.Context, q domain.CatalogQuery) (domain.Page[domain.CatalogTitle], error) {
+	if len(q.TrackerIDs) == 0 {
+		q.TrackerIDs = s.eligibleTrackerIDs()
+	}
 	ids, err := s.repo.QueryCatalogTitleIDs(ctx, q)
 	if err != nil {
 		return domain.Page[domain.CatalogTitle]{}, err
 	}
-	sources, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, ids.Items)
+	sources, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, ids.Items, q.TrackerIDs)
 	if err != nil {
 		return domain.Page[domain.CatalogTitle]{}, err
 	}
@@ -49,7 +52,7 @@ func (s *Service) CatalogTitles(ctx context.Context, q domain.CatalogQuery) (dom
 }
 
 func (s *Service) CatalogDetail(ctx context.Context, id string) (domain.CatalogDetail, error) {
-	matched, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{id})
+	matched, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{id}, s.eligibleTrackerIDs())
 	if err != nil {
 		return domain.CatalogDetail{}, err
 	}
@@ -596,7 +599,7 @@ func (s *Service) Artwork(ctx context.Context, titleID, kind string) (string, st
 }
 
 func (s *Service) CatalogFacets(ctx context.Context) (domain.CatalogFacets, error) {
-	return s.repo.CatalogFacets(ctx)
+	return s.repo.CatalogFacets(ctx, s.eligibleTrackerIDs())
 }
 
 func filterCatalogSources(items []domain.CatalogSource, q domain.CatalogQuery) []domain.CatalogSource {
@@ -733,6 +736,7 @@ func setNonEmpty(set map[string]bool, value string) {
 		set[value] = true
 	}
 }
+
 func sortedKeys(set map[string]bool) []string {
 	out := []string{}
 	for key, ok := range set {

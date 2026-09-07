@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -115,11 +116,141 @@ CREATE INDEX IF NOT EXISTS job_logs_created ON job_logs(created_at);`)
 	if err != nil {
 		return err
 	}
+	if err := r.migrateTrackers(ctx); err != nil {
+		return err
+	}
 	return r.backfillCatalog(ctx)
 }
 
+func filelistCategory(name string) (id string, browseClass string, excluded bool) {
+	for _, c := range domain.Categories {
+		if strings.EqualFold(c.Name, name) {
+			class := "other"
+			if strings.HasPrefix(c.Name, "Games") {
+				class = "games"
+			} else if c.Name == "XXX" {
+				class = "adult"
+			} else {
+				switch c.Artwork {
+				case "movies", "animation", "television", "sport":
+					class = "video"
+				case "music":
+					class = "audio"
+				case "software":
+					class = "software"
+				default:
+					class = "other"
+				}
+			}
+			return strconv.Itoa(c.ID), class, c.DefaultBlacklisted
+		}
+	}
+	return "", "other", false
+}
+
+func trackerEligibilityFilter(eligible []string, prefix string) (string, []any) {
+	if prefix != "" && !strings.HasSuffix(prefix, ".") {
+		prefix += "."
+	}
+	if len(eligible) == 0 {
+		return "0", nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(eligible)), ",")
+	args := make([]any, len(eligible))
+	for i, id := range eligible {
+		args[i] = id
+	}
+	return prefix + "tracker_id IN (" + placeholders + ")", args
+}
+
+func (r *Repository) migrateTrackers(ctx context.Context) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	runAlter := func(stmt string) error {
+		if _, e := tx.ExecContext(ctx, stmt); e != nil && !strings.Contains(strings.ToLower(e.Error()), "duplicate column") {
+			return e
+		}
+		return nil
+	}
+
+	for _, q := range []string{
+		"ALTER TABLE releases ADD COLUMN tracker_id TEXT NOT NULL DEFAULT 'filelist'",
+		"ALTER TABLE releases ADD COLUMN tracker_name TEXT NOT NULL DEFAULT 'FileList'",
+		"ALTER TABLE releases ADD COLUMN provider_id TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE releases ADD COLUMN category_id TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE releases ADD COLUMN browse_class TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE releases ADD COLUMN discovery_excluded INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE downloads ADD COLUMN tracker_id TEXT NOT NULL DEFAULT 'filelist'",
+		"ALTER TABLE downloads ADD COLUMN tracker_name TEXT NOT NULL DEFAULT 'FileList'",
+		"ALTER TABLE torrent_manifests ADD COLUMN metainfo BLOB",
+		"ALTER TABLE jobs ADD COLUMN tracker_id TEXT NOT NULL DEFAULT ''",
+	} {
+		if err := runAlter(q); err != nil {
+			return err
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, `UPDATE releases SET provider_id = id WHERE provider_id = ''`); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS releases_tracker_provider ON releases(tracker_id, provider_id)`); err != nil {
+		return err
+	}
+
+	// Backfill category IDs/classes and discovery_excluded for historical rows
+	rows, err := tx.QueryContext(ctx, `SELECT id, category FROM releases WHERE browse_class = ''`)
+	if err != nil {
+		return err
+	}
+	type catUpdate struct {
+		id          string
+		categoryID  string
+		browseClass string
+		excluded    int
+	}
+	var updates []catUpdate
+	for rows.Next() {
+		var id, cat string
+		if err := rows.Scan(&id, &cat); err != nil {
+			rows.Close()
+			return err
+		}
+		cID, bClass, excl := filelistCategory(cat)
+		exVal := 0
+		if excl {
+			exVal = 1
+		}
+		updates = append(updates, catUpdate{id, cID, bClass, exVal})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, u := range updates {
+		if _, err := tx.ExecContext(ctx, `UPDATE releases SET category_id = ?, browse_class = ?, discovery_excluded = ? WHERE id = ?`,
+			u.categoryID, u.browseClass, u.excluded, u.id); err != nil {
+			return err
+		}
+	}
+
+	// Backfill download provenance from persisted releases (orphans default to filelist/FileList)
+	if _, err := tx.ExecContext(ctx, `UPDATE downloads SET
+		tracker_id = COALESCE((SELECT r.tracker_id FROM releases r WHERE r.id = downloads.release_id), 'filelist'),
+		tracker_name = COALESCE((SELECT r.tracker_name FROM releases r WHERE r.id = downloads.release_id), 'FileList')
+		WHERE tracker_id = '' OR tracker_name = '' OR tracker_id = 'filelist'`); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 func (r *Repository) backfillCatalog(ctx context.Context) error {
-	rows, err := r.db.QueryContext(ctx, `SELECT r.id,r.name,r.category,r.size_bytes,r.imdb_id,r.seeders,r.leechers,r.times_completed,r.freeleech,r.double_up,r.internal,r.moderated,r.small_description,r.uploaded_at,r.file_count,r.comments
+	rows, err := r.db.QueryContext(ctx, `SELECT r.id,r.name,r.category,r.size_bytes,r.imdb_id,r.seeders,r.leechers,r.times_completed,r.freeleech,r.double_up,r.internal,r.moderated,r.small_description,r.uploaded_at,r.file_count,r.comments,r.tracker_id,r.tracker_name,r.provider_id,r.category_id,r.browse_class,r.discovery_excluded
 FROM releases r LEFT JOIN catalog_releases c ON c.release_id=r.id WHERE c.release_id IS NULL`)
 	if err != nil {
 		return err
@@ -139,7 +270,7 @@ FROM releases r LEFT JOIN catalog_releases c ON c.release_id=r.id WHERE c.releas
 		return err
 	}
 	if len(items) > 0 {
-		if err := r.UpsertReleases(ctx, items); err != nil {
+		if _, err := r.UpsertReleases(ctx, items); err != nil {
 			return err
 		}
 	}
@@ -148,40 +279,87 @@ WHERE EXISTS(SELECT 1 FROM catalog_releases c WHERE c.release_id=favorites.title
 	return err
 }
 
-func (r *Repository) UpsertReleases(ctx context.Context, items []domain.TorrentRelease) error {
+func (r *Repository) UpsertReleases(ctx context.Context, items []domain.TorrentRelease) ([]domain.TorrentRelease, error) {
+	if len(items) == 0 {
+		return []domain.TorrentRelease{}, nil
+	}
+	for _, x := range items {
+		if strings.TrimSpace(x.TrackerID) == "" || strings.TrimSpace(x.ProviderID) == "" {
+			return nil, fmt.Errorf("release %q missing required tracker or provider identity", x.Name)
+		}
+	}
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
-	q := `INSERT INTO releases(id,name,category,size_bytes,imdb_id,seeders,leechers,times_completed,freeleech,double_up,internal,moderated,small_description,uploaded_at,file_count,comments,updated_at)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,category=excluded.category,size_bytes=excluded.size_bytes,imdb_id=excluded.imdb_id,
-seeders=excluded.seeders,leechers=excluded.leechers,times_completed=excluded.times_completed,freeleech=excluded.freeleech,double_up=excluded.double_up,internal=excluded.internal,
-moderated=excluded.moderated,small_description=excluded.small_description,uploaded_at=excluded.uploaded_at,file_count=excluded.file_count,comments=excluded.comments,updated_at=excluded.updated_at`
+
+	q := `INSERT INTO releases(id,tracker_id,tracker_name,provider_id,category_id,browse_class,discovery_excluded,name,category,size_bytes,imdb_id,seeders,leechers,times_completed,freeleech,double_up,internal,moderated,small_description,uploaded_at,file_count,comments,updated_at)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+ON CONFLICT(tracker_id,provider_id) DO UPDATE SET
+tracker_name=excluded.tracker_name,category_id=excluded.category_id,browse_class=excluded.browse_class,
+discovery_excluded=excluded.discovery_excluded,name=excluded.name,category=excluded.category,
+size_bytes=excluded.size_bytes,imdb_id=excluded.imdb_id,seeders=excluded.seeders,leechers=excluded.leechers,
+times_completed=excluded.times_completed,freeleech=excluded.freeleech,double_up=excluded.double_up,
+internal=excluded.internal,moderated=excluded.moderated,small_description=excluded.small_description,
+uploaded_at=excluded.uploaded_at,file_count=excluded.file_count,comments=excluded.comments,
+updated_at=excluded.updated_at
+RETURNING id`
+
+	catQ := `INSERT INTO catalog_releases(release_id,title_id,title,sort_title,media_kind,year,season_start,season_end,episode_start,episode_end,episode_title,resolution,source,video_codec,audio,hdr,edition,release_group)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(release_id) DO UPDATE SET title_id=excluded.title_id,title=excluded.title,sort_title=excluded.sort_title,
+media_kind=excluded.media_kind,year=excluded.year,season_start=excluded.season_start,season_end=excluded.season_end,episode_start=excluded.episode_start,
+episode_end=excluded.episode_end,episode_title=excluded.episode_title,resolution=excluded.resolution,source=excluded.source,video_codec=excluded.video_codec,
+audio=excluded.audio,hdr=excluded.hdr,edition=excluded.edition,release_group=excluded.release_group`
+
+	out := make([]domain.TorrentRelease, 0, len(items))
+	now := time.Now().Unix()
+
 	for _, x := range items {
+		candidateID := x.TrackerID + ":" + url.PathEscape(x.ProviderID)
 		var uploaded any
 		if x.UploadedAt != nil {
 			uploaded = x.UploadedAt.Unix()
 		}
-		if _, err = tx.ExecContext(ctx, q, x.ID, x.Name, x.Category, x.SizeBytes, x.IMDbID, x.Seeders, x.Leechers, x.TimesCompleted, x.Freeleech, x.DoubleUp, x.Internal, x.Moderated, x.SmallDescription, uploaded, x.FileCount, x.Comments, time.Now().Unix()); err != nil {
-			return err
+		discExcl := 0
+		if x.DiscoveryExcluded {
+			discExcl = 1
 		}
-		parsed := domain.ParseRelease(x)
-		if _, err = tx.ExecContext(ctx, `INSERT INTO catalog_releases(release_id,title_id,title,sort_title,media_kind,year,season_start,season_end,episode_start,episode_end,episode_title,resolution,source,video_codec,audio,hdr,edition,release_group)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(release_id) DO UPDATE SET title_id=excluded.title_id,title=excluded.title,sort_title=excluded.sort_title,
-media_kind=excluded.media_kind,year=excluded.year,season_start=excluded.season_start,season_end=excluded.season_end,episode_start=excluded.episode_start,
-episode_end=excluded.episode_end,episode_title=excluded.episode_title,resolution=excluded.resolution,source=excluded.source,video_codec=excluded.video_codec,
-audio=excluded.audio,hdr=excluded.hdr,edition=excluded.edition,release_group=excluded.release_group`,
-			x.ID, domain.CatalogTitleID(x, parsed), parsed.Title, parsed.SortTitle, parsed.Kind, parsed.Year, parsed.SeasonStart, parsed.SeasonEnd,
+		var storedID string
+		err := tx.QueryRowContext(
+			ctx, q,
+			candidateID, x.TrackerID, x.TrackerName, x.ProviderID, x.CategoryID, x.BrowseClass, discExcl,
+			x.Name, x.Category, x.SizeBytes, x.IMDbID, x.Seeders, x.Leechers, x.TimesCompleted,
+			x.Freeleech, x.DoubleUp, x.Internal, x.Moderated, x.SmallDescription, uploaded,
+			x.FileCount, x.Comments, now,
+		).Scan(&storedID)
+		if err != nil {
+			return nil, err
+		}
+
+		stored := x
+		stored.ID = storedID
+
+		parsed := domain.ParseRelease(stored)
+		if _, err = tx.ExecContext(ctx, catQ,
+			stored.ID, domain.CatalogTitleID(stored, parsed), parsed.Title, parsed.SortTitle, parsed.Kind, parsed.Year, parsed.SeasonStart, parsed.SeasonEnd,
 			parsed.EpisodeStart, parsed.EpisodeEnd, parsed.EpisodeTitle, parsed.Resolution, parsed.Quality, parsed.VideoCodec, parsed.Audio, parsed.HDR, parsed.Edition, parsed.ReleaseGroup); err != nil {
-			return err
+			return nil, err
 		}
+
+		out = append(out, stored)
 	}
-	return tx.Commit()
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
-func (r *Repository) ListCatalogSources(ctx context.Context) ([]domain.CatalogSource, error) {
-	rows, err := r.db.QueryContext(ctx, catalogSourceSelect+` ORDER BY COALESCE(r.uploaded_at,0) DESC,r.id DESC`)
+func (r *Repository) ListCatalogSources(ctx context.Context, eligible []string) ([]domain.CatalogSource, error) {
+	clause, args := trackerEligibilityFilter(eligible, "r")
+	rows, err := r.db.QueryContext(ctx, catalogSourceSelect+` WHERE `+clause+` AND r.discovery_excluded=0 ORDER BY COALESCE(r.uploaded_at,0) DESC,r.id DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +367,7 @@ func (r *Repository) ListCatalogSources(ctx context.Context) ([]domain.CatalogSo
 }
 
 const catalogSourceSelect = `SELECT r.id,r.name,r.category,r.size_bytes,r.imdb_id,r.seeders,r.leechers,r.times_completed,r.freeleech,r.double_up,r.internal,r.moderated,r.small_description,r.uploaded_at,r.file_count,r.comments,
+r.tracker_id,r.tracker_name,r.provider_id,r.category_id,r.browse_class,r.discovery_excluded,
 c.title,c.sort_title,c.media_kind,c.year,c.season_start,c.season_end,c.episode_start,c.episode_end,c.episode_title,c.resolution,c.source,c.video_codec,c.audio,c.hdr,c.edition,c.release_group
 FROM releases r JOIN catalog_releases c ON c.release_id=r.id`
 
@@ -198,9 +377,12 @@ func scanCatalogSources(rows *sql.Rows) ([]domain.CatalogSource, error) {
 	for rows.Next() {
 		var x domain.CatalogSource
 		var uploaded sql.NullInt64
+		var discExcl int
 		if err := rows.Scan(&x.Release.ID, &x.Release.Name, &x.Release.Category, &x.Release.SizeBytes, &x.Release.IMDbID, &x.Release.Seeders, &x.Release.Leechers,
 			&x.Release.TimesCompleted, &x.Release.Freeleech, &x.Release.DoubleUp, &x.Release.Internal, &x.Release.Moderated, &x.Release.SmallDescription, &uploaded,
-			&x.Release.FileCount, &x.Release.Comments, &x.Parsed.Title, &x.Parsed.SortTitle, &x.Parsed.Kind, &x.Parsed.Year, &x.Parsed.SeasonStart,
+			&x.Release.FileCount, &x.Release.Comments,
+			&x.Release.TrackerID, &x.Release.TrackerName, &x.Release.ProviderID, &x.Release.CategoryID, &x.Release.BrowseClass, &discExcl,
+			&x.Parsed.Title, &x.Parsed.SortTitle, &x.Parsed.Kind, &x.Parsed.Year, &x.Parsed.SeasonStart,
 			&x.Parsed.SeasonEnd, &x.Parsed.EpisodeStart, &x.Parsed.EpisodeEnd, &x.Parsed.EpisodeTitle, &x.Parsed.Resolution, &x.Parsed.Quality,
 			&x.Parsed.VideoCodec, &x.Parsed.Audio, &x.Parsed.HDR, &x.Parsed.Edition, &x.Parsed.ReleaseGroup); err != nil {
 			return nil, err
@@ -209,14 +391,18 @@ func scanCatalogSources(rows *sql.Rows) ([]domain.CatalogSource, error) {
 			t := time.Unix(uploaded.Int64, 0).UTC()
 			x.Release.UploadedAt = &t
 		}
+		x.Release.DiscoveryExcluded = discExcl != 0
 		out = append(out, x)
 	}
 	return out, rows.Err()
 }
 
 func catalogFilter(q domain.CatalogQuery) (string, []any) {
-	where := []string{"r.seeders>0"}
+	where := []string{"r.seeders>0", "r.discovery_excluded=0"}
 	args := []any{}
+	trackerClause, trackerArgs := trackerEligibilityFilter(q.TrackerIDs, "r")
+	where = append(where, trackerClause)
+	args = append(args, trackerArgs...)
 	blacklisted := []string{}
 	for _, category := range domain.Categories {
 		if category.DefaultBlacklisted {
@@ -308,15 +494,19 @@ func (r *Repository) QueryCatalogTitleIDs(ctx context.Context, q domain.CatalogQ
 	return domain.Page[string]{Items: items, NextCursor: next, Total: total}, nil
 }
 
-func (r *Repository) ListCatalogSourcesByTitleIDs(ctx context.Context, ids []string) ([]domain.CatalogSource, error) {
+func (r *Repository) ListCatalogSourcesByTitleIDs(ctx context.Context, ids []string, eligible []string) ([]domain.CatalogSource, error) {
 	if len(ids) == 0 {
 		return []domain.CatalogSource{}, nil
 	}
-	args := make([]any, len(ids))
-	for i := range ids {
-		args[i] = ids[i]
+	clause, filterArgs := trackerEligibilityFilter(eligible, "r")
+	titlePlaceholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	query := catalogSourceSelect + ` WHERE c.title_id IN (` + titlePlaceholders + `) AND ` + clause + ` AND r.discovery_excluded=0 ORDER BY COALESCE(r.uploaded_at,0) DESC,r.id DESC`
+	args := make([]any, 0, len(ids)+len(filterArgs))
+	for _, id := range ids {
+		args = append(args, id)
 	}
-	rows, err := r.db.QueryContext(ctx, catalogSourceSelect+` WHERE c.title_id IN (`+strings.TrimRight(strings.Repeat("?,", len(ids)), ",")+`) ORDER BY COALESCE(r.uploaded_at,0) DESC,r.id DESC`, args...)
+	args = append(args, filterArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -347,14 +537,16 @@ func (r *Repository) CatalogTitleIDsForReleases(ctx context.Context, releaseIDs 
 	return out, rows.Err()
 }
 
-func (r *Repository) CatalogFacets(ctx context.Context) (domain.CatalogFacets, error) {
+func (r *Repository) CatalogFacets(ctx context.Context, eligible []string) (domain.CatalogFacets, error) {
 	blacklisted := []string{}
 	for _, category := range domain.Categories {
 		if category.DefaultBlacklisted {
 			blacklisted = append(blacklisted, category.Name)
 		}
 	}
-	where, args := "r.seeders>0", []any{}
+	trackerClause, trackerArgs := trackerEligibilityFilter(eligible, "r")
+	where := "r.seeders>0 AND r.discovery_excluded=0 AND " + trackerClause
+	args := append([]any{}, trackerArgs...)
 	if len(blacklisted) > 0 {
 		where += " AND r.category NOT IN (" + strings.TrimRight(strings.Repeat("?,", len(blacklisted)), ",") + ")"
 		for _, v := range blacklisted {
@@ -416,15 +608,16 @@ func (r *Repository) GetCatalogMetadata(ctx context.Context, titleID string) (do
 	return m, err
 }
 
-func (r *Repository) ListReleases(ctx context.Context, search, category string, limit, offset int) (domain.Page[domain.TorrentRelease], error) {
+func (r *Repository) ListReleases(ctx context.Context, search, category string, limit, offset int, eligible []string) (domain.Page[domain.TorrentRelease], error) {
 	if limit < 1 || limit > 100 {
 		limit = 24
 	}
 	if offset < 0 {
 		offset = 0
 	}
-	where := []string{"1=1"}
-	args := []any{}
+	trackerClause, trackerArgs := trackerEligibilityFilter(eligible, "")
+	where := []string{"1=1", "discovery_excluded=0", trackerClause}
+	args := append([]any{}, trackerArgs...)
 	if search != "" {
 		where = append(where, "name LIKE ? ESCAPE '\\'")
 		args = append(args, "%"+escapeLike(search)+"%")
@@ -439,7 +632,7 @@ func (r *Repository) ListReleases(ctx context.Context, search, category string, 
 		return domain.Page[domain.TorrentRelease]{}, err
 	}
 	args = append(args, limit, offset)
-	rows, err := r.db.QueryContext(ctx, `SELECT id,name,category,size_bytes,imdb_id,seeders,leechers,times_completed,freeleech,double_up,internal,moderated,small_description,uploaded_at,file_count,comments FROM releases WHERE `+w+` ORDER BY COALESCE(uploaded_at,0) DESC,id DESC LIMIT ? OFFSET ?`, args...)
+	rows, err := r.db.QueryContext(ctx, `SELECT id,name,category,size_bytes,imdb_id,seeders,leechers,times_completed,freeleech,double_up,internal,moderated,small_description,uploaded_at,file_count,comments,tracker_id,tracker_name,provider_id,category_id,browse_class,discovery_excluded FROM releases WHERE `+w+` ORDER BY COALESCE(uploaded_at,0) DESC,id DESC LIMIT ? OFFSET ?`, args...)
 	if err != nil {
 		return domain.Page[domain.TorrentRelease]{}, err
 	}
@@ -465,16 +658,18 @@ type scanner interface{ Scan(...any) error }
 func scanRelease(s scanner) (domain.TorrentRelease, error) {
 	var x domain.TorrentRelease
 	var uploaded sql.NullInt64
-	err := s.Scan(&x.ID, &x.Name, &x.Category, &x.SizeBytes, &x.IMDbID, &x.Seeders, &x.Leechers, &x.TimesCompleted, &x.Freeleech, &x.DoubleUp, &x.Internal, &x.Moderated, &x.SmallDescription, &uploaded, &x.FileCount, &x.Comments)
+	var discExcl int
+	err := s.Scan(&x.ID, &x.Name, &x.Category, &x.SizeBytes, &x.IMDbID, &x.Seeders, &x.Leechers, &x.TimesCompleted, &x.Freeleech, &x.DoubleUp, &x.Internal, &x.Moderated, &x.SmallDescription, &uploaded, &x.FileCount, &x.Comments, &x.TrackerID, &x.TrackerName, &x.ProviderID, &x.CategoryID, &x.BrowseClass, &discExcl)
 	if uploaded.Valid {
 		t := time.Unix(uploaded.Int64, 0).UTC()
 		x.UploadedAt = &t
 	}
+	x.DiscoveryExcluded = discExcl != 0
 	return x, err
 }
 
 func (r *Repository) GetRelease(ctx context.Context, id string) (domain.TorrentRelease, error) {
-	return scanRelease(r.db.QueryRowContext(ctx, `SELECT id,name,category,size_bytes,imdb_id,seeders,leechers,times_completed,freeleech,double_up,internal,moderated,small_description,uploaded_at,file_count,comments FROM releases WHERE id=?`, id))
+	return scanRelease(r.db.QueryRowContext(ctx, `SELECT id,name,category,size_bytes,imdb_id,seeders,leechers,times_completed,freeleech,double_up,internal,moderated,small_description,uploaded_at,file_count,comments,tracker_id,tracker_name,provider_id,category_id,browse_class,discovery_excluded FROM releases WHERE id=?`, id))
 }
 
 func (r *Repository) SyncAge(ctx context.Context, name string) (int64, error) {
@@ -502,7 +697,8 @@ func (r *Repository) RecordSync(ctx context.Context, name string, count int, syn
 }
 
 func (r *Repository) SaveDownload(ctx context.Context, d domain.Download) error {
-	_, err := r.db.ExecContext(ctx, `INSERT INTO downloads(id,release_id,engine_id,file_index,file_path,absolute_path,size_bytes,file_offset,piece_size,state,progress,downloaded_bytes,speed_bytes_per_second,eta_seconds,peers,seeds,buffered_bytes,leased,error,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET engine_id=excluded.engine_id,absolute_path=excluded.absolute_path,piece_size=excluded.piece_size,state=excluded.state,progress=excluded.progress,downloaded_bytes=excluded.downloaded_bytes,speed_bytes_per_second=excluded.speed_bytes_per_second,eta_seconds=excluded.eta_seconds,peers=excluded.peers,seeds=excluded.seeds,buffered_bytes=excluded.buffered_bytes,leased=excluded.leased,error=excluded.error,updated_at=excluded.updated_at`, d.ID, d.ReleaseID, d.EngineID, d.FileIndex, d.FilePath, d.AbsolutePath, d.SizeBytes, d.FileOffset, d.PieceSize, d.State, d.Progress, d.DownloadedBytes, d.SpeedBytesPerSecond, d.ETASeconds, d.Peers, d.Seeds, d.BufferedBytes, d.Leased, d.Error, d.CreatedAt.Unix(), d.UpdatedAt.Unix())
+	_, err := r.db.ExecContext(ctx, `INSERT INTO downloads(id,release_id,engine_id,file_index,file_path,absolute_path,size_bytes,file_offset,piece_size,state,progress,downloaded_bytes,speed_bytes_per_second,eta_seconds,peers,seeds,buffered_bytes,leased,error,tracker_id,tracker_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET engine_id=excluded.engine_id,absolute_path=excluded.absolute_path,piece_size=excluded.piece_size,state=excluded.state,progress=excluded.progress,downloaded_bytes=excluded.downloaded_bytes,speed_bytes_per_second=excluded.speed_bytes_per_second,eta_seconds=excluded.eta_seconds,peers=excluded.peers,seeds=excluded.seeds,buffered_bytes=excluded.buffered_bytes,leased=excluded.leased,error=excluded.error,tracker_id=excluded.tracker_id,tracker_name=excluded.tracker_name,updated_at=excluded.updated_at`,
+		d.ID, d.ReleaseID, d.EngineID, d.FileIndex, d.FilePath, d.AbsolutePath, d.SizeBytes, d.FileOffset, d.PieceSize, d.State, d.Progress, d.DownloadedBytes, d.SpeedBytesPerSecond, d.ETASeconds, d.Peers, d.Seeds, d.BufferedBytes, d.Leased, d.Error, d.TrackerID, d.TrackerName, d.CreatedAt.Unix(), d.UpdatedAt.Unix())
 	return err
 }
 
@@ -534,11 +730,11 @@ func (r *Repository) RemoveRelease(ctx context.Context, id string) error {
 }
 
 func (r *Repository) GetDownload(ctx context.Context, id string) (domain.Download, error) {
-	return scanDownload(r.db.QueryRowContext(ctx, `SELECT id,release_id,engine_id,file_index,file_path,absolute_path,size_bytes,file_offset,piece_size,state,progress,downloaded_bytes,speed_bytes_per_second,eta_seconds,peers,seeds,buffered_bytes,leased,error,created_at,updated_at FROM downloads WHERE id=?`, id))
+	return scanDownload(r.db.QueryRowContext(ctx, `SELECT id,release_id,engine_id,file_index,file_path,absolute_path,size_bytes,file_offset,piece_size,state,progress,downloaded_bytes,speed_bytes_per_second,eta_seconds,peers,seeds,buffered_bytes,leased,error,tracker_id,tracker_name,created_at,updated_at FROM downloads WHERE id=?`, id))
 }
 
 func (r *Repository) FindDownload(ctx context.Context, releaseID string, fileIndex int) (domain.Download, error) {
-	query := `SELECT id,release_id,engine_id,file_index,file_path,absolute_path,size_bytes,file_offset,piece_size,state,progress,downloaded_bytes,speed_bytes_per_second,eta_seconds,peers,seeds,buffered_bytes,leased,error,created_at,updated_at FROM downloads WHERE release_id=?`
+	query := `SELECT id,release_id,engine_id,file_index,file_path,absolute_path,size_bytes,file_offset,piece_size,state,progress,downloaded_bytes,speed_bytes_per_second,eta_seconds,peers,seeds,buffered_bytes,leased,error,tracker_id,tracker_name,created_at,updated_at FROM downloads WHERE release_id=?`
 	args := []any{releaseID}
 	if fileIndex >= 0 {
 		query += ` AND file_index=?`
@@ -549,7 +745,7 @@ func (r *Repository) FindDownload(ctx context.Context, releaseID string, fileInd
 }
 
 func (r *Repository) ListDownloads(ctx context.Context) ([]domain.Download, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id,release_id,engine_id,file_index,file_path,absolute_path,size_bytes,file_offset,piece_size,state,progress,downloaded_bytes,speed_bytes_per_second,eta_seconds,peers,seeds,buffered_bytes,leased,error,created_at,updated_at FROM downloads ORDER BY created_at DESC,id ASC`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id,release_id,engine_id,file_index,file_path,absolute_path,size_bytes,file_offset,piece_size,state,progress,downloaded_bytes,speed_bytes_per_second,eta_seconds,peers,seeds,buffered_bytes,leased,error,tracker_id,tracker_name,created_at,updated_at FROM downloads ORDER BY created_at DESC,id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -568,7 +764,7 @@ func (r *Repository) ListDownloads(ctx context.Context) ([]domain.Download, erro
 func scanDownload(s scanner) (domain.Download, error) {
 	var d domain.Download
 	var created, updated int64
-	err := s.Scan(&d.ID, &d.ReleaseID, &d.EngineID, &d.FileIndex, &d.FilePath, &d.AbsolutePath, &d.SizeBytes, &d.FileOffset, &d.PieceSize, &d.State, &d.Progress, &d.DownloadedBytes, &d.SpeedBytesPerSecond, &d.ETASeconds, &d.Peers, &d.Seeds, &d.BufferedBytes, &d.Leased, &d.Error, &created, &updated)
+	err := s.Scan(&d.ID, &d.ReleaseID, &d.EngineID, &d.FileIndex, &d.FilePath, &d.AbsolutePath, &d.SizeBytes, &d.FileOffset, &d.PieceSize, &d.State, &d.Progress, &d.DownloadedBytes, &d.SpeedBytesPerSecond, &d.ETASeconds, &d.Peers, &d.Seeds, &d.BufferedBytes, &d.Leased, &d.Error, &d.TrackerID, &d.TrackerName, &created, &updated)
 	d.CreatedAt = time.Unix(created, 0).UTC()
 	d.UpdatedAt = time.Unix(updated, 0).UTC()
 	return d, err
@@ -598,9 +794,9 @@ func (r *Repository) SaveJob(ctx context.Context, job domain.Job) error {
 	if job.NextAttemptAt != nil {
 		next = job.NextAttemptAt.Unix()
 	}
-	_, err := r.db.ExecContext(ctx, `INSERT INTO jobs(id,kind,state,payload,dedupe_key,attempt,progress,error,retryable,next_attempt_at,created_at,updated_at)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET state=excluded.state,payload=excluded.payload,attempt=excluded.attempt,
-progress=excluded.progress,error=excluded.error,retryable=excluded.retryable,next_attempt_at=excluded.next_attempt_at,updated_at=excluded.updated_at`, job.ID, job.Kind, job.State, job.Label, job.DedupeKey,
+	_, err := r.db.ExecContext(ctx, `INSERT INTO jobs(id,tracker_id,kind,state,payload,dedupe_key,attempt,progress,error,retryable,next_attempt_at,created_at,updated_at)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET tracker_id=excluded.tracker_id,state=excluded.state,payload=excluded.payload,attempt=excluded.attempt,
+progress=excluded.progress,error=excluded.error,retryable=excluded.retryable,next_attempt_at=excluded.next_attempt_at,updated_at=excluded.updated_at`, job.ID, job.TrackerID, job.Kind, job.State, job.Label, job.DedupeKey,
 		job.Attempt, job.Progress, job.Error, job.Retryable, next, job.CreatedAt.Unix(), job.UpdatedAt.Unix())
 	return err
 }
@@ -609,7 +805,7 @@ func (r *Repository) ListJobs(ctx context.Context, limit int) ([]domain.Job, err
 	if limit < 1 || limit > 1000 {
 		limit = 100
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT id,kind,state,payload,dedupe_key,progress,attempt,error,retryable,next_attempt_at,created_at,updated_at
+	rows, err := r.db.QueryContext(ctx, `SELECT id,tracker_id,kind,state,payload,dedupe_key,progress,attempt,error,retryable,next_attempt_at,created_at,updated_at
 FROM jobs ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,updated_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -620,7 +816,7 @@ FROM jobs ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 
 		var job domain.Job
 		var created, updated int64
 		var next sql.NullInt64
-		if err := rows.Scan(&job.ID, &job.Kind, &job.State, &job.Label, &job.DedupeKey, &job.Progress, &job.Attempt, &job.Error, &job.Retryable, &next, &created, &updated); err != nil {
+		if err := rows.Scan(&job.ID, &job.TrackerID, &job.Kind, &job.State, &job.Label, &job.DedupeKey, &job.Progress, &job.Attempt, &job.Error, &job.Retryable, &next, &created, &updated); err != nil {
 			return nil, err
 		}
 		job.CreatedAt, job.UpdatedAt = time.Unix(created, 0).UTC(), time.Unix(updated, 0).UTC()
@@ -637,7 +833,7 @@ func (r *Repository) ListDueJobs(ctx context.Context, before time.Time, limit in
 	if limit < 1 || limit > 1000 {
 		limit = 500
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT id,kind,state,payload,dedupe_key,progress,attempt,error,retryable,next_attempt_at,created_at,updated_at
+	rows, err := r.db.QueryContext(ctx, `SELECT id,tracker_id,kind,state,payload,dedupe_key,progress,attempt,error,retryable,next_attempt_at,created_at,updated_at
 FROM jobs WHERE next_attempt_at IS NOT NULL AND next_attempt_at<=? AND (state='retry_wait' OR (state='failed' AND retryable=1))
 ORDER BY next_attempt_at,id LIMIT ?`, before.Unix(), limit)
 	if err != nil {
@@ -649,7 +845,7 @@ ORDER BY next_attempt_at,id LIMIT ?`, before.Unix(), limit)
 		var job domain.Job
 		var created, updated int64
 		var next sql.NullInt64
-		if err := rows.Scan(&job.ID, &job.Kind, &job.State, &job.Label, &job.DedupeKey, &job.Progress, &job.Attempt, &job.Error, &job.Retryable, &next, &created, &updated); err != nil {
+		if err := rows.Scan(&job.ID, &job.TrackerID, &job.Kind, &job.State, &job.Label, &job.DedupeKey, &job.Progress, &job.Attempt, &job.Error, &job.Retryable, &next, &created, &updated); err != nil {
 			return nil, err
 		}
 		job.CreatedAt, job.UpdatedAt = time.Unix(created, 0).UTC(), time.Unix(updated, 0).UTC()
@@ -697,7 +893,7 @@ func (r *Repository) QueryJobs(ctx context.Context, search, state, kind, retryab
 		return domain.Page[domain.Job]{}, err
 	}
 	queryArgs := append(append([]any{}, args...), limit, offset)
-	rows, err := r.db.QueryContext(ctx, `SELECT id,kind,state,payload,dedupe_key,progress,attempt,error,retryable,next_attempt_at,created_at,updated_at FROM jobs WHERE `+clause+`
+	rows, err := r.db.QueryContext(ctx, `SELECT id,tracker_id,kind,state,payload,dedupe_key,progress,attempt,error,retryable,next_attempt_at,created_at,updated_at FROM jobs WHERE `+clause+`
 ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,updated_at DESC,id DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		return domain.Page[domain.Job]{}, err
@@ -708,7 +904,7 @@ ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,update
 		var job domain.Job
 		var created, updated int64
 		var next sql.NullInt64
-		if err := rows.Scan(&job.ID, &job.Kind, &job.State, &job.Label, &job.DedupeKey, &job.Progress, &job.Attempt, &job.Error, &job.Retryable, &next, &created, &updated); err != nil {
+		if err := rows.Scan(&job.ID, &job.TrackerID, &job.Kind, &job.State, &job.Label, &job.DedupeKey, &job.Progress, &job.Attempt, &job.Error, &job.Retryable, &next, &created, &updated); err != nil {
 			return domain.Page[domain.Job]{}, err
 		}
 		job.CreatedAt, job.UpdatedAt = time.Unix(created, 0).UTC(), time.Unix(updated, 0).UTC()
@@ -733,8 +929,8 @@ func (r *Repository) GetJob(ctx context.Context, id string) (domain.Job, error) 
 	var job domain.Job
 	var created, updated int64
 	var next sql.NullInt64
-	err := r.db.QueryRowContext(ctx, `SELECT id,kind,state,payload,dedupe_key,progress,attempt,error,retryable,next_attempt_at,created_at,updated_at FROM jobs WHERE id=?`, id).
-		Scan(&job.ID, &job.Kind, &job.State, &job.Label, &job.DedupeKey, &job.Progress, &job.Attempt, &job.Error, &job.Retryable, &next, &created, &updated)
+	err := r.db.QueryRowContext(ctx, `SELECT id,tracker_id,kind,state,payload,dedupe_key,progress,attempt,error,retryable,next_attempt_at,created_at,updated_at FROM jobs WHERE id=?`, id).
+		Scan(&job.ID, &job.TrackerID, &job.Kind, &job.State, &job.Label, &job.DedupeKey, &job.Progress, &job.Attempt, &job.Error, &job.Retryable, &next, &created, &updated)
 	if err == nil {
 		job.CreatedAt, job.UpdatedAt = time.Unix(created, 0).UTC(), time.Unix(updated, 0).UTC()
 		if next.Valid {
@@ -815,6 +1011,9 @@ func (r *Repository) PruneJobLogs(ctx context.Context, before time.Time, perJob 
 }
 
 func (r *Repository) SaveTorrentManifest(ctx context.Context, manifest domain.TorrentManifest) error {
+	if len(manifest.Metainfo) >= 16<<20 {
+		return errors.New("torrent metadata is too large")
+	}
 	b, err := json.Marshal(manifest.Files)
 	if err != nil {
 		return err
@@ -822,25 +1021,27 @@ func (r *Repository) SaveTorrentManifest(ctx context.Context, manifest domain.To
 	if manifest.FetchedAt.IsZero() {
 		manifest.FetchedAt = time.Now().UTC()
 	}
-	_, err = r.db.ExecContext(ctx, `INSERT INTO torrent_manifests(release_id,files_json,fetched_at) VALUES(?,?,?)
-ON CONFLICT(release_id) DO UPDATE SET files_json=excluded.files_json,fetched_at=excluded.fetched_at`, manifest.ReleaseID, string(b), manifest.FetchedAt.Unix())
+	_, err = r.db.ExecContext(ctx, `INSERT INTO torrent_manifests(release_id,files_json,metainfo,fetched_at) VALUES(?,?,?,?)
+ON CONFLICT(release_id) DO UPDATE SET files_json=excluded.files_json,metainfo=excluded.metainfo,fetched_at=excluded.fetched_at`, manifest.ReleaseID, string(b), manifest.Metainfo, manifest.FetchedAt.Unix())
 	return err
 }
 
 func (r *Repository) GetTorrentManifest(ctx context.Context, releaseID string) (domain.TorrentManifest, error) {
 	var raw string
+	var metainfo []byte
 	var fetched int64
-	err := r.db.QueryRowContext(ctx, `SELECT files_json,fetched_at FROM torrent_manifests WHERE release_id=?`, releaseID).Scan(&raw, &fetched)
-	manifest := domain.TorrentManifest{ReleaseID: releaseID, FetchedAt: time.Unix(fetched, 0).UTC()}
+	err := r.db.QueryRowContext(ctx, `SELECT files_json,metainfo,fetched_at FROM torrent_manifests WHERE release_id=?`, releaseID).Scan(&raw, &metainfo, &fetched)
+	manifest := domain.TorrentManifest{ReleaseID: releaseID, Metainfo: metainfo, FetchedAt: time.Unix(fetched, 0).UTC()}
 	if err == nil {
 		err = json.Unmarshal([]byte(raw), &manifest.Files)
 	}
 	return manifest, err
 }
 
-func (r *Repository) CatalogCounts(ctx context.Context) (int, int, error) {
+func (r *Repository) CatalogCounts(ctx context.Context, eligible []string) (int, int, error) {
+	clause, args := trackerEligibilityFilter(eligible, "")
 	var total, discoverable int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(CASE WHEN seeders>0 THEN 1 ELSE 0 END),0) FROM releases`).Scan(&total, &discoverable)
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(CASE WHEN seeders>0 AND discovery_excluded=0 THEN 1 ELSE 0 END),0) FROM releases WHERE `+clause, args...).Scan(&total, &discoverable)
 	return total, discoverable, err
 }
 

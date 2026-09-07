@@ -183,7 +183,7 @@ func (s *Service) runMetadataRequest(request metadataRequest) {
 		s.jobLog(job, "info", "complete", "Metadata lookup completed", nil)
 	}
 	payload := map[string]any{"titleId": request.TitleID, "job": job}
-	if sources, sourceErr := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{request.TitleID}); sourceErr == nil && len(sources) > 0 {
+	if sources, sourceErr := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{request.TitleID}, s.eligibleTrackerIDs()); sourceErr == nil && len(sources) > 0 {
 		title := groupCatalog(sources, false)[0]
 		applyMetadata(&title, metadata)
 		payload["title"] = title
@@ -256,7 +256,7 @@ func (s *Service) ensureMetadata(ctx context.Context, titleIDs []string, force b
 	if len(titleIDs) > 24 {
 		titleIDs = titleIDs[:24]
 	}
-	sources, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, titleIDs)
+	sources, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, titleIDs, s.eligibleTrackerIDs())
 	if err != nil {
 		return 0
 	}
@@ -362,7 +362,7 @@ func (s *Service) runCatalogSync(job domain.Job, mode string) {
 		items, err = s.catalog.Latest(ctx)
 		if err == nil {
 			total = len(items)
-			err = s.repo.UpsertReleases(ctx, items)
+			_, err = s.upsertReleases(ctx, items)
 		}
 		_ = s.repo.RecordSync(ctx, "latest", total, err)
 	} else {
@@ -378,7 +378,7 @@ func (s *Service) runCatalogSync(job domain.Job, mode string) {
 				err = e
 				break
 			}
-			if e = s.repo.UpsertReleases(ctx, items); e != nil {
+			if _, e = s.upsertReleases(ctx, items); e != nil {
 				err = e
 				break
 			}
@@ -398,7 +398,7 @@ func (s *Service) runCatalogSync(job domain.Job, mode string) {
 		job.Retryable = false
 		job.NextAttemptAt = nil
 		job.Progress = 1
-		if retained, discoverable, countErr := s.repo.CatalogCounts(ctx); countErr == nil {
+		if retained, discoverable, countErr := s.repo.CatalogCounts(ctx, s.eligibleTrackerIDs()); countErr == nil {
 			job.Label = fmt.Sprintf("%s · %d refreshed · %d retained (%d discoverable)", job.Label, total, retained, discoverable)
 		}
 	}
@@ -430,7 +430,7 @@ func (s *Service) RetryJob(ctx context.Context, id string) (domain.Job, error) {
 		return s.repo.GetJob(ctx, id)
 	case "catalog-title-refresh":
 		titleID := strings.TrimPrefix(job.DedupeKey, "catalog-title-refresh:")
-		sources, sourceErr := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{titleID})
+		sources, sourceErr := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{titleID}, s.eligibleTrackerIDs())
 		if sourceErr != nil || len(sources) == 0 {
 			return domain.Job{}, fmt.Errorf("catalog title is unavailable")
 		}
@@ -601,7 +601,7 @@ func (s *Service) recoverInterruptedJobs() {
 			if query == job.Label || len([]rune(strings.TrimSpace(query))) < 3 {
 				continue
 			}
-			if sources, sourceErr := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{strings.TrimPrefix(job.DedupeKey, "catalog-title-refresh:")}); sourceErr == nil && len(sources) > 0 {
+			if sources, sourceErr := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{strings.TrimPrefix(job.DedupeKey, "catalog-title-refresh:")}, s.eligibleTrackerIDs()); sourceErr == nil && len(sources) > 0 {
 				blacklisted := defaultBlacklistedCategories()
 				allowed := false
 				for _, source := range sources {
@@ -636,7 +636,7 @@ func (s *Service) Jobs(ctx context.Context, limit int) ([]domain.Job, error) {
 }
 
 func (s *Service) CatalogStatus(ctx context.Context) (map[string]any, error) {
-	total, discoverable, err := s.repo.CatalogCounts(ctx)
+	total, discoverable, err := s.repo.CatalogCounts(ctx, s.eligibleTrackerIDs())
 	if err != nil {
 		return nil, err
 	}
@@ -665,7 +665,7 @@ func (s *Service) Browse(ctx context.Context, search, category string, limit, of
 		return domain.Page[domain.TorrentRelease]{}, err
 	}
 	stale := age < 0 || time.Duration(age)*time.Second > s.settings.CatalogMaxAge()
-	page, err := s.repo.ListReleases(ctx, search, category, limit, offset)
+	page, err := s.repo.ListReleases(ctx, search, category, limit, offset, s.eligibleTrackerIDs())
 	page.Stale = stale
 	return page, err
 }
@@ -680,12 +680,13 @@ func (s *Service) Search(ctx context.Context, q string) (domain.Page[domain.Torr
 	if err != nil {
 		return domain.Page[domain.TorrentRelease]{}, err
 	}
-	if err = s.repo.UpsertReleases(ctx, items); err != nil {
+	stored, err := s.upsertReleases(ctx, items)
+	if err != nil {
 		return domain.Page[domain.TorrentRelease]{}, err
 	}
 	seen := map[string]bool{}
 	blacklisted := defaultBlacklistedCategories()
-	for _, release := range items {
+	for _, release := range stored {
 		if blacklisted[release.Category] {
 			continue
 		}
@@ -697,8 +698,25 @@ func (s *Service) Search(ctx context.Context, q string) (domain.Page[domain.Torr
 		seen[id] = true
 		_, _ = s.QueueTitleRefresh(context.Background(), id, parsed.Title, false)
 	}
-	s.publish("catalog.search.completed", map[string]any{"query": q, "items": len(items), "titleCount": len(seen)})
-	return domain.Page[domain.TorrentRelease]{Items: items, Total: len(items)}, nil
+	s.publish("catalog.search.completed", map[string]any{"query": q, "items": len(stored), "titleCount": len(seen)})
+	return domain.Page[domain.TorrentRelease]{Items: stored, Total: len(stored)}, nil
+}
+
+func (s *Service) eligibleTrackerIDs() []string {
+	return []string{"filelist"}
+}
+
+func (s *Service) upsertReleases(ctx context.Context, items []domain.TorrentRelease) ([]domain.TorrentRelease, error) {
+	for i := range items {
+		if items[i].TrackerID == "" {
+			items[i].TrackerID = "filelist"
+			items[i].TrackerName = "FileList"
+		}
+		if items[i].ProviderID == "" {
+			items[i].ProviderID = items[i].ID
+		}
+	}
+	return s.repo.UpsertReleases(ctx, items)
 }
 
 func defaultBlacklistedCategories() map[string]bool {
@@ -885,11 +903,12 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 		_ = s.repo.SaveJob(context.Background(), job)
 		s.publish("job.updated", job)
 	}
+	var stored []domain.TorrentRelease
 	if err == nil {
-		err = s.repo.UpsertReleases(ctx, items)
+		stored, err = s.upsertReleases(ctx, items)
 	}
 	if err == nil {
-		for index, release := range items {
+		for index, release := range stored {
 			parsed := domain.ParseRelease(release)
 			if release.FileCount > 1 && (domain.CatalogTitleID(release, parsed) == request.TitleID) {
 				if _, manifestErr := s.torrentManifest(ctx, release); manifestErr != nil {
@@ -1760,7 +1779,7 @@ func (s *Service) SetFavorite(ctx context.Context, releaseID string, favorite bo
 }
 
 func (s *Service) SetTitleFavorite(ctx context.Context, titleID string, favorite bool) error {
-	sources, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{titleID})
+	sources, err := s.repo.ListCatalogSourcesByTitleIDs(ctx, []string{titleID}, s.eligibleTrackerIDs())
 	if err != nil {
 		return err
 	}
@@ -1807,7 +1826,7 @@ func (s *Service) HouseholdState(ctx context.Context) (domain.HouseholdState, er
 			titleIDs = append(titleIDs, favorite.TitleID)
 		}
 	}
-	catalogSources, _ := s.repo.ListCatalogSourcesByTitleIDs(ctx, titleIDs)
+	catalogSources, _ := s.repo.ListCatalogSourcesByTitleIDs(ctx, titleIDs, s.eligibleTrackerIDs())
 	titleSources := map[string][]domain.CatalogSource{}
 	for _, source := range catalogSources {
 		titleSources[domain.CatalogTitleID(source.Release, source.Parsed)] = append(titleSources[domain.CatalogTitleID(source.Release, source.Parsed)], source)

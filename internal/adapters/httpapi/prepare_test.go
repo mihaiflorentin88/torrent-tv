@@ -89,12 +89,13 @@ func newPrepareGateHandler(t *testing.T, engine application.TorrentEngine) http.
 	}
 	t.Cleanup(func() { repo.Close() })
 	ctx := context.Background()
-	release := domain.TorrentRelease{ID: "incoming-release", Name: "New.S01.1080p.WEB-DL", Category: "Series", SizeBytes: 500 << 20, FileCount: 2}
-	if err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release, {ID: "stored-release", Name: "Old.S01.1080p.WEB-DL", Category: "Series"}}); err != nil {
+	release := domain.TorrentRelease{ID: "filelist:incoming-release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "incoming-release", Name: "New.S01.1080p.WEB-DL", Category: "Series", SizeBytes: 500 << 20, FileCount: 2}
+	stored := domain.TorrentRelease{ID: "filelist:stored-release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "stored-release", Name: "Old.S01.1080p.WEB-DL", Category: "Series"}
+	if _, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release, stored}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	download := domain.Download{ID: "leased", ReleaseID: "stored-release", EngineID: "qb:leased", FilePath: "Old.S01E01.mkv", State: "pausedUP", Progress: 1, Leased: true, CreatedAt: now, UpdatedAt: now}
+	download := domain.Download{ID: "leased", ReleaseID: "filelist:stored-release", EngineID: "qb:leased", FilePath: "Old.S01E01.mkv", State: "pausedUP", Progress: 1, Leased: true, CreatedAt: now, UpdatedAt: now}
 	if err := repo.SaveDownload(ctx, download); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +109,7 @@ func TestPrepareRouteReturnsAllocationProblem(t *testing.T) {
 	}}
 	handler := newPrepareGateHandler(t, engine)
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/releases/incoming-release/prepare", nil))
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/releases/filelist:incoming-release/prepare", nil))
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("POST prepare status = %d, want 409: %s", rec.Code, rec.Body.String())
 	}
@@ -130,7 +131,7 @@ func TestPrepareSeasonRouteReturnsAllocationProblem(t *testing.T) {
 	}}
 	handler := newPrepareGateHandler(t, engine)
 	rec := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/releases/incoming-release/prepare-season", strings.NewReader(`{"season":1}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/releases/filelist:incoming-release/prepare-season", strings.NewReader(`{"season":1}`))
 	request.Header.Set("Content-Type", "application/json")
 	handler.ServeHTTP(rec, request)
 	if rec.Code != http.StatusConflict {

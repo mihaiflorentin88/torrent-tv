@@ -94,7 +94,7 @@ func TestPrepareEvictsUnprotectedToFitAllocation(t *testing.T) {
 	}
 	service := NewService(capacityCatalog{torrent: capacityTorrent(500 << 20)}, engine, repo, settings)
 
-	download, err := service.Prepare(context.Background(), "incoming-release", -1)
+	download, err := service.Prepare(context.Background(), canonicalReleaseID("incoming-release"), -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestPrepareRejectsWhenAllocationCannotFit(t *testing.T) {
 	}}
 	service := NewService(capacityCatalog{torrent: capacityTorrent(500 << 20)}, engine, repo, settings)
 
-	_, err := service.Prepare(context.Background(), "incoming-release", -1)
+	_, err := service.Prepare(context.Background(), canonicalReleaseID("incoming-release"), -1)
 	var fit *domain.AllocationError
 	if !errors.As(err, &fit) {
 		t.Fatalf("prepare should fail with the Allocation problem, got: %v", err)
@@ -148,7 +148,7 @@ func TestPrepareNeverEvictsProtectedToFit(t *testing.T) {
 	}}
 	service := NewService(capacityCatalog{torrent: capacityTorrent(500 << 20)}, engine, repo, settings)
 
-	_, err := service.Prepare(context.Background(), "incoming-release", -1)
+	_, err := service.Prepare(context.Background(), canonicalReleaseID("incoming-release"), -1)
 	var fit *domain.AllocationError
 	if !errors.As(err, &fit) {
 		t.Fatalf("prepare should fail with the Allocation problem, got: %v", err)
@@ -172,7 +172,7 @@ func TestPrepareSkipsAllocationCheckWhenDisabled(t *testing.T) {
 	}
 	service := NewService(capacityCatalog{torrent: capacityTorrent(500 << 20)}, engine, repo, settings)
 
-	if _, err := service.Prepare(context.Background(), "incoming-release", -1); err != nil {
+	if _, err := service.Prepare(context.Background(), canonicalReleaseID("incoming-release"), -1); err != nil {
 		t.Fatalf("a zero Allocation disables the admission gate: %v", err)
 	}
 	if engine.adds != 1 || len(engine.removed) != 0 {
@@ -183,7 +183,8 @@ func TestPrepareSkipsAllocationCheckWhenDisabled(t *testing.T) {
 func TestPrepareUsesTrackerSizeWhenManifestUnavailable(t *testing.T) {
 	repo, settings := retryHarness(t)
 	retentionSettings(t, settings, 1, 0)
-	if err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{{ID: "incoming-release", Name: "New.S01.1080p.WEB-DL", Category: "Series", SizeBytes: 500 << 20}}); err != nil {
+	incoming := domain.TorrentRelease{ID: "filelist:incoming-release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "incoming-release", Name: "New.S01.1080p.WEB-DL", Category: "Series", SizeBytes: 500 << 20}
+	if _, err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{incoming}); err != nil {
 		t.Fatal(err)
 	}
 	seedRetentionDownload(t, repo, "leased", "leased-release", "qb:leased", time.Now().UTC(), true, 1)
@@ -192,7 +193,7 @@ func TestPrepareUsesTrackerSizeWhenManifestUnavailable(t *testing.T) {
 	}}
 	service := NewService(capacityCatalog{openErr: errors.New("tracker unreachable")}, engine, repo, settings)
 
-	_, err := service.Prepare(context.Background(), "incoming-release", -1)
+	_, err := service.Prepare(context.Background(), incoming.ID, -1)
 	var fit *domain.AllocationError
 	if !errors.As(err, &fit) {
 		t.Fatalf("without a manifest the tracker Release size must drive the gate, got: %v", err)
@@ -205,7 +206,8 @@ func TestPrepareUsesTrackerSizeWhenManifestUnavailable(t *testing.T) {
 func TestPrepareSeasonEvictsUnprotectedToFitAllocation(t *testing.T) {
 	repo, settings := retryHarness(t)
 	retentionSettings(t, settings, 1, 0)
-	if err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{{ID: "pack-release", Name: "Pack.S01.1080p.WEB-DL", Category: "Series", FileCount: 2}}); err != nil {
+	pack := domain.TorrentRelease{ID: "filelist:pack-release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "pack-release", Name: "Pack.S01.1080p.WEB-DL", Category: "Series", FileCount: 2}
+	if _, err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{pack}); err != nil {
 		t.Fatal(err)
 	}
 	seedRetentionRelease(t, repo, "old-release", "Old.S01.1080p.WEB-DL")
@@ -219,7 +221,7 @@ func TestPrepareSeasonEvictsUnprotectedToFitAllocation(t *testing.T) {
 	}
 	service := NewService(capacityCatalog{torrent: capacityTorrent(400 << 20)}, engine, repo, settings)
 
-	downloads, err := service.PrepareSeason(context.Background(), "pack-release", 1)
+	downloads, err := service.PrepareSeason(context.Background(), pack.ID, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

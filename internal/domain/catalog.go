@@ -65,6 +65,7 @@ type CatalogTitle struct {
 	Overview         string          `json:"overview,omitempty"`
 	PosterURL        string          `json:"posterUrl,omitempty"`
 	BackdropURL      string          `json:"backdropUrl,omitempty"`
+	Trackers         []TrackerRef    `json:"trackers,omitempty"`
 	Categories       []string        `json:"categories"`
 	Resolutions      []string        `json:"resolutions"`
 	SourceCount      int             `json:"sourceCount"`
@@ -83,6 +84,7 @@ type CatalogTitle struct {
 type CatalogQuery struct {
 	Search     string
 	Category   string
+	TrackerIDs []string
 	Kind       MediaKind
 	Resolution string
 	HDR        string

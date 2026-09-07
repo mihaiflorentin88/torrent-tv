@@ -104,8 +104,8 @@ func newSubtitleTestServiceWithRepo(t *testing.T, engine *subtitleEngineStub, pr
 	}
 	t.Cleanup(func() { _ = repo.Close() })
 	ctx := context.Background()
-	release := domain.TorrentRelease{ID: "release", Name: "Movie.2023.JAPANESE.1080p.WEB-DL"}
-	if err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
+	release := domain.TorrentRelease{ID: "filelist:release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "release", Name: "Movie.2023.JAPANESE.1080p.WEB-DL"}
+	if _, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
 		t.Fatal(err)
 	}
 	media := filepath.Join(dir, "movie.mkv")

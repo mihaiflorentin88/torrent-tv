@@ -227,14 +227,19 @@ func retryHarness(t *testing.T) (*sqlite.Repository, *config.Store) {
 func seedRetryDownload(t *testing.T, repo *sqlite.Repository, releaseID string, seedRelease bool) {
 	t.Helper()
 	ctx := context.Background()
+	storedID := releaseID
 	if seedRelease {
-		release := domain.TorrentRelease{ID: releaseID, Name: "Show.S01.1080p.WEB-DL", Category: "Series"}
-		if err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
+		providerID := strings.TrimPrefix(releaseID, "filelist:")
+		canonicalID := "filelist:" + providerID
+		release := domain.TorrentRelease{ID: canonicalID, TrackerID: "filelist", TrackerName: "FileList", ProviderID: providerID, Name: "Show.S01.1080p.WEB-DL", Category: "Series"}
+		stored, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release})
+		if err != nil {
 			t.Fatal(err)
 		}
+		storedID = stored[0].ID
 	}
 	now := time.Now().UTC()
-	download := domain.Download{ID: "episode", ReleaseID: releaseID, EngineID: "qb:deadhash", FileIndex: 2, FilePath: "Show.S01E02.mkv", State: "unavailable", CreatedAt: now, UpdatedAt: now}
+	download := domain.Download{ID: "episode", ReleaseID: storedID, EngineID: "qb:deadhash", FileIndex: 2, FilePath: "Show.S01E02.mkv", State: "unavailable", CreatedAt: now, UpdatedAt: now}
 	if err := repo.SaveDownload(ctx, download); err != nil {
 		t.Fatal(err)
 	}
@@ -271,8 +276,8 @@ func TestRetryRepreparesVanishedTorrent(t *testing.T) {
 	if _, err := repo.GetDownload(context.Background(), "episode"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("stale row for the vanished torrent survived: %v", err)
 	}
-	row, err := repo.FindDownload(context.Background(), "release", 2)
-	if err != nil || row.EngineID != "qb:livehash" || row.ReleaseID != "release" || row.FileIndex != 2 || row.State != "downloading" {
+	row, err := repo.FindDownload(context.Background(), "filelist:release", 2)
+	if err != nil || row.EngineID != "qb:livehash" || row.ReleaseID != "filelist:release" || row.FileIndex != 2 || row.State != "downloading" {
 		t.Fatalf("re-prepared row does not carry the cached release and file: %#v %v", row, err)
 	}
 }
@@ -308,12 +313,12 @@ func TestEngineRoutePrefix(t *testing.T) {
 func TestDownloadsMarksForeignEngineRouteUnavailable(t *testing.T) {
 	repo, settings := retryHarness(t)
 	ctx := context.Background()
-	release := domain.TorrentRelease{ID: "release", Name: "Show.S01.1080p.WEB-DL", Category: "Series"}
-	if err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
+	release := domain.TorrentRelease{ID: "filelist:release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "release", Name: "Show.S01.1080p.WEB-DL", Category: "Series"}
+	if _, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	stale := domain.Download{ID: "episode", ReleaseID: "release", EngineID: "qb:deadhash", FileIndex: 2, FilePath: "Show.S01E02.mkv", State: "downloading", CreatedAt: now, UpdatedAt: now}
+	stale := domain.Download{ID: "episode", ReleaseID: release.ID, EngineID: "qb:deadhash", FileIndex: 2, FilePath: "Show.S01E02.mkv", State: "downloading", CreatedAt: now, UpdatedAt: now}
 	if err := repo.SaveDownload(ctx, stale); err != nil {
 		t.Fatal(err)
 	}
@@ -339,16 +344,16 @@ func (deadCatalog) OpenTorrent(context.Context, string) (io.ReadCloser, error) {
 
 func TestPrepareRemovesReleaseDeletedFromTracker(t *testing.T) {
 	repo, settings := retryHarness(t)
-	movie := domain.TorrentRelease{ID: "release", Name: "Minions.and.Monsters.2026.1080p.AMZN.WEB-DL.DD+5.1.H.264-playWEB", Category: "Movies"}
-	if err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{movie}); err != nil {
+	movie := domain.TorrentRelease{ID: "filelist:release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "release", Name: "Minions.and.Monsters.2026.1080p.AMZN.WEB-DL.DD+5.1.H.264-playWEB", Category: "Movies"}
+	if _, err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{movie}); err != nil {
 		t.Fatal(err)
 	}
 	service := NewService(deadCatalog{}, &retryEngine{}, repo, settings)
-	_, err := service.Prepare(context.Background(), "release", 0)
+	_, err := service.Prepare(context.Background(), movie.ID, 0)
 	if err == nil || !strings.Contains(err.Error(), "no longer available on FileList") {
 		t.Fatalf("prepare must explain the removal to the user, got %v", err)
 	}
-	if _, getErr := repo.GetRelease(context.Background(), "release"); !errors.Is(getErr, sql.ErrNoRows) {
+	if _, getErr := repo.GetRelease(context.Background(), movie.ID); !errors.Is(getErr, sql.ErrNoRows) {
 		t.Fatalf("dead release must be removed from the catalog, got %v", getErr)
 	}
 	events, evErr := repo.ListEvents(context.Background(), 0, 10)

@@ -31,22 +31,28 @@ func (e *AllocationError) Error() string {
 }
 
 type TorrentRelease struct {
-	ID               string     `json:"id"`
-	Name             string     `json:"name"`
-	Category         string     `json:"category"`
-	SizeBytes        int64      `json:"sizeBytes"`
-	IMDbID           string     `json:"imdbId,omitempty"`
-	Seeders          int        `json:"seeders"`
-	Leechers         int        `json:"leechers"`
-	TimesCompleted   int        `json:"timesCompleted"`
-	Freeleech        bool       `json:"freeleech"`
-	DoubleUp         bool       `json:"doubleUp"`
-	Internal         bool       `json:"internal"`
-	Moderated        bool       `json:"moderated"`
-	SmallDescription string     `json:"smallDescription,omitempty"`
-	UploadedAt       *time.Time `json:"uploadedAt,omitempty"`
-	FileCount        int        `json:"fileCount"`
-	Comments         int        `json:"comments"`
+	ID                string     `json:"id"`
+	TrackerID         string     `json:"trackerId"`
+	TrackerName       string     `json:"trackerName"`
+	ProviderID        string     `json:"providerId"`
+	CategoryID        string     `json:"categoryId"`
+	BrowseClass       string     `json:"browseClass"`
+	DiscoveryExcluded bool       `json:"-"`
+	Name              string     `json:"name"`
+	Category          string     `json:"category"`
+	SizeBytes         int64      `json:"sizeBytes"`
+	IMDbID            string     `json:"imdbId,omitempty"`
+	Seeders           int        `json:"seeders"`
+	Leechers          int        `json:"leechers"`
+	TimesCompleted    int        `json:"timesCompleted"`
+	Freeleech         bool       `json:"freeleech"`
+	DoubleUp          bool       `json:"doubleUp"`
+	Internal          bool       `json:"internal"`
+	Moderated         bool       `json:"moderated"`
+	SmallDescription  string     `json:"smallDescription,omitempty"`
+	UploadedAt        *time.Time `json:"uploadedAt,omitempty"`
+	FileCount         int        `json:"fileCount"`
+	Comments          int        `json:"comments"`
 }
 type Page[T any] struct {
 	Items      []T     `json:"items"`
@@ -86,6 +92,7 @@ type DownloadStatus struct {
 }
 type Download struct {
 	ID, ReleaseID, EngineID, FilePath, AbsolutePath, State                                                              string
+	TrackerID, TrackerName                                                                                              string
 	TitleID, DisplayTitle, ReleaseName, Category                                                                        string
 	Parsed                                                                                                              ParsedRelease
 	FileIndex                                                                                                           int
@@ -107,6 +114,7 @@ type PieceMap struct {
 
 type Job struct {
 	ID            string     `json:"id"`
+	TrackerID     string     `json:"trackerId,omitempty"`
 	Kind          string     `json:"kind"`
 	State         string     `json:"state"`
 	Label         string     `json:"label"`
@@ -215,6 +223,7 @@ type SubtitleProviderWarning struct {
 type TorrentManifest struct {
 	ReleaseID string        `json:"releaseId"`
 	Files     []TorrentFile `json:"files"`
+	Metainfo  []byte        `json:"-"`
 	FetchedAt time.Time     `json:"fetchedAt"`
 }
 

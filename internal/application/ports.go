@@ -76,13 +76,13 @@ type MediaProbe interface {
 }
 type Repository interface {
 	Close() error
-	UpsertReleases(context.Context, []domain.TorrentRelease) error
-	ListReleases(context.Context, string, string, int, int) (domain.Page[domain.TorrentRelease], error)
-	ListCatalogSources(context.Context) ([]domain.CatalogSource, error)
+	UpsertReleases(context.Context, []domain.TorrentRelease) ([]domain.TorrentRelease, error)
+	ListReleases(context.Context, string, string, int, int, []string) (domain.Page[domain.TorrentRelease], error)
+	ListCatalogSources(context.Context, []string) ([]domain.CatalogSource, error)
 	QueryCatalogTitleIDs(context.Context, domain.CatalogQuery) (domain.Page[string], error)
-	ListCatalogSourcesByTitleIDs(context.Context, []string) ([]domain.CatalogSource, error)
+	ListCatalogSourcesByTitleIDs(context.Context, []string, []string) ([]domain.CatalogSource, error)
 	CatalogTitleIDsForReleases(context.Context, []string) (map[string]string, error)
-	CatalogFacets(context.Context) (domain.CatalogFacets, error)
+	CatalogFacets(context.Context, []string) (domain.CatalogFacets, error)
 	SaveCatalogMetadata(context.Context, domain.CatalogMetadata) error
 	GetCatalogMetadata(context.Context, string) (domain.CatalogMetadata, error)
 	GetRelease(context.Context, string) (domain.TorrentRelease, error)
@@ -104,7 +104,7 @@ type Repository interface {
 	PruneJobLogs(context.Context, time.Time, int) error
 	SaveTorrentManifest(context.Context, domain.TorrentManifest) error
 	GetTorrentManifest(context.Context, string) (domain.TorrentManifest, error)
-	CatalogCounts(context.Context) (int, int, error)
+	CatalogCounts(context.Context, []string) (int, int, error)
 	RemoveRelease(context.Context, string) error
 	AppendEvent(context.Context, string, string) (domain.Event, error)
 	ListEvents(context.Context, int64, int) ([]domain.Event, error)

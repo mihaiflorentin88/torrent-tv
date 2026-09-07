@@ -90,8 +90,8 @@ func TestHouseholdStateAndRemovalLifecycle(t *testing.T) {
 	defer repo.Close()
 	now := time.Now().UTC()
 	ctx := context.Background()
-	release := domain.TorrentRelease{ID: "release", Name: "Movie", Category: "Movies"}
-	if err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
+	release := domain.TorrentRelease{ID: "filelist:release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "release", Name: "Movie", Category: "Movies"}
+	if _, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
 		t.Fatal(err)
 	}
 	download := domain.Download{ID: "source", ReleaseID: release.ID, EngineID: "qb:hash", FileIndex: 2, FilePath: "movie.mkv", AbsolutePath: "/downloads/movie.mkv", State: "complete", CreatedAt: now, UpdatedAt: now}
@@ -169,8 +169,8 @@ func TestPrepareReusesManagedDownloadWithoutTrackerLookup(t *testing.T) {
 	}
 	defer repo.Close()
 	ctx := context.Background()
-	release := domain.TorrentRelease{ID: "release", Name: "Movie.2026.1080p.WEB-DL", Category: "Movies HD"}
-	if err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
+	release := domain.TorrentRelease{ID: "filelist:release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "release", Name: "Movie.2026.1080p.WEB-DL", Category: "Movies HD"}
+	if _, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
@@ -223,8 +223,8 @@ func TestPrepareReappliesStreamingSettingsForIncompleteManagedDownload(t *testin
 	}
 	defer repo.Close()
 	ctx := context.Background()
-	release := domain.TorrentRelease{ID: "release", Name: "Movie.2026.1080p.WEB-DL", Category: "Movies HD"}
-	if err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
+	release := domain.TorrentRelease{ID: "filelist:release", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "release", Name: "Movie.2026.1080p.WEB-DL", Category: "Movies HD"}
+	if _, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
@@ -277,14 +277,14 @@ func TestFavoritePrefersManagedSourceForCanonicalTitle(t *testing.T) {
 	defer repo.Close()
 	ctx := context.Background()
 	releases := []domain.TorrentRelease{
-		{ID: "first", Name: "Movie.2026.1080p.WEB-DL", Category: "Movies HD"},
-		{ID: "downloaded", Name: "Movie.2026.2160p.WEB-DL", Category: "Movies 4K"},
+		{ID: "filelist:first", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "first", Name: "Movie.2026.1080p.WEB-DL", Category: "Movies HD"},
+		{ID: "filelist:downloaded", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "downloaded", Name: "Movie.2026.2160p.WEB-DL", Category: "Movies 4K"},
 	}
-	if err := repo.UpsertReleases(ctx, releases); err != nil {
+	if _, err := repo.UpsertReleases(ctx, releases); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	download := domain.Download{ID: "managed-source", ReleaseID: "downloaded", EngineID: "qb:hash", FileIndex: 4, FilePath: "Movie/movie.mkv", AbsolutePath: "/downloads/Movie/movie.mkv", Progress: 1, State: "uploading", CreatedAt: now, UpdatedAt: now}
+	download := domain.Download{ID: "managed-source", ReleaseID: "filelist:downloaded", EngineID: "qb:hash", FileIndex: 4, FilePath: "Movie/movie.mkv", AbsolutePath: "/downloads/Movie/movie.mkv", Progress: 1, State: "uploading", CreatedAt: now, UpdatedAt: now}
 	if err := repo.SaveDownload(ctx, download); err != nil {
 		t.Fatal(err)
 	}
@@ -324,18 +324,18 @@ func TestHouseholdStateGroupsSeriesEpisodesByCanonicalTitle(t *testing.T) {
 	defer repo.Close()
 	ctx := context.Background()
 	releases := []domain.TorrentRelease{
-		{ID: "silo-e1", Name: "Silo.S01E01.1080p.WEB-DL", Category: "TV-Series HD"},
-		{ID: "silo-e2", Name: "Silo.S01E02.1080p.WEB-DL", Category: "TV-Series HD"},
-		{ID: "movie", Name: "A.Movie.2026.1080p.WEB-DL", Category: "Movies HD"},
+		{ID: "filelist:silo-e1", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "silo-e1", Name: "Silo.S01E01.1080p.WEB-DL", Category: "TV-Series HD"},
+		{ID: "filelist:silo-e2", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "silo-e2", Name: "Silo.S01E02.1080p.WEB-DL", Category: "TV-Series HD"},
+		{ID: "filelist:movie", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "movie", Name: "A.Movie.2026.1080p.WEB-DL", Category: "Movies HD"},
 	}
-	if err := repo.UpsertReleases(ctx, releases); err != nil {
+	if _, err := repo.UpsertReleases(ctx, releases); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
 	playback := []domain.PlaybackState{
-		{ProfileID: householdProfile, SourceID: "silo-source-1", ReleaseID: "silo-e1", FileIndex: 0, FilePath: "Silo.S01E01.mkv", PositionMS: 1_000, DurationMS: 10_000, UpdatedAt: now.Add(-time.Hour)},
-		{ProfileID: householdProfile, SourceID: "silo-source-2", ReleaseID: "silo-e2", FileIndex: 0, FilePath: "Silo.S01E02.mkv", PositionMS: 2_000, DurationMS: 10_000, UpdatedAt: now},
-		{ProfileID: householdProfile, SourceID: "movie-source", ReleaseID: "movie", FileIndex: 0, FilePath: "movie.mkv", PositionMS: 3_000, DurationMS: 10_000, UpdatedAt: now.Add(-2 * time.Hour)},
+		{ProfileID: householdProfile, SourceID: "silo-source-1", ReleaseID: "filelist:silo-e1", FileIndex: 0, FilePath: "Silo.S01E01.mkv", PositionMS: 1_000, DurationMS: 10_000, UpdatedAt: now.Add(-time.Hour)},
+		{ProfileID: householdProfile, SourceID: "silo-source-2", ReleaseID: "filelist:silo-e2", FileIndex: 0, FilePath: "Silo.S01E02.mkv", PositionMS: 2_000, DurationMS: 10_000, UpdatedAt: now},
+		{ProfileID: householdProfile, SourceID: "movie-source", ReleaseID: "filelist:movie", FileIndex: 0, FilePath: "movie.mkv", PositionMS: 3_000, DurationMS: 10_000, UpdatedAt: now.Add(-2 * time.Hour)},
 	}
 	for _, item := range playback {
 		if err := repo.SavePlayback(ctx, item); err != nil {
