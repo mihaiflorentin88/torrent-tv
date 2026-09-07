@@ -58,11 +58,11 @@ func (s *Service) SearchSubtitles(ctx context.Context, downloadID, language stri
 		fallbackLanguage = settings.FallbackSubtitleLanguage
 	}
 	if scope != SubtitleScopeRemote {
-		hash, ok := s.route(d.EngineID)
+		engine, hash, ok := s.owner(d.EngineID)
 		if !ok {
-			return nil, nil, fmt.Errorf("unsupported engine route")
+			return nil, nil, s.engineUnavailableErr(d.EngineID)
 		}
-		files, filesErr := s.engine.Files(ctx, hash)
+		files, filesErr := engine.Files(ctx, hash)
 		if filesErr != nil {
 			return nil, nil, filesErr
 		}
@@ -174,15 +174,15 @@ func (s *Service) PrepareSubtitle(ctx context.Context, downloadID, providerName,
 		if parseErr != nil {
 			return domain.SubtitleAsset{}, fmt.Errorf("invalid contained subtitle id")
 		}
-		hash, ok := s.route(d.EngineID)
+		engine, hash, ok := s.owner(d.EngineID)
 		if !ok {
-			return domain.SubtitleAsset{}, fmt.Errorf("unsupported engine route")
+			return domain.SubtitleAsset{}, s.engineUnavailableErr(d.EngineID)
 		}
-		files, filesErr := s.engine.Files(ctx, hash)
+		files, filesErr := engine.Files(ctx, hash)
 		if filesErr != nil {
 			return domain.SubtitleAsset{}, filesErr
 		}
-		status, statusErr := s.engine.Status(ctx, hash)
+		status, statusErr := engine.Status(ctx, hash)
 		if statusErr != nil {
 			return domain.SubtitleAsset{}, statusErr
 		}

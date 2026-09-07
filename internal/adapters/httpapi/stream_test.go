@@ -120,7 +120,7 @@ func newStreamHTTPTest(t *testing.T, engine *streamEngine, download domain.Downl
 	if err := repo.SaveDownload(ctx, download); err != nil {
 		t.Fatal(err)
 	}
-	service := application.NewService(nil, engine, repo, store)
+	service := application.NewService(nil, testEngineSet(t, engine), repo, store)
 	return New(service, store, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
 }
 

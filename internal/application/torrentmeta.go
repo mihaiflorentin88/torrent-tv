@@ -45,7 +45,7 @@ func (s *Service) releaseMetainfo(ctx context.Context, release domain.TorrentRel
 	}
 	resolveCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	data, err := s.engine.ResolveMagnet(resolveCtx, acquisition.Magnet, s.settings.Get().DownloadRoot)
+	data, err := s.engines.Default().ResolveMagnet(resolveCtx, acquisition.Magnet, s.settings.Get().DownloadRoot)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 			return nil, fmt.Errorf("%w: %w", domain.ErrMetadataDeadline, err)

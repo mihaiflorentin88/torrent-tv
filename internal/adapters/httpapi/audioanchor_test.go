@@ -65,7 +65,7 @@ func newAnchorHTTPTest(t *testing.T, probe application.MediaProbe, download doma
 	if err := repo.SaveDownload(ctx, download); err != nil {
 		t.Fatal(err)
 	}
-	service := application.NewService(nil, nil, repo, store)
+	service := application.NewService(nil, testEngineSet(t, nil), repo, store)
 	service.SetMediaProbe(probe)
 	return New(service, store, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
 }

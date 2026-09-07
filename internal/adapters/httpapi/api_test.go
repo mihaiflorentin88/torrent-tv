@@ -174,6 +174,24 @@ func (r stubRepo) GetDownload(context.Context, string) (domain.Download, error) 
 	return domain.Download{}, r.downloadErr
 }
 
+// stubEngine is an inert TorrentEngine for handlers that never touch the
+// download engine.
+type stubEngine struct{ application.TorrentEngine }
+
+// testEngineSet wraps an engine (or a nil inert one) in the single-engine
+// routing set the service constructor takes.
+func testEngineSet(t *testing.T, engine application.TorrentEngine) *application.EngineSet {
+	t.Helper()
+	if engine == nil {
+		engine = stubEngine{}
+	}
+	es, err := application.NewEngineSet("qb:", map[string]application.TorrentEngine{"qb:": engine})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return es
+}
+
 func newStubHandler(t *testing.T, downloadErr error) http.Handler {
 	t.Helper()
 	dir := t.TempDir()
@@ -195,7 +213,7 @@ func newStubHandler(t *testing.T, downloadErr error) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := application.NewService(nil, nil, stubRepo{Repository: nil, downloadErr: downloadErr}, store)
+	service := application.NewService(nil, testEngineSet(t, nil), stubRepo{Repository: nil, downloadErr: downloadErr}, store)
 	return New(service, store, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
 }
 
@@ -716,7 +734,7 @@ func newPortalFixture(t *testing.T, upstream http.HandlerFunc) *portalFixture {
 		t.Fatalf("parse fake upstream url: %v", err)
 	}
 	store := newPortalSettings(t)
-	service := application.NewService(nil, nil, &journalRepo{}, store)
+	service := application.NewService(nil, testEngineSet(t, nil), &journalRepo{}, store)
 	adapter := portalclient.New(&http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
 		r.URL.Scheme, r.URL.Host, r.Host = target.Scheme, target.Host, target.Host
 		return http.DefaultTransport.RoundTrip(r)
@@ -1120,7 +1138,7 @@ func (c *scriptedCoordinator) ResponseFlushed() {
 func newUpdatesFixture(t *testing.T, coordinator *scriptedCoordinator) *httptest.Server {
 	t.Helper()
 	store := newPortalSettings(t)
-	service := application.NewService(nil, nil, &journalRepo{}, store)
+	service := application.NewService(nil, testEngineSet(t, nil), &journalRepo{}, store)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server := httptest.NewServer(New(service, store, logger, "test", WithUpdates(coordinator)))
 	t.Cleanup(server.Close)

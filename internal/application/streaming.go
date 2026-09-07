@@ -60,11 +60,11 @@ func (strategy progressiveTorrentStrategy) waitReadablePath(ctx context.Context,
 	if count <= 0 || start < 0 || start+count > d.SizeBytes {
 		return "", fmt.Errorf("requested media range is outside the selected file")
 	}
-	hash, ok := strategy.service.route(d.EngineID)
+	engine, hash, ok := strategy.service.owner(d.EngineID)
 	if !ok {
-		return "", fmt.Errorf("unsupported engine route")
+		return "", strategy.service.engineUnavailableErr(d.EngineID)
 	}
-	status, err := strategy.service.engine.Status(ctx, hash)
+	status, err := engine.Status(ctx, hash)
 	if err != nil {
 		return "", err
 	}
@@ -72,7 +72,7 @@ func (strategy progressiveTorrentStrategy) waitReadablePath(ctx context.Context,
 	if err != nil {
 		return "", err
 	}
-	if err = strategy.service.engine.PrepareRange(ctx, hash, d.FileIndex, d.FileOffset+start, count); err != nil {
+	if err = engine.PrepareRange(ctx, hash, d.FileIndex, d.FileOffset+start, count); err != nil {
 		return "", err
 	}
 	if err = strategy.service.WaitRange(ctx, d, start, count); err != nil {
@@ -92,7 +92,7 @@ func (strategy progressiveTorrentStrategy) waitReadablePath(ctx context.Context,
 		}
 		// Completion can move the content between chunks. Refresh qBittorrent's
 		// content path before retrying instead of holding onto a stale temp path.
-		if refreshed, statusErr := strategy.service.engine.Status(ctx, hash); statusErr == nil {
+		if refreshed, statusErr := engine.Status(ctx, hash); statusErr == nil {
 			if candidate, pathErr := safeQBContentPath(strategy.service.settings.Get().DownloadRoot, refreshed, d.FilePath); pathErr == nil {
 				path = candidate
 			}

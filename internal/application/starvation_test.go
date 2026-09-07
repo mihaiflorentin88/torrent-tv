@@ -98,7 +98,7 @@ func TestPrepareEvictsUnprotectedToFitAllocation(t *testing.T) {
 		status: map[string]domain.DownloadStatus{"old": {Hash: "old", State: "pausedUP", Progress: 1, TotalBytes: 800 << 20}},
 		files:  []domain.TorrentFile{{Index: 0, Path: "New.S01E01.1080p.mkv", SizeBytes: 500 << 20, Playable: true}},
 	}
-	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(500 << 20)}), engine, repo, settings)
+	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(500 << 20)}), singleEngineSet(t, "qb:", engine), repo, settings)
 
 	download, err := service.Prepare(context.Background(), canonicalReleaseID("incoming-release"), -1)
 	if err != nil {
@@ -126,7 +126,7 @@ func TestPrepareRejectsWhenAllocationCannotFit(t *testing.T) {
 		"old":    {Hash: "old", State: "pausedUP", Progress: 1, TotalBytes: 200 << 20},
 		"leased": {Hash: "leased", State: "pausedUP", Progress: 1, TotalBytes: 900 << 20},
 	}}
-	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(500 << 20)}), engine, repo, settings)
+	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(500 << 20)}), singleEngineSet(t, "qb:", engine), repo, settings)
 
 	_, err := service.Prepare(context.Background(), canonicalReleaseID("incoming-release"), -1)
 	var fit *domain.AllocationError
@@ -152,7 +152,7 @@ func TestPrepareNeverEvictsProtectedToFit(t *testing.T) {
 	engine := &capacityEngine{status: map[string]domain.DownloadStatus{
 		"leased": {Hash: "leased", State: "pausedUP", Progress: 1, TotalBytes: 900 << 20},
 	}}
-	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(500 << 20)}), engine, repo, settings)
+	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(500 << 20)}), singleEngineSet(t, "qb:", engine), repo, settings)
 
 	_, err := service.Prepare(context.Background(), canonicalReleaseID("incoming-release"), -1)
 	var fit *domain.AllocationError
@@ -176,7 +176,7 @@ func TestPrepareSkipsAllocationCheckWhenDisabled(t *testing.T) {
 		status: map[string]domain.DownloadStatus{"leased": {Hash: "leased", State: "pausedUP", Progress: 1, TotalBytes: 900 << 20}},
 		files:  []domain.TorrentFile{{Index: 0, Path: "New.S01E01.1080p.mkv", SizeBytes: 500 << 20, Playable: true}},
 	}
-	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(500 << 20)}), engine, repo, settings)
+	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(500 << 20)}), singleEngineSet(t, "qb:", engine), repo, settings)
 
 	if _, err := service.Prepare(context.Background(), canonicalReleaseID("incoming-release"), -1); err != nil {
 		t.Fatalf("a zero Allocation disables the admission gate: %v", err)
@@ -197,7 +197,7 @@ func TestPrepareUsesTrackerSizeWhenManifestUnavailable(t *testing.T) {
 	engine := &capacityEngine{status: map[string]domain.DownloadStatus{
 		"leased": {Hash: "leased", State: "pausedUP", Progress: 1, TotalBytes: 900 << 20},
 	}}
-	service := NewService(testRegistry(capacityCatalog{openErr: errors.New("tracker unreachable")}), engine, repo, settings)
+	service := NewService(testRegistry(capacityCatalog{openErr: errors.New("tracker unreachable")}), singleEngineSet(t, "qb:", engine), repo, settings)
 
 	_, err := service.Prepare(context.Background(), incoming.ID, -1)
 	var fit *domain.AllocationError
@@ -225,7 +225,7 @@ func TestPrepareSeasonEvictsUnprotectedToFitAllocation(t *testing.T) {
 			{Index: 1, Path: "Pack.S01E02.1080p.mkv", SizeBytes: 300 << 20, Playable: true},
 		},
 	}
-	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(400 << 20)}), engine, repo, settings)
+	service := NewService(testRegistry(capacityCatalog{torrent: capacityTorrent(400 << 20)}), singleEngineSet(t, "qb:", engine), repo, settings)
 
 	downloads, err := service.PrepareSeason(context.Background(), pack.ID, 1)
 	if err != nil {

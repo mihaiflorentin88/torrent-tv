@@ -23,38 +23,37 @@ import (
 )
 
 type Service struct {
-	trackers          *TrackerRegistry
-	engine            TorrentEngine
-	engineRoutePrefix string
-	repo              Repository
-	settings          *config.Store
-	subtitles         []SubtitleProvider
-	locks             sync.Map
-	metadata          MetadataProvider
-	mediaProbe        MediaProbe
-	freeSpace         func(string) (int64, error)
-	metaQueue         chan metadataRequest
-	eventMu           sync.Mutex
-	eventSubscribers  map[chan domain.Event]struct{}
-	syncMu            sync.Mutex
-	refreshQueue      chan titleRefreshRequest
-	searchQueue       chan trackerSearchRequest
-	jobSlots          chan struct{}
-	providerSlotsMu   sync.Mutex
-	providerSlots     map[string]chan struct{}
-	pendingMu         sync.Mutex
-	pendingMetadata   map[string]bool
-	mediaInfoMu       sync.Mutex
-	mediaInfoCache    map[string]cachedMediaInfo
-	providerMu        sync.Mutex
-	providerCtx       context.Context
-	providerCancel    context.CancelFunc
-	baseCtx           context.Context
-	cancelBase        context.CancelFunc
-	stopping          chan struct{}
-	closeOnce         sync.Once
-	closeErr          error
-	wg                sync.WaitGroup
+	trackers         *TrackerRegistry
+	engines          *EngineSet
+	repo             Repository
+	settings         *config.Store
+	subtitles        []SubtitleProvider
+	locks            sync.Map
+	metadata         MetadataProvider
+	mediaProbe       MediaProbe
+	freeSpace        func(string) (int64, error)
+	metaQueue        chan metadataRequest
+	eventMu          sync.Mutex
+	eventSubscribers map[chan domain.Event]struct{}
+	syncMu           sync.Mutex
+	refreshQueue     chan titleRefreshRequest
+	searchQueue      chan trackerSearchRequest
+	jobSlots         chan struct{}
+	providerSlotsMu  sync.Mutex
+	providerSlots    map[string]chan struct{}
+	pendingMu        sync.Mutex
+	pendingMetadata  map[string]bool
+	mediaInfoMu      sync.Mutex
+	mediaInfoCache   map[string]cachedMediaInfo
+	providerMu       sync.Mutex
+	providerCtx      context.Context
+	providerCancel   context.CancelFunc
+	baseCtx          context.Context
+	cancelBase       context.CancelFunc
+	stopping         chan struct{}
+	closeOnce        sync.Once
+	closeErr         error
+	wg               sync.WaitGroup
 }
 
 type cachedMediaInfo struct {
@@ -73,7 +72,7 @@ type (
 	trackerSearchRequest struct{ Query string }
 )
 
-func NewService(trackers *TrackerRegistry, e TorrentEngine, r Repository, s *config.Store, subtitles ...SubtitleProvider) *Service {
+func NewService(trackers *TrackerRegistry, engines *EngineSet, r Repository, s *config.Store, subtitles ...SubtitleProvider) *Service {
 	limit := s.Get().MaxConcurrentJobs
 	if limit < 1 {
 		limit = 10
@@ -82,7 +81,7 @@ func NewService(trackers *TrackerRegistry, e TorrentEngine, r Repository, s *con
 	provCtx, provCancel := context.WithCancel(base)
 	service := &Service{
 		trackers:         trackers,
-		engine:           e,
+		engines:          engines,
 		repo:             r,
 		settings:         s,
 		subtitles:        subtitles,
@@ -677,11 +676,13 @@ func (s *Service) joinAndClose(ctx context.Context) error {
 		return fmt.Errorf("service shutdown aborted: workers did not stop: %w", joinCtx.Err())
 	}
 	var firstErr error
-	if closer, ok := s.engine.(io.Closer); ok {
-		if err := closer.Close(); err != nil && firstErr == nil {
-			firstErr = err
+	s.engines.Each(func(_ string, engine TorrentEngine) {
+		if closer, ok := engine.(io.Closer); ok {
+			if err := closer.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
 		}
-	}
+	})
 	if err := s.repo.Close(); err != nil && firstErr == nil {
 		firstErr = err
 	}
@@ -1305,7 +1306,9 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 	s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": request.TitleID, "items": total, "job": job})
 }
 
-func (s *Service) TestEngine(ctx context.Context) (string, error) { return s.engine.Test(ctx) }
+func (s *Service) TestEngine(ctx context.Context) (string, error) {
+	return s.engines.Default().Test(ctx)
+}
 
 // ensureAllocationRoom is the starvation path of ADR-0004: before a new
 // torrent is added, the Allocation must be able to hold it. Stored bytes come
@@ -1430,20 +1433,21 @@ func (s *Service) Prepare(ctx context.Context, releaseID string, fileIndex int) 
 			return domain.Download{}, err
 		}
 	}
+	engine := s.engines.Default()
 	settings := s.settings.Get()
-	hash, err := s.engine.Add(ctx, bytes.NewReader(metainfo), settings.DownloadRoot)
+	hash, err := engine.Add(ctx, bytes.NewReader(metainfo), settings.DownloadRoot)
 	if err != nil {
 		return domain.Download{}, err
 	}
 	var files []domain.TorrentFile
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		files, err = s.engine.Files(ctx, hash)
+		files, err = engine.Files(ctx, hash)
 		if err == nil && len(files) > 0 {
 			break
 		}
 		if time.Now().After(deadline) {
-			return domain.Download{}, fmt.Errorf("qBittorrent metadata unavailable: %w", err)
+			return domain.Download{}, fmt.Errorf("%s metadata unavailable: %w", engineIdentity(s.engines.DefaultPrefix()), err)
 		}
 		select {
 		case <-ctx.Done():
@@ -1468,11 +1472,12 @@ func (s *Service) Prepare(ctx context.Context, releaseID string, fileIndex int) 
 		return domain.Download{}, fmt.Errorf("selected file is not playable")
 	}
 	fileIndex = selected.Index
-	indices := s.managedTorrentIndices(ctx, s.enginePrefix()+hash, files, fileIndex)
-	if err = s.engine.PrepareFiles(ctx, hash, indices, subs); err != nil {
+	route := s.engines.DefaultPrefix() + hash
+	indices := s.managedTorrentIndices(ctx, route, files, fileIndex)
+	if err = engine.PrepareFiles(ctx, hash, indices, subs); err != nil {
 		return domain.Download{}, err
 	}
-	status, err := s.engine.Status(ctx, hash)
+	status, err := engine.Status(ctx, hash)
 	if err != nil {
 		return domain.Download{}, err
 	}
@@ -1485,7 +1490,7 @@ func (s *Service) Prepare(ctx context.Context, releaseID string, fileIndex int) 
 	d := domain.Download{
 		ID:           id,
 		ReleaseID:    releaseID,
-		EngineID:     s.enginePrefix() + hash,
+		EngineID:     route,
 		FileIndex:    fileIndex,
 		FilePath:     selected.Path,
 		AbsolutePath: abs,
@@ -1516,11 +1521,11 @@ func (s *Service) prepareExistingTorrentFile(ctx context.Context, release domain
 		if managed.ReleaseID != release.ID {
 			continue
 		}
-		hash, ok := s.route(managed.EngineID)
+		engine, hash, ok := s.owner(managed.EngineID)
 		if !ok {
 			continue
 		}
-		files, filesErr := s.engine.Files(ctx, hash)
+		files, filesErr := engine.Files(ctx, hash)
 		if filesErr != nil {
 			return domain.Download{}, filesErr
 		}
@@ -1536,7 +1541,7 @@ func (s *Service) prepareExistingTorrentFile(ctx context.Context, release domain
 		if selected == nil || !selected.Playable {
 			return domain.Download{}, fmt.Errorf("selected file is not playable")
 		}
-		status, statusErr := s.engine.Status(ctx, hash)
+		status, statusErr := engine.Status(ctx, hash)
 		if statusErr != nil {
 			return domain.Download{}, statusErr
 		}
@@ -1659,12 +1664,13 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 		season = 1
 	}
 
-	engineID, hash := "", ""
+	var engine TorrentEngine
+	engineID, hash, enginePrefix := "", "", ""
 	if managed, listErr := s.repo.ListDownloads(ctx); listErr == nil {
 		for _, download := range managed {
 			if download.ReleaseID == releaseID {
-				if existingHash, ok := s.route(download.EngineID); ok {
-					engineID, hash = download.EngineID, existingHash
+				if owned, existingHash, ok := s.owner(download.EngineID); ok {
+					engine, engineID, hash, enginePrefix = owned, download.EngineID, existingHash, strings.TrimSuffix(download.EngineID, existingHash)
 					break
 				}
 			}
@@ -1706,22 +1712,24 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 				return nil, fitErr
 			}
 		}
-		hash, err = s.engine.Add(ctx, bytes.NewReader(metainfo), settings.DownloadRoot)
+		engine = s.engines.Default()
+		enginePrefix = s.engines.DefaultPrefix()
+		hash, err = engine.Add(ctx, bytes.NewReader(metainfo), settings.DownloadRoot)
 		if err != nil {
 			return nil, err
 		}
-		engineID = s.enginePrefix() + hash
+		engineID = enginePrefix + hash
 	}
 
 	var files []domain.TorrentFile
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		files, err = s.engine.Files(ctx, hash)
+		files, err = engine.Files(ctx, hash)
 		if err == nil && len(files) > 0 {
 			break
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("qBittorrent metadata unavailable: %w", err)
+			return nil, fmt.Errorf("%s metadata unavailable: %w", engineIdentity(enginePrefix), err)
 		}
 		select {
 		case <-ctx.Done():
@@ -1760,10 +1768,10 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 		extra = append(extra, file.Index)
 	}
 	indices := s.managedTorrentIndices(ctx, engineID, files, extra...)
-	if err = s.engine.PrepareFiles(ctx, hash, indices, subs); err != nil {
+	if err = engine.PrepareFiles(ctx, hash, indices, subs); err != nil {
 		return nil, err
 	}
-	status, err := s.engine.Status(ctx, hash)
+	status, err := engine.Status(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -1836,16 +1844,16 @@ func (s *Service) prepareManagedDownload(ctx context.Context, d domain.Download)
 	if completedLocalFile(d) {
 		return d, nil
 	}
-	hash, ok := s.route(d.EngineID)
+	engine, hash, ok := s.owner(d.EngineID)
 	if !ok {
-		return d, fmt.Errorf("unsupported engine route")
+		return d, s.engineUnavailableErr(d.EngineID)
 	}
 	lockAny, _ := s.locks.LoadOrStore("stream:"+hash, &sync.Mutex{})
 	lock := lockAny.(*sync.Mutex)
 	lock.Lock()
 	defer lock.Unlock()
 
-	status, err := s.engine.Status(ctx, hash)
+	status, err := engine.Status(ctx, hash)
 	if err != nil {
 		// A completed local file remains playable even when qBittorrent is down.
 		if completedLocalFile(d) {
@@ -1854,11 +1862,11 @@ func (s *Service) prepareManagedDownload(ctx context.Context, d domain.Download)
 		return d, err
 	}
 	if domain.IsPaused(status.State) {
-		if err = s.engine.Resume(ctx, hash); err != nil {
+		if err = engine.Resume(ctx, hash); err != nil {
 			return d, fmt.Errorf("resume torrent for playback: %w", err)
 		}
 	}
-	files, err := s.engine.Files(ctx, hash)
+	files, err := engine.Files(ctx, hash)
 	if err != nil {
 		return d, err
 	}
@@ -1877,15 +1885,15 @@ func (s *Service) prepareManagedDownload(ctx context.Context, d domain.Download)
 		return d, fmt.Errorf("selected torrent file is no longer available")
 	}
 	indices := s.managedTorrentIndices(ctx, d.EngineID, files, d.FileIndex)
-	if err = s.engine.PrepareFiles(ctx, hash, indices, subs); err != nil {
+	if err = engine.PrepareFiles(ctx, hash, indices, subs); err != nil {
 		return d, err
 	}
-	status, err = s.engine.Status(ctx, hash)
+	status, err = engine.Status(ctx, hash)
 	if err != nil {
 		return d, err
 	}
 	if !status.Sequential || !status.FirstLastPriority {
-		return d, fmt.Errorf("qBittorrent did not enable progressive streaming priorities")
+		return d, fmt.Errorf("engine did not enable progressive streaming priorities")
 	}
 	applyDownloadStatus(&d, status, selected)
 	d.UpdatedAt = time.Now().UTC()
@@ -1905,23 +1913,22 @@ func (s *Service) Downloads(ctx context.Context) ([]domain.Download, error) {
 		if release, releaseErr := s.repo.GetRelease(ctx, items[i].ReleaseID); releaseErr == nil {
 			s.enrichDownload(ctx, &items[i], release)
 		}
-		hash, ok := s.route(items[i].EngineID)
+		engine, hash, ok := s.owner(items[i].EngineID)
 		var st domain.DownloadStatus
 		statusErr := error(nil)
 		if ok {
-			st, statusErr = s.engine.Status(ctx, hash)
+			st, statusErr = engine.Status(ctx, hash)
 		} else {
-			// The active engine cannot describe a row issued under a foreign
-			// Engine prefix; it surfaces as unavailable rather than serving
-			// stale persisted state.
-			statusErr = fmt.Errorf("unsupported engine route")
+			// The owning engine is absent from the set: the row surfaces as
+			// unavailable rather than serving stale persisted state.
+			statusErr = s.engineUnavailableErr(items[i].EngineID)
 		}
 		if statusErr != nil {
 			items[i].Error = statusErr.Error()
 			items[i].State = "unavailable"
 		} else {
 			var selected *domain.TorrentFile
-			if files, filesErr := s.engine.Files(ctx, hash); filesErr == nil {
+			if files, filesErr := engine.Files(ctx, hash); filesErr == nil {
 				for _, file := range files {
 					if file.Index == items[i].FileIndex {
 						copy := file
@@ -2021,15 +2028,15 @@ func (s *Service) Manage(ctx context.Context, id, action string, _ bool) error {
 	if err != nil {
 		return err
 	}
-	hash, ok := s.route(d.EngineID)
+	engine, hash, ok := s.owner(d.EngineID)
 	if !ok {
-		return fmt.Errorf("unsupported engine route")
+		return s.engineUnavailableErr(d.EngineID)
 	}
 	switch action {
 	case "pause":
-		err = s.engine.Pause(ctx, hash)
+		err = engine.Pause(ctx, hash)
 	case "resume", "retry":
-		err = s.engine.Resume(ctx, hash)
+		err = engine.Resume(ctx, hash)
 		if action == "retry" && errors.Is(err, domain.ErrTorrentNotFound) {
 			// The torrent vanished from the engine; forget the rows pinned to
 			// it and re-prepare from the cached release, the same path a
@@ -2078,11 +2085,11 @@ func (s *Service) Manage(ctx context.Context, id, action string, _ bool) error {
 // and forgets every Managed download row pinned to that route. The manual
 // remove action and retention eviction share this exact path (ADR-0004).
 func (s *Service) removeTorrent(ctx context.Context, engineID string) error {
-	hash, ok := s.route(engineID)
+	engine, hash, ok := s.owner(engineID)
 	if !ok {
-		return fmt.Errorf("unsupported engine route")
+		return s.engineUnavailableErr(engineID)
 	}
-	if err := s.engine.Remove(ctx, hash, true); err != nil && !errors.Is(err, domain.ErrTorrentNotFound) {
+	if err := engine.Remove(ctx, hash, true); err != nil && !errors.Is(err, domain.ErrTorrentNotFound) {
 		return err
 	}
 	return s.forgetEngineRows(ctx, engineID)
@@ -2457,14 +2464,14 @@ func (s *Service) Release(id string) {
 }
 
 func (s *Service) WaitRange(ctx context.Context, d domain.Download, start, count int64) error {
-	hash, ok := s.route(d.EngineID)
+	engine, hash, ok := s.owner(d.EngineID)
 	if !ok {
-		return fmt.Errorf("unsupported engine route")
+		return s.engineUnavailableErr(d.EngineID)
 	}
 	deadline := time.NewTimer(s.settings.PieceWaitTimeout())
 	defer deadline.Stop()
 	for {
-		pieces, err := s.engine.Pieces(ctx, hash)
+		pieces, err := engine.Pieces(ctx, hash)
 		if err != nil {
 			return err
 		}
@@ -2473,7 +2480,7 @@ func (s *Service) WaitRange(ctx context.Context, d domain.Download, start, count
 			pieceSize = d.PieceSize
 		}
 		if pieceSize <= 0 {
-			return fmt.Errorf("qBittorrent did not report piece size")
+			return fmt.Errorf("engine did not report piece size")
 		}
 		first := (d.FileOffset + start) / pieceSize
 		last := (d.FileOffset + start + count - 1) / pieceSize
@@ -2545,25 +2552,50 @@ func sourceID(release, path string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:18])
 }
 
-// SetEngineRoutePrefix selects the Engine route prefix the active engine
-// issues ("qb:" or "native:"). Composition calls it at startup; the empty
-// default keeps the historical qBittorrent routing.
-func (s *Service) SetEngineRoutePrefix(prefix string) {
-	s.engineRoutePrefix = prefix
+// engineIdentities maps owner prefixes to the user-facing engine identity
+// used in diagnostics and error messages.
+var engineIdentities = map[string]string{
+	"native:": EngineNative,
+	"qb:":     EngineQbittorrent,
 }
 
-func (s *Service) enginePrefix() string {
-	if s.engineRoutePrefix == "" {
-		return "qb:"
+// engineIdentity names an owner prefix for diagnostics and messages:
+// "native:" -> "native", "qb:" -> "qbittorrent".
+func engineIdentity(prefix string) string {
+	if name, ok := engineIdentities[prefix]; ok {
+		return name
 	}
-	return s.engineRoutePrefix
+	return strings.TrimSuffix(prefix, ":")
 }
 
-// route splits an Engine route into its engine hash. Routes issued by another
-// engine fail the prefix check and surface as unavailable downloads — the
-// behavior that already exists when an engine torrent goes missing.
-func (s *Service) route(engineID string) (string, bool) {
-	return strings.CutPrefix(engineID, s.enginePrefix())
+// routePrefix returns the owner prefix of a "prefix:hash" route.
+func routePrefix(route string) string {
+	prefix, _, _ := strings.Cut(route, ":")
+	return prefix + ":"
+}
+
+// owner splits an Engine route and returns the engine registered under its
+// prefix. Routes issued by an engine absent from the set fail the lookup and
+// surface as unavailable downloads — there is no fallback to the default.
+func (s *Service) owner(route string) (TorrentEngine, string, bool) {
+	return s.engines.Resolve(route)
+}
+
+// engineUnavailableErr renders the neutral unavailable error for a download
+// whose owning engine is absent from the set: it names the route and either
+// the engine's construction error or the fact it was never constructed.
+func (s *Service) engineUnavailableErr(route string) error {
+	initErr, _ := s.engines.InitError(routePrefix(route))
+	reason := "not constructed"
+	if initErr != nil {
+		reason = initErr.Error()
+	}
+	return fmt.Errorf("%w: %s (%s)", domain.ErrEngineUnavailable, route, reason)
+}
+
+// EngineDefault names the engine new acquisitions are issued under.
+func (s *Service) EngineDefault() string {
+	return engineIdentity(s.engines.DefaultPrefix())
 }
 
 func safeJoin(root, name string) (string, error) {

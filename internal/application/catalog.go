@@ -501,7 +501,7 @@ func sourcesForTitle(sources []domain.CatalogSource, titleID string) []domain.Ca
 
 func (s *Service) catalogTorrentManifest(ctx context.Context, releaseID string) (domain.TorrentManifest, error) {
 	manifest, err := s.repo.GetTorrentManifest(ctx, releaseID)
-	if err == nil || err != sql.ErrNoRows || s.engine == nil {
+	if err == nil || err != sql.ErrNoRows || s.engines.Default() == nil {
 		return manifest, err
 	}
 	downloads, listErr := s.repo.ListDownloads(ctx)
@@ -512,11 +512,11 @@ func (s *Service) catalogTorrentManifest(ctx context.Context, releaseID string) 
 		if download.ReleaseID != releaseID {
 			continue
 		}
-		hash, ok := s.route(download.EngineID)
+		engine, hash, ok := s.owner(download.EngineID)
 		if !ok {
 			continue
 		}
-		files, filesErr := s.engine.Files(ctx, hash)
+		files, filesErr := engine.Files(ctx, hash)
 		if filesErr != nil || len(files) == 0 {
 			continue
 		}

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -114,7 +115,7 @@ func TestWaitRangeDoesNotRequireTorrentCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := &Service{engine: pieceEngine{}, settings: settings}
+	service := &Service{engines: singleEngineSet(t, "qb:", pieceEngine{}), settings: settings}
 	download := domain.Download{EngineID: "qb:abc", PieceSize: 4, Progress: 0.5}
 	if err := service.WaitRange(t.Context(), download, 0, 4); err != nil {
 		t.Fatalf("downloaded range in incomplete torrent should be immediately streamable: %v", err)
@@ -265,7 +266,7 @@ func TestRetryResumesExistingTorrent(t *testing.T) {
 	repo, settings := retryHarness(t)
 	seedRetryDownload(t, repo, "release", true)
 	engine := &retryEngine{}
-	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), singleEngineSet(t, "qb:", engine), repo, settings)
 	if err := service.Manage(context.Background(), "episode", "retry", false); err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +283,7 @@ func TestRetryRepreparesVanishedTorrent(t *testing.T) {
 	repo, settings := retryHarness(t)
 	seedRetryDownload(t, repo, "release", true)
 	engine := &retryEngine{resumeErr: domain.ErrTorrentNotFound}
-	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), singleEngineSet(t, "qb:", engine), repo, settings)
 	if err := service.Manage(context.Background(), "episode", "retry", false); err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +303,7 @@ func TestRetrySurfacesErrorWhenReleaseGone(t *testing.T) {
 	repo, settings := retryHarness(t)
 	seedRetryDownload(t, repo, "gone", false)
 	engine := &retryEngine{resumeErr: domain.ErrTorrentNotFound}
-	service := NewService(testRegistry(openCatalog{}), engine, repo, settings)
+	service := NewService(testRegistry(openCatalog{}), singleEngineSet(t, "qb:", engine), repo, settings)
 	err := service.Manage(context.Background(), "episode", "retry", false)
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("retry without a cached release must surface the lookup error: %v", err)
@@ -312,16 +313,16 @@ func TestRetrySurfacesErrorWhenReleaseGone(t *testing.T) {
 	}
 }
 
-func TestEngineRoutePrefix(t *testing.T) {
-	s := &Service{}
-	if hash, ok := s.route("qb:abc123"); !ok || hash != "abc123" {
+func TestOwnerResolvesRoutesByPrefix(t *testing.T) {
+	s := &Service{engines: singleEngineSet(t, "qb:", nil)}
+	if _, hash, ok := s.owner("qb:abc123"); !ok || hash != "abc123" {
 		t.Fatalf("default prefix must resolve qb: routes, got %q %v", hash, ok)
 	}
-	s.SetEngineRoutePrefix("native:")
-	if hash, ok := s.route("native:deadbeef"); !ok || hash != "deadbeef" {
+	s.engines = singleEngineSet(t, "native:", nil)
+	if _, hash, ok := s.owner("native:deadbeef"); !ok || hash != "deadbeef" {
 		t.Fatalf("native prefix must resolve, got %q %v", hash, ok)
 	}
-	if _, ok := s.route("qb:abc123"); ok {
+	if _, _, ok := s.owner("qb:abc123"); ok {
 		t.Fatal("a foreign engine route must not resolve")
 	}
 }
@@ -338,8 +339,7 @@ func TestDownloadsMarksForeignEngineRouteUnavailable(t *testing.T) {
 	if err := repo.SaveDownload(ctx, stale); err != nil {
 		t.Fatal(err)
 	}
-	service := NewService(testRegistry(openCatalog{}), &retryEngine{}, repo, settings)
-	service.SetEngineRoutePrefix("native:")
+	service := NewService(testRegistry(openCatalog{}), singleEngineSet(t, "native:", &retryEngine{}), repo, settings)
 	items, err := service.Downloads(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -349,6 +349,104 @@ func TestDownloadsMarksForeignEngineRouteUnavailable(t *testing.T) {
 	}
 	if items[0].State != "unavailable" || items[0].Error == "" {
 		t.Fatalf("a foreign qb: row must surface unavailable under native routing, got state=%q error=%q", items[0].State, items[0].Error)
+	}
+}
+
+type dummyEngine struct{ TorrentEngine }
+
+func singleEngineSet(t *testing.T, prefix string, e TorrentEngine) *EngineSet {
+	t.Helper()
+	if prefix == "" {
+		prefix = "qb:"
+	}
+	if e == nil {
+		e = &dummyEngine{}
+	}
+	es, err := NewEngineSet(prefix, map[string]TorrentEngine{prefix: e})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return es
+}
+
+type routingEngine struct {
+	TorrentEngine
+	mu    sync.Mutex
+	state string
+	hits  []string
+}
+
+func (e *routingEngine) Status(_ context.Context, hash string) (domain.DownloadStatus, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.hits = append(e.hits, hash)
+	return domain.DownloadStatus{Hash: hash, State: e.state, TotalBytes: 4096}, nil
+}
+
+func (e *routingEngine) statusHits() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]string(nil), e.hits...)
+}
+
+func (e *routingEngine) Files(context.Context, string) ([]domain.TorrentFile, error) {
+	return []domain.TorrentFile{{Index: 0, Path: "video.mkv", SizeBytes: 4096, Playable: true}}, nil
+}
+
+func TestDownloadsRoutesEachRowToItsOwnEngine(t *testing.T) {
+	repo, settings := retryHarness(t)
+	ctx := context.Background()
+	seedRetentionRelease(t, repo, "native-release", "Native.S01.1080p.WEB-DL")
+	seedRetentionRelease(t, repo, "qb-release", "QBit.S01.1080p.WEB-DL")
+	seedRetentionRelease(t, repo, "ghost-release", "Ghost.S01.1080p.WEB-DL")
+	native, qb := &routingEngine{state: "downloading"}, &routingEngine{state: "pausedUP"}
+	set, err := NewEngineSet("qb:", map[string]TorrentEngine{"native:": native, "qb:": qb})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	for _, row := range []domain.Download{
+		{ID: "native-row", ReleaseID: "filelist:native-release", EngineID: "native:nativehash", TrackerID: "filelist", TrackerName: "FileList", FileIndex: 0, FilePath: "native-row.mkv", CreatedAt: now, UpdatedAt: now},
+		{ID: "qb-row", ReleaseID: "filelist:qb-release", EngineID: "qb:qbhash", TrackerID: "filelist", TrackerName: "FileList", FileIndex: 0, FilePath: "qb-row.mkv", CreatedAt: now, UpdatedAt: now},
+		{ID: "ghost-row", ReleaseID: "filelist:ghost-release", EngineID: "ghost:ghosthash", TrackerID: "filelist", TrackerName: "FileList", FileIndex: 0, FilePath: "ghost-row.mkv", CreatedAt: now, UpdatedAt: now},
+	} {
+		if err := repo.SaveDownload(ctx, row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	service := NewService(testRegistry(openCatalog{}), set, repo, settings)
+
+	items, err := service.Downloads(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected all three rows to list, got %d", len(items))
+	}
+	byID := map[string]domain.Download{}
+	for _, item := range items {
+		byID[item.ID] = item
+	}
+	if got := byID["native-row"].State; got != "downloading" {
+		t.Fatalf("the native row must reflect its own engine state, got %q", got)
+	}
+	if got := byID["qb-row"].State; got != "pausedUP" {
+		t.Fatalf("the qb row must reflect its own engine state, got %q", got)
+	}
+	if !slices.Equal(native.statusHits(), []string{"nativehash"}) || !slices.Equal(qb.statusHits(), []string{"qbhash"}) {
+		t.Fatalf("each engine must be probed only for its own hashes: native=%v qb=%v", native.statusHits(), qb.statusHits())
+	}
+	ghost := byID["ghost-row"]
+	if ghost.State != "unavailable" || ghost.Error == "" {
+		t.Fatalf("a row whose engine is absent from the set must surface unavailable, got state=%q error=%q", ghost.State, ghost.Error)
+	}
+	if !strings.Contains(ghost.Error, domain.ErrEngineUnavailable.Error()) || !strings.Contains(ghost.Error, "ghost:") {
+		t.Fatalf("unavailable row must wrap ErrEngineUnavailable and name the prefix, got %q", ghost.Error)
+	}
+	for _, id := range []string{"native-row", "qb-row"} {
+		if byID[id].TrackerID != "filelist" || byID[id].TrackerName != "FileList" {
+			t.Fatalf("%s lost its tracker labels: %+v", id, byID[id])
+		}
 	}
 }
 
@@ -370,7 +468,7 @@ func TestPrepareRemovesReleaseDeletedFromTracker(t *testing.T) {
 	if _, err := repo.UpsertReleases(context.Background(), []domain.TorrentRelease{movie}); err != nil {
 		t.Fatal(err)
 	}
-	service := NewService(testRegistry(deadCatalog{}), &retryEngine{}, repo, settings)
+	service := NewService(testRegistry(deadCatalog{}), singleEngineSet(t, "qb:", &retryEngine{}), repo, settings)
 	_, err := service.Prepare(context.Background(), movie.ID, 0)
 	if err == nil || !strings.Contains(err.Error(), "no longer available on FileList") {
 		t.Fatalf("prepare must explain the removal to the user, got %v", err)
@@ -421,7 +519,7 @@ func (e *closerEngine) Close() error {
 func TestCloseJoinsWorkersClosesEngineAndRepositoryIdempotently(t *testing.T) {
 	repo, settings := retryHarness(t)
 	engine := &closerEngine{}
-	service := NewService(testRegistry(idleCatalog{}), engine, repo, settings)
+	service := NewService(testRegistry(idleCatalog{}), singleEngineSet(t, "qb:", engine), repo, settings)
 	service.StartScheduler()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -470,7 +568,7 @@ func TestCloseTimeoutAbortsHandoffKeepsRepositoryOpenAndBlocksJournal(t *testing
 	repo, settings := retryHarness(t)
 	catalog := &blockingCatalog{release: make(chan struct{})}
 	engine := &closerEngine{}
-	service := NewService(testRegistry(catalog), engine, repo, settings)
+	service := NewService(testRegistry(catalog), singleEngineSet(t, "qb:", engine), repo, settings)
 	if _, err := service.SyncCatalog("latest"); err != nil {
 		t.Fatal(err)
 	}

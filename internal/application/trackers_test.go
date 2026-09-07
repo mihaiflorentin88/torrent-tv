@@ -180,7 +180,7 @@ func (h *trackerHarness) openRepo(t *testing.T) *sqlite.Repository {
 
 func (h *trackerHarness) newService(t *testing.T, registry *TrackerRegistry, engine TorrentEngine, repo *sqlite.Repository) *Service {
 	t.Helper()
-	service := NewService(registry, engine, repo, h.settings)
+	service := NewService(registry, singleEngineSet(t, "qb:", engine), repo, h.settings)
 	t.Cleanup(func() { _ = service.Close(context.Background()) })
 	return service
 }
@@ -880,7 +880,7 @@ func TestCatalogDetailAndSetTitleFavoriteSurfaceListDownloadsError(t *testing.T)
 	injected := errors.New("injected repository failure")
 	failRepo := failListDownloadsRepo{Repository: realRepo, err: injected}
 	reg, _ := NewTrackerRegistry(nil)
-	service := NewService(reg, nil, failRepo, h.settings)
+	service := NewService(reg, singleEngineSet(t, "qb:", nil), failRepo, h.settings)
 
 	ctx := context.Background()
 	_, err := service.CatalogDetail(ctx, "title-missing")

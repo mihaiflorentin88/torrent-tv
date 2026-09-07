@@ -66,7 +66,7 @@ func newAnchorTestServiceWithRepo(t *testing.T, probe MediaProbe, download domai
 	if err := repo.SaveDownload(ctx, download); err != nil {
 		t.Fatal(err)
 	}
-	service := NewService(nil, nil, repo, settings)
+	service := NewService(nil, singleEngineSet(t, "qb:", nil), repo, settings)
 	service.SetMediaProbe(probe)
 	return service, repo
 }

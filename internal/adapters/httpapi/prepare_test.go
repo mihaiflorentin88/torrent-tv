@@ -113,7 +113,7 @@ func newPrepareGateHandler(t *testing.T, engine application.TorrentEngine) http.
 			Configured: func() bool { return true },
 		},
 	})
-	service := application.NewService(registry, engine, repo, store)
+	service := application.NewService(registry, testEngineSet(t, engine), repo, store)
 	return New(service, store, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
 }
 

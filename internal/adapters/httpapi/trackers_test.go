@@ -133,7 +133,7 @@ func newTrackerFixture(t *testing.T, engine application.TorrentEngine, registrat
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := application.NewService(registry, engine, repo, store)
+	service := application.NewService(registry, testEngineSet(t, engine), repo, store)
 	return trackerFixture{
 		handler: New(service, store, slog.New(slog.NewTextHandler(io.Discard, nil)), "test"),
 		service: service,

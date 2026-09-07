@@ -46,7 +46,6 @@ type App struct {
 	Server     *http.Server
 	Settings   *config.Store
 	Repository *sqlite.Repository
-	Engine     io.Closer
 	// Service owns the worker, engine, and repository lifetime. Close
 	// routes through it so workers join before engine/repository close.
 	Service *application.Service
@@ -160,9 +159,8 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tracker registry: %w", err)
 	}
-	var engine application.TorrentEngine
-	var engineCloser io.Closer
-	routePrefix := "qb:"
+	engines := map[string]application.TorrentEngine{}
+	var defaultPrefix string
 	switch current.DownloadEngine {
 	case "", "native":
 		nt, err := nativetorrent.New(nativetorrent.Config{
@@ -175,19 +173,24 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 		if err != nil {
 			return nil, fmt.Errorf("native torrent engine: %w", err)
 		}
-		engine, engineCloser, routePrefix = nt, nt, "native:"
+		engines["native:"] = nt
+		defaultPrefix = "native:"
 	case "qbittorrent":
-		engine = qbittorrent.New(func() (string, string, string) {
+		engines["qb:"] = qbittorrent.New(func() (string, string, string) {
 			v := settings.Get()
 			return v.QBittorrentURL, v.QBittorrentUsername, v.QBittorrentPassword
 		})
+		defaultPrefix = "qb:"
 	default:
 		return nil, fmt.Errorf("unknown download engine %q", current.DownloadEngine)
 	}
-	service := application.NewService(registry, engine, repo, settings, subtitles.NewSubDL(settings))
+	engineSet, err := application.NewEngineSet(defaultPrefix, engines)
+	if err != nil {
+		return nil, fmt.Errorf("torrent engines: %w", err)
+	}
+	service := application.NewService(registry, engineSet, repo, settings, subtitles.NewSubDL(settings))
 	service.SetMetadataProvider(tmdb.New(func() string { return settings.Get().TMDBAPIKey }))
 	service.SetMediaProbe(mediaprobe.New(settings))
-	service.SetEngineRoutePrefix(routePrefix)
 	service.StartScheduler()
 
 	// Integration wiring: the hub and the update coordinator are
@@ -198,7 +201,6 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 	app := &App{
 		Settings:      settings,
 		Repository:    repo,
-		Engine:        engineCloser,
 		Service:       service,
 		ListenAddress: current.ListenAddress,
 	}
@@ -328,9 +330,6 @@ func (a *App) Close(ctx context.Context) error {
 	}
 	if a.Service != nil {
 		return a.Service.Close(ctx)
-	}
-	if a.Engine != nil {
-		_ = a.Engine.Close()
 	}
 	if a.Repository != nil {
 		return a.Repository.Close()

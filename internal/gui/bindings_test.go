@@ -347,6 +347,20 @@ func TestOpenURLRestrictsSchemes(t *testing.T) {
 // settings surfaces only touch the store.
 type parityRepo struct{ application.Repository }
 
+// stubEngine is an inert TorrentEngine; the settings surfaces never call it.
+type stubEngine struct{ application.TorrentEngine }
+
+// testEngineSet builds the single-engine routing set the service constructor
+// takes.
+func testEngineSet(t *testing.T) *application.EngineSet {
+	t.Helper()
+	es, err := application.NewEngineSet("qb:", map[string]application.TorrentEngine{"qb:": stubEngine{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return es
+}
+
 // TestBindingsSettingsSurfaceParityWithHTTP pins that LoadSettings and
 // SettingsSchema serve byte-identical JSON shapes to GET /api/v1/settings
 // and /api/v1/settings/schema for the same store.
@@ -372,7 +386,7 @@ func TestBindingsSettingsSurfaceParityWithHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := httpapi.New(application.NewService(nil, nil, parityRepo{}, store), store, testLogger(), "test")
+	handler := httpapi.New(application.NewService(nil, testEngineSet(t), parityRepo{}, store), store, testLogger(), "test")
 	b := &Bindings{settings: store}
 
 	getJSON := func(target any, url string, payload any) {

@@ -117,7 +117,7 @@ func newSubtitleTestServiceWithRepo(t *testing.T, engine *subtitleEngineStub, pr
 	if err := repo.SaveDownload(ctx, download); err != nil {
 		t.Fatal(err)
 	}
-	service := NewService(nil, engine, repo, settings, providers...)
+	service := NewService(nil, singleEngineSet(t, "qb:", engine), repo, settings, providers...)
 	service.SetMediaProbe(probe)
 	return service, repo
 }

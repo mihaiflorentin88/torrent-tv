@@ -104,7 +104,7 @@ func TestHouseholdStateAndRemovalLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	engine := &removeEngine{}
-	service := NewService(nil, engine, repo, settings)
+	service := NewService(nil, singleEngineSet(t, "qb:", engine), repo, settings)
 	state, err := service.UpdatePlayback(ctx, download.ID, 899, 1000)
 	if err != nil || state.Watched {
 		t.Fatalf("89.9%% must not be watched: %#v %v", state, err)
@@ -193,7 +193,7 @@ func TestPrepareReusesManagedDownloadWithoutTrackerLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	catalog := &failingCatalog{}
-	service := NewService(testRegistry(catalog), &removeEngine{}, repo, settings)
+	service := NewService(testRegistry(catalog), singleEngineSet(t, "qb:", &removeEngine{}), repo, settings)
 
 	got, err := service.Prepare(ctx, release.ID, download.FileIndex)
 	if err != nil || got.ID != download.ID {
@@ -238,7 +238,7 @@ func TestPrepareReappliesStreamingSettingsForIncompleteManagedDownload(t *testin
 		t.Fatal(err)
 	}
 	engine := &streamingEngine{}
-	service := NewService(testRegistry(&failingCatalog{}), engine, repo, settings)
+	service := NewService(testRegistry(&failingCatalog{}), singleEngineSet(t, "qb:", engine), repo, settings)
 	if _, err := service.Prepare(ctx, release.ID, download.FileIndex); err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestFavoritePrefersManagedSourceForCanonicalTitle(t *testing.T) {
 	if err := repo.SetFavorite(ctx, householdProfile, titleID, true); err != nil {
 		t.Fatal(err)
 	}
-	service := NewService(nil, &removeEngine{}, repo, settings)
+	service := NewService(nil, singleEngineSet(t, "qb:", &removeEngine{}), repo, settings)
 	state, err := service.HouseholdState(ctx)
 	if err != nil || len(state.Favorites) != 1 {
 		t.Fatalf("favorite was not returned: %#v %v", state, err)
@@ -347,7 +347,7 @@ func TestHouseholdStateGroupsSeriesEpisodesByCanonicalTitle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	service := NewService(nil, &removeEngine{}, repo, settings)
+	service := NewService(nil, singleEngineSet(t, "qb:", &removeEngine{}), repo, settings)
 	state, err := service.HouseholdState(ctx)
 	if err != nil {
 		t.Fatal(err)

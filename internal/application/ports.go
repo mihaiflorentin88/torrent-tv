@@ -43,6 +43,14 @@ type TorrentEngine interface {
 	Remove(context.Context, string, bool) error
 	ResolveMagnet(ctx context.Context, uri string, downloadRoot string) ([]byte, error)
 }
+
+const (
+	// EngineNative names the built-in torrent engine.
+	EngineNative = "native"
+	// EngineQbittorrent names the qBittorrent engine.
+	EngineQbittorrent = "qbittorrent"
+)
+
 type SubtitleQuery struct {
 	Release          domain.TorrentRelease
 	MediaPath        string
