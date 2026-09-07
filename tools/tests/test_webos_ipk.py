@@ -52,7 +52,7 @@ def make_ar(members: list[tuple[str, bytes]]) -> bytes:
 
 VALID_APPINFO = {
     "id": "com.torrenttv.app",
-    "version": "0.5.11",
+    "version": "0.6.0",
     "vendor": "torrent-tv",
     "type": "web",
     "main": "index.html",
@@ -66,7 +66,7 @@ VALID_APPINFO = {
 
 VALID_CONTROL = (
     "Package: com.torrenttv.app\n"
-    "Version: 0.5.11\n"
+    "Version: 0.6.0\n"
     "Architecture: all\n"
     "Maintainer: torrent-tv\n"
     "Description: Torrent TV\n"
@@ -129,10 +129,10 @@ class WebosIpkTests(unittest.TestCase):
     def test_valid_fixture_passes_validation(self):
         with tempfile.TemporaryDirectory() as td:
             ipk_path = self.write_ipk_file(self.make_ipk(), Path(td))
-            report = webos_ipk.validate_archive(ipk_path, target_version="0.5.11")
+            report = webos_ipk.validate_archive(ipk_path, target_version="0.6.0")
             self.assertIn("Compatible webOS package structure", report)
             self.assertIn("id=com.torrenttv.app", report)
-            self.assertIn("version=0.5.11", report)
+            self.assertIn("version=0.6.0", report)
             self.assertIn("architecture=all", report)
 
     def test_rejects_missing_or_wrong_extension(self):
@@ -197,7 +197,7 @@ class WebosIpkTests(unittest.TestCase):
 
             # Missing package field
             bad1 = self.write_ipk_file(
-                self.make_ipk(control_bytes=b"Version: 0.5.11\nArchitecture: all\n"),
+                self.make_ipk(control_bytes=b"Version: 0.6.0\nArchitecture: all\n"),
                 root, name="c1.ipk"
             )
             with self.assertRaisesRegex(webos_ipk.WebosIpkError, "missing required 'Package' field"):
@@ -207,7 +207,7 @@ class WebosIpkTests(unittest.TestCase):
             for prefix in ("com.palm.app", "com.webos.app", "com.lge.app"):
                 bad_prefix = self.write_ipk_file(
                     self.make_ipk(
-                        control_bytes=f"Package: {prefix}\nVersion: 0.5.11\nArchitecture: all\n".encode(),
+                        control_bytes=f"Package: {prefix}\nVersion: 0.6.0\nArchitecture: all\n".encode(),
                         pkg_id=prefix,
                     ),
                     root, name=f"{prefix}.ipk"
@@ -217,7 +217,7 @@ class WebosIpkTests(unittest.TestCase):
 
             # Architecture not "all"
             bad_arch = self.write_ipk_file(
-                self.make_ipk(control_bytes=b"Package: com.torrenttv.app\nVersion: 0.5.11\nArchitecture: arm\n"),
+                self.make_ipk(control_bytes=b"Package: com.torrenttv.app\nVersion: 0.6.0\nArchitecture: arm\n"),
                 root, name="c2.ipk"
             )
             with self.assertRaisesRegex(webos_ipk.WebosIpkError, "control Architecture must be 'all'"):
@@ -228,8 +228,8 @@ class WebosIpkTests(unittest.TestCase):
                 self.make_ipk(control_bytes=b"Package: com.torrenttv.app\nVersion: 1.0.0\nArchitecture: all\n"),
                 root, name="c3.ipk"
             )
-            with self.assertRaisesRegex(webos_ipk.WebosIpkError, "does not match expected '0.5.11'"):
-                webos_ipk.validate_archive(bad_ver, target_version="0.5.11")
+            with self.assertRaisesRegex(webos_ipk.WebosIpkError, "does not match expected '0.6.0'"):
+                webos_ipk.validate_archive(bad_ver, target_version="0.6.0")
 
     def test_rejects_missing_appinfo_json(self):
         with tempfile.TemporaryDirectory() as td:
@@ -321,7 +321,7 @@ class WebosIpkTests(unittest.TestCase):
                     self.make_ipk(extra_data={"usr/palm/applications/com.torrenttv.app/bgImage.png": png(*dims)}),
                     root, name=f"bg_{dims[0]}.ipk"
                 )
-                report = webos_ipk.validate_archive(ipk, target_version="0.5.11")
+                report = webos_ipk.validate_archive(ipk, target_version="0.6.0")
                 self.assertIn("Compatible webOS package structure", report)
 
     def test_rejects_missing_runtime_scripts(self):
@@ -395,13 +395,13 @@ class WebosIpkTests(unittest.TestCase):
     def test_checksum_emission(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            ipk = self.write_ipk_file(self.make_ipk(), root, name="torrent-tv-0.5.11-webos.ipk")
+            ipk = self.write_ipk_file(self.make_ipk(), root, name="torrent-tv-0.6.0-webos.ipk")
             digest = webos_ipk.write_checksum(ipk)
             self.assertEqual(64, len(digest))
-            sha_file = root / "torrent-tv-0.5.11-webos.ipk.sha256"
+            sha_file = root / "torrent-tv-0.6.0-webos.ipk.sha256"
             self.assertTrue(sha_file.is_file())
             content = sha_file.read_text(encoding="utf-8")
-            self.assertEqual(f"{digest}  torrent-tv-0.5.11-webos.ipk\n", content)
+            self.assertEqual(f"{digest}  torrent-tv-0.6.0-webos.ipk\n", content)
 
     def test_rejects_module_launcher_tags_in_packaged_html(self):
         with tempfile.TemporaryDirectory() as td:
@@ -468,7 +468,7 @@ class WebosIpkTests(unittest.TestCase):
             out_ipk = root / "out.ipk"
 
             with self.assertRaisesRegex(webos_ipk.WebosIpkError, "appinfo file .* is not valid JSON"):
-                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.5.11", ares_bin=str(stub))
+                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.6.0", ares_bin=str(stub))
             self.assertFalse(out_ipk.exists())
 
     def test_pack_cleans_up_and_does_not_leave_output_on_archive_validation_failure(self):
@@ -505,7 +505,7 @@ echo "corrupt-archive" > "$out_dir/bad.ipk"
             out_ipk = root / "out.ipk"
 
             with self.assertRaises(webos_ipk.WebosIpkError):
-                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.5.11", ares_bin=str(stub))
+                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.6.0", ares_bin=str(stub))
             self.assertFalse(out_ipk.exists())
 
     def test_pack_unlinks_preexisting_output_on_archive_validation_failure(self):
@@ -541,7 +541,7 @@ echo "corrupt-archive" > "$out_dir/bad.ipk"
             out_ipk.write_text("pre-existing stale file")
 
             with self.assertRaises(webos_ipk.WebosIpkError):
-                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.5.11", ares_bin=str(stub))
+                webos_ipk.pack(src, appinfo, icons, out_ipk, target_version="0.6.0", ares_bin=str(stub))
             self.assertFalse(out_ipk.exists())
 
 if __name__ == "__main__":

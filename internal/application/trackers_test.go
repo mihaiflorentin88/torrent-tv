@@ -793,3 +793,32 @@ func indexOf(haystack, needle string) int {
 	}
 	return -1
 }
+
+type failListDownloadsRepo struct {
+	Repository
+	err error
+}
+
+func (f failListDownloadsRepo) ListDownloads(ctx context.Context) ([]domain.Download, error) {
+	return nil, f.err
+}
+
+func TestCatalogDetailAndSetTitleFavoriteSurfaceListDownloadsError(t *testing.T) {
+	h := newTrackerHarness(t, 4)
+	realRepo := h.openRepo(t)
+	injected := errors.New("injected repository failure")
+	failRepo := failListDownloadsRepo{Repository: realRepo, err: injected}
+	reg, _ := NewTrackerRegistry(nil)
+	service := NewService(reg, nil, failRepo, h.settings)
+
+	ctx := context.Background()
+	_, err := service.CatalogDetail(ctx, "title-missing")
+	if !errors.Is(err, injected) {
+		t.Fatalf("CatalogDetail error = %v, want %v", err, injected)
+	}
+
+	err = service.SetTitleFavorite(ctx, "title-missing", true)
+	if !errors.Is(err, injected) {
+		t.Fatalf("SetTitleFavorite error = %v, want %v", err, injected)
+	}
+}

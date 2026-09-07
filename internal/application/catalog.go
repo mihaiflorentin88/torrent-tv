@@ -63,13 +63,15 @@ func (s *Service) CatalogDetail(ctx context.Context, id string) (domain.CatalogD
 		seenReleases[m.Release.ID] = true
 	}
 	var extraSources []domain.CatalogSource
-	if managedDownloads, dlErr := s.repo.ListDownloads(ctx); dlErr == nil {
-		for _, dl := range managedDownloads {
-			if dl.TitleID == id && !seenReleases[dl.ReleaseID] {
-				seenReleases[dl.ReleaseID] = true
-				if rel, relErr := s.repo.GetRelease(ctx, dl.ReleaseID); relErr == nil {
-					extraSources = append(extraSources, domain.CatalogSource{Release: rel, Parsed: domain.ParseRelease(rel)})
-				}
+	managedDownloads, dlErr := s.repo.ListDownloads(ctx)
+	if dlErr != nil {
+		return domain.CatalogDetail{}, dlErr
+	}
+	for _, dl := range managedDownloads {
+		if dl.TitleID == id && !seenReleases[dl.ReleaseID] {
+			seenReleases[dl.ReleaseID] = true
+			if rel, relErr := s.repo.GetRelease(ctx, dl.ReleaseID); relErr == nil {
+				extraSources = append(extraSources, domain.CatalogSource{Release: rel, Parsed: domain.ParseRelease(rel)})
 			}
 		}
 	}

@@ -2227,12 +2227,14 @@ func (s *Service) SetTitleFavorite(ctx context.Context, titleID string, favorite
 	}
 	if len(sources) == 0 {
 		hasManaged := false
-		if downloads, dlErr := s.repo.ListDownloads(ctx); dlErr == nil {
-			for _, dl := range downloads {
-				if dl.TitleID == titleID {
-					hasManaged = true
-					break
-				}
+		downloads, dlErr := s.repo.ListDownloads(ctx)
+		if dlErr != nil {
+			return dlErr
+		}
+		for _, dl := range downloads {
+			if dl.TitleID == titleID {
+				hasManaged = true
+				break
 			}
 		}
 		if !hasManaged {

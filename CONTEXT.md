@@ -1,13 +1,16 @@
 # Torrent TV
 
-Turns a private-tracker (FileList) catalog into a browsable, streamable home library for a single household on the home LAN, served by a low-power always-on box.
+Turns multi-tracker (FileList, The Pirate Bay) catalogs into a browsable, streamable home library for a single household on the home LAN, served by a low-power always-on box.
 
 ## Language
 
 ### Tracker & catalog
+**Tracker**:
+An upstream source provider of torrent releases (for example FileList or The Pirate Bay). Each tracker specifies its own categories, capabilities (such as IMDb search, season/episode filters), and acquisition format (.torrent download or magnet URI).
+
 
 **Release**:
-One torrent entry on the FileList tracker; the durable source record the catalog mirrors.
+One torrent entry from an upstream tracker; the durable source record the catalog mirrors, identified uniquely by `(tracker_id, provider_id)`. Old FileList release IDs are preserved byte-for-byte across migration.
 _Avoid_: torrent (when talking about catalog data)
 
 **Parsed release**:
@@ -19,9 +22,8 @@ _Avoid_: source
 
 **Kind**:
 The media class of a Release: `movie` or `series`. Never inferred from the tracker category alone.
-
 **Category**:
-A FileList tracker category ID; a hint that can mislead Kind.
+A tracker category ID or class; a hint that can mislead Kind.
 _Avoid_: genre, section
 
 **Canonical title**:
@@ -32,13 +34,16 @@ The append-only local mirror of tracker Releases; rows are never removed.
 _Avoid_: library
 
 **Catalog sync**:
-A pull of tracker Releases into the Catalog, in one of two modes: `latest` appends the newest tracker window; `rebuild` refreshes every enabled category's window and rebuilds local projections. Append-only either way; runs on a schedule (latest hourly, rebuild weekly) or by hand as Fetch latest / Rebuild catalog.
+A pull of tracker Releases into the Catalog, in one of two modes: `latest` appends the newest tracker window (bounded to 100 releases per provider per category); `rebuild` refreshes every enabled category's window and rebuilds local projections. Append-only either way; runs on a schedule (latest hourly, rebuild weekly) or by hand as Fetch latest / Rebuild catalog.
 _Avoid_: cache rebuild, refresh (unqualified)
 
 ### Playback
 
 **Managed download**:
-A download this server created and tracks. Only Managed downloads are visible or deletable.
+A download this server created and tracks. Only Managed downloads are visible or deletable. Every managed download is permanently labeled with its source `tracker_id` and `tracker_name`. Managed media remains playable without contacting upstream trackers and survives server restarts even when its tracker is disabled or unreachable (downloads-kept guarantee).
+
+**Disabled tracker**:
+A configured tracker with `enabled=false`. Disabling a tracker excludes it from catalog discovery, title expansion, and new download preparation, but never deletes or impairs existing managed downloads or their streamable byte serving.
 
 **Engine route**:
 A persistent pointer to where a torrent lives in the download engine, stable across restarts.
