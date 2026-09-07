@@ -109,23 +109,25 @@ class AvPlayBridge(private val surface: SurfaceView, private val dispatch: (Stri
         return TrackInfo.toJson(tracksOf(exo))
     }
 
-    fun setSelectTrack(type: String, index: Int) {
-        if (type != "AUDIO") return
-        withPlayer { exo ->
-            var audioIndex = 0
-            for (group in exo.currentTracks.groups) {
-                if (group.type != C.TRACK_TYPE_AUDIO) continue
-                for (trackIndex in 0 until group.mediaTrackGroup.length) {
-                    if (audioIndex == index) {
+    fun setSelectTrack(type: String, index: Int): Boolean {
+        if (type != "AUDIO") return false
+        val exo = player ?: return false
+        var audioIndex = 0
+        for (group in exo.currentTracks.groups) {
+            if (group.type != C.TRACK_TYPE_AUDIO) continue
+            for (trackIndex in 0 until group.mediaTrackGroup.length) {
+                if (audioIndex == index) {
+                    onMain {
                         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                             .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
                             .build()
-                        return@withPlayer
                     }
-                    audioIndex++
+                    return true
                 }
+                audioIndex++
             }
         }
+        return false
     }
 
     fun setSilentSubtitle(silent: Boolean) {
