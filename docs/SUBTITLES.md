@@ -36,9 +36,14 @@ The browser tries ranked candidates in order, prepares the first usable one as W
 
 AVPlay native text tracks remain available as a fallback. The Tizen client also requests local candidates, prepares the selected item as WebVTT, parses cues in the app, and renders the current cue itself. This path is deliberate: it avoids device-specific instability in AVPlay external subtitle loading. If no local or native Romanian/English track is usable, the client automatically requests and caches an English online result. Subtitle delay is applied in the cue lookup, while native-track delay uses AVPlay.
 
+## webOS playback
+
+The webOS client renders the same pipeline through its platform adapter: prepared server WebVTT stays the primary path and renders in the shared overlay, while AVPlay-shaped native TEXT tracks are mirrored onto hidden HTML text tracks whose cues forward through the same listener the overlay already consumes. Subtitle delay shifts the native cue evaluation instead of relying on a device delay property, and Off disables every native track so the overlay never doubles with device rendering. Native-track presence on real LG firmware is a pending hardware check ([WEBOS-VERIFICATION.md](WEBOS-VERIFICATION.md)).
+
 ## Preservation constraints
 
 - Do not replace Tizen's parsed-WebVTT overlay with an unverified AVPlay external-subtitle path.
+- Keep the webOS adapter's native text tracks hidden; the shared overlay remains the only renderer on every TV client.
 - Keep local discovery independent from online provider availability and rate limits.
 - Reuse prepared subtitle assets instead of downloading the same candidate again.
 - Preserve per-provider warnings and continue trying other ranked candidates.

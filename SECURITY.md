@@ -1,6 +1,6 @@
 # Security policy
 
-Do not include tracker credentials, passkeys, API keys, qBittorrent credentials, runtime settings, databases, downloaded media, logs, SSH material, or Tizen signing certificates in an issue or commit.
+Do not include tracker credentials, passkeys, API keys, qBittorrent credentials, runtime settings, databases, downloaded media, logs, SSH material, Tizen signing certificates, or webOS Developer Mode pairing material in an issue or commit.
 
 For a sensitive report, use GitHub's private vulnerability reporting feature when it is available on this repository. For a non-sensitive defect, open a regular issue with secrets and private network details removed.
 

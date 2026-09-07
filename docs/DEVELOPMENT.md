@@ -27,6 +27,10 @@ make validate-tizen-wgt TIZEN_TARGET=5.0
 
 `make torrenttv-apk` builds the Android TV client: it requires `clients/tv/dist` to exist (build it with `npm run build -w @torrent-tv/tv`; the Gradle sync fails loudly when it is missing), syncs it into the APK assets with the Android page variant, runs the Kotlin unit tests, and produces `clients/android-tv/.build/artifacts/torrent-tv-<version>-android-tv.apk` plus its checksum. CI's `android-tv` job adds the same-bundle check — the packaged `app.js`/`app.css` must be byte-identical to the Tizen bundle (the spec's Parity contract) — and boots the real APK on the API 26 Android TV emulator, the 2018 support floor, asserting the TorrentTV setup screen renders. See [ANDROIDTV.md](ANDROIDTV.md).
 
+### LG webOS TV build and boot smoke
+
+`npm run build -w @torrent-tv/webos` compiles the shared TV sources for the Chromium 53 floor into `clients/webos/dist` (classic scripts only); the webOS unit tests run with `npm run test -w @torrent-tv/webos`. `make webos-ipk` packs the dist through the official `ares-package` CLI, pinned to `@webos-tools/cli` 3.2.5, producing `clients/webos/.build/artifacts/torrent-tv-<version>-webos.ipk` plus its SHA-256; `make validate-webos-ipk` checks archive layout, LG metadata (the declared version must equal `VERSION`), packaged scripts, and the classic-script gates. `make smoke-webos-engine` boots the packaged index in the pinned `selenoid/chrome:53.0` image — the engine of the required webOS 4.x generation — and runs clean, injected-error, and broken-bundle cases with playback, seek, and track assertions. CI's `webos` job chains build, tests, packaging, validation, the smoke, and the same-bundle byte check that proves the webOS build left the Tizen and Android bundles untouched.
+
 ## Server builds and Raspberry Pi deployment
 
 ```sh
@@ -76,7 +80,7 @@ make build-all      # all seven release binaries + universal macOS .app (Docker;
 
 The dependency direction is domain → application ports → adapters, with concrete wiring only in composition. SQLite uses WAL and pure Go. Runtime settings live in an atomically replaced `0600` JSON file; never make runtime behavior depend on `.env`.
 
-Keep [OpenAPI](../api/openapi.yaml), shared TypeScript models, [API documentation](API.md), [architecture](ARCHITECTURE.md), [Known issues](KNOWN_ISSUES.md), the [Tizen physical-TV log](TIZEN.md), and the [Android TV verification log](ANDROIDTV.md) synchronized with behavior. Any confirmed TV result belongs in its log immediately.
+Keep [OpenAPI](../api/openapi.yaml), shared TypeScript models, [API documentation](API.md), [architecture](ARCHITECTURE.md), [Known issues](KNOWN_ISSUES.md), the [Tizen physical-TV log](TIZEN.md), the [Android TV verification log](ANDROIDTV.md), and the [webOS verification log](WEBOS-VERIFICATION.md) synchronized with behavior. Any confirmed TV result belongs in its log immediately.
 
 The durable environment, provider, cache, TV-focus, and release invariants are in [maintainer and agent notes](MAINTAINER_NOTES.md). Read them before changing or deploying the project. Most importantly: never install tools on a workstation without explicit permission; use the pinned Docker frontend build instead.
 

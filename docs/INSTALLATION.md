@@ -20,7 +20,7 @@ Prebuilt archives for every supported platform are on the [releases page](https:
 - **`desktop`** — desktop app + server in one archive (GUI included).
 - **`cli`** — a raw binary meant to run from a terminal; it can open the desktop UI or run the headless `serve` server.
 - **`headless`** — pure server build, GUI excluded at compile time.
-- TV clients carry their platform instead of a flavor: `samsung-tizen` (WGT) and `android-tv` (APK).
+- TV clients carry their platform instead of a flavor: `samsung-tizen` (WGT), `android-tv` (APK), and `lg-webos` (IPK).
 
 | Release asset | What it is | Pick it when |
 | --- | --- | --- |
@@ -43,6 +43,7 @@ Every release also ships:
 - CycloneDX/SPDX SBOMs for the Go and npm dependencies.
 - The unsigned Tizen `torrent-tv-<version>-samsung-tizen.wgt` (see [Samsung Tizen application](#samsung-tizen-application)).
 - The sideload `torrent-tv-<version>-android-tv.apk` with its `.apk.sha256` checksum (see [Android TV application](#android-tv-application-torrenttv)).
+- The Developer Mode `torrent-tv-<version>-webos.ipk` with its `.sha256` checksum (see [LG webOS TV application](#lg-webos-tv-application)).
 
 Every archive contains the binary — named `torrent-tv` (`torrent-tv.exe` on Windows), so the installed path stays stable across versions — plus a `README.md`. `desktop` and `cli` builds contain both the desktop app and the headless server; `headless` builds exclude the GUI at build time (armv7 via its architecture constraints, the others via the `headless` build tag). If you build from source instead, `make help` lists every target with the exact artifact it produces.
 
@@ -223,3 +224,7 @@ Use the unsigned `torrent-tv-<version>-samsung-tizen.wgt` from a tagged release,
 ## Android TV application (TorrentTV)
 
 Use the `torrent-tv-<version>-android-tv.apk` from a tagged release, or build it with `make torrenttv-apk`. The app runs on Android TV 8.0 (API 26, the 2018 Android TV baseline) and newer, installs by sideload (`adb install`, or a file manager after allowing unknown sources per device), and updates by installing the newer APK over the old one. The app displays as TorrentTV and runs the same screens and design as the Tizen client (see [ANDROIDTV.md](ANDROIDTV.md) and [ADR-0009](adr/0009-android-tv-client-torrenttv.md)). The TV and server must share the same private LAN.
+
+## LG webOS TV application
+
+Use the `torrent-tv-<version>-webos.ipk` and its `.sha256` from a tagged release, or build both with `make webos-ipk` and check them with `make validate-webos-ipk`. The client runs on LG webOS TV 4.0 (2018, Chromium 53) through the current platform with no upper version pin. Install by sideload on a TV with Developer Mode enabled: pair the workstation once (the CLI prompts for the TV's passphrase), then `ares-install torrent-tv-<version>-webos.ipk`; replacement updates install the newer IPK over the old one — the application ID never changes. Disabling Developer Mode, or letting a session expire followed by a reboot, uninstalls sideloaded apps. See [WEBOS.md](WEBOS.md) for pairing, renewal, packaging, and verification commands, and [WEBOS-VERIFICATION.md](WEBOS-VERIFICATION.md) for what has and has not been verified. The TV and server must share the same private LAN.

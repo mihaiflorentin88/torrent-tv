@@ -2,7 +2,7 @@
 
 A self-hosted Go media server with a built-in torrent engine, a responsive web application, Samsung Tizen and LG webOS TV clients, an Android TV client (TorrentTV), and a desktop app for browsing FileList and streaming downloads as they arrive. It is designed for a trusted private LAN and a small server such as a Raspberry Pi 4.
 
-Version **0.3.0** adds the built-in torrent engine — no qBittorrent or Docker required — first-run setup prompts, and automatic ffmpeg/ffprobe detection. Progressive HTTP Range playback from an incomplete download is server-verified; physical Samsung AVPlay verification below 100% remains pending.
+Version **0.6.0** adds the LG webOS TV client: the same shared TV application rebuilt for the webOS Chromium 53 floor and packaged as a Developer Mode IPK; physical-LG verification is tracked in [docs/WEBOS-VERIFICATION.md](docs/WEBOS-VERIFICATION.md). Version **0.3.0** added the built-in torrent engine — no qBittorrent or Docker required — first-run setup prompts, and automatic ffmpeg/ffprobe detection. Progressive HTTP Range playback from an incomplete download is server-verified; physical Samsung AVPlay verification below 100% remains pending.
 
 **[Install](docs/INSTALLATION.md)** — download a binary for Linux, Windows, or macOS from the [releases page](https://github.com/mihaiflorentin88/torrent-tv/releases) and run it. Nothing else is required to start.
 
@@ -11,7 +11,7 @@ Version **0.3.0** adds the built-in torrent engine — no qBittorrent or Docker 
 - **Stream torrents while they download.** The built-in engine prioritizes the pieces playback needs, so playback starts before the download finishes — no qBittorrent or Docker required (qBittorrent stays available as an optional external engine).
 - **Subtitles handled end to end.** Embedded and torrent-packed subtitles are discovered automatically, SubDL downloads are cached and reused, and track preferences (English audio, Romanian subtitles with English fallback) are remembered per file.
 - **Automatic torrent eviction.** Finished downloads clean themselves up when storage runs low, by the rule you pick (default: oldest completed), with protection for incomplete, actively streaming, favorited, and never-watched items.
-- **Watch anywhere on your network.** A responsive web app, the Samsung Tizen TV with native direct playback, and a desktop app — with resume, auto-advance to the next episode, and watch state shared across all of them.
+- **Watch anywhere on your network.** A responsive web app, the Samsung Tizen and LG webOS TVs with native direct playback, the Android TV client, and a desktop app — with resume, auto-advance to the next episode, and watch state shared across all of them.
 - **The whole FileList catalog, fast.** Cached browsing, search, and filtering, with canonical movie and series pages that map every season-pack file to its episode.
 - **Precise download control.** Live progress, speed, and peer state, per-file selection inside season packs, and one action that removes a torrent together with its files.
 
@@ -44,7 +44,7 @@ The README uses 360 px WebP thumbnails and optimized WebP full views so the gall
 
 | Guide | Contents |
 | --- | --- |
-| [Installation and upgrades](docs/INSTALLATION.md) | Requirements and where to get them, per-OS install and run instructions, credential/API-key acquisition, automated and manual installs, GitHub release artifacts, Raspberry Pi deployment, backup, rollback, and Tizen and Android TV installation. |
+| [Installation and upgrades](docs/INSTALLATION.md) | Requirements and where to get them, per-OS install and run instructions, credential/API-key acquisition, automated and manual installs, GitHub release artifacts, Raspberry Pi deployment, backup, rollback, and Tizen, Android TV, and webOS installation. |
 | [User guide](docs/USER_GUIDE.md) | Browsing, season packs, downloads, playback, resume, subtitles, TV operation, and troubleshooting. |
 | [Configuration reference](docs/CONFIGURATION.md) | Settings, paths, limits, language preferences, and provider configuration. |
 | [Tizen guide](docs/TIZEN.md) | Build, signing, Developer Mode, Apps2Samsung installation, D-pad behavior, and physical-TV verification. |
@@ -118,6 +118,6 @@ The idempotent script supports `apt`, `dnf`, `pacman`, and `zypper`. It never ch
 
 ## CI, security, and releases
 
-Every push to `master` runs Go tests/race/vet, browser and TV compiler/tests, WGT validation, and packaging tests. A separate security workflow runs Gitleaks, govulncheck, Trivy, CodeQL, actionlint, Zizmor, and pull-request dependency review; Dependabot checks Go, npm, Actions, and Docker dependencies weekly.
+Every push to `master` runs Go tests/race/vet, browser and TV compiler/tests, WGT and webOS IPK validation, packaging tests, and the Chromium 53 floor boot smoke. A separate security workflow runs Gitleaks, govulncheck, Trivy, CodeQL, actionlint, Zizmor, and pull-request dependency review; Dependabot checks Go, npm, Actions, and Docker dependencies weekly.
 
-`VERSION` is the single release version. A matching `v<VERSION>` tag builds and publishes Linux amd64/arm64/armv7, Windows amd64/arm64, macOS amd64/arm64 (plus a universal `Torrent TV.app`), and an unsigned Apps2Samsung WGT. Releases also contain SHA-256 checksums, CycloneDX/SPDX SBOMs, and build-provenance attestations. See [maintainer notes](docs/MAINTAINER_NOTES.md) and [security policy](SECURITY.md).
+`VERSION` is the single release version. A matching `v<VERSION>` tag builds and publishes Linux amd64/arm64/armv7, Windows amd64/arm64, macOS amd64/arm64 (plus a universal `Torrent TV.app`), an unsigned Apps2Samsung WGT, and a Developer Mode webOS IPK (`torrent-tv-<VERSION>-webos.ipk`) with its checksum. Releases also contain SHA-256 checksums, CycloneDX/SPDX SBOMs, and build-provenance attestations. See [maintainer notes](docs/MAINTAINER_NOTES.md) and [security policy](SECURITY.md).

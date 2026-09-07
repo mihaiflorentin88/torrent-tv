@@ -12,7 +12,7 @@ Browser video and Tizen AVPlay now retry incomplete streams as requested pieces 
 
 ## Direct-play compatibility
 
-The server transcodes browser-hostile audio to AAC stereo and always copies video (see `docs/adr/0003`, which revises `docs/adr/0001`). The web player plays that compatibility stream whenever the selected audio track is one the browser cannot decode (AC3/EAC3/DTS-class, or a non-default track in a multi-track file) and direct-plays the progressive stream otherwise; video is never re-encoded anywhere. Tizen remains direct-play through AVPlay, so unsupported TV video or audio formats require choosing another source. Samsung TV sets since 2018 decode no DTS-class audio — both Verified TV generations included — and AV1 decoding needs a 2021-or-newer set, so a DTS-only or AV1 release on an older TV is avoided by choosing another release, never transcoded away (see `docs/adr/0006`).
+The server transcodes browser-hostile audio to AAC stereo and always copies video (see `docs/adr/0003`, which revises `docs/adr/0001`). The web player plays that compatibility stream whenever the selected audio track is one the browser cannot decode (AC3/EAC3/DTS-class, or a non-default track in a multi-track file) and direct-plays the progressive stream otherwise; video is never re-encoded anywhere. Tizen stays direct-play through AVPlay and webOS through its media adapter over the same Range URLs, so unsupported TV video or audio formats require choosing another source. Samsung TV sets since 2018 decode no DTS-class audio — both Verified TV generations included — and AV1 decoding needs a 2021-or-newer set, so a DTS-only or AV1 release on an older TV is avoided by choosing another release, never transcoded away (se…
 
 ## Tizen 5.0 Support floor degradations
 
@@ -21,6 +21,12 @@ One client spans Tizen 5.0 through the latest platform (see `docs/adr/0006`). On
 **Methods are not syntax.** The `es2017` build target downlevels *syntax* (optional chaining, nullish coalescing) but does nothing about *runtime methods*: `Array.prototype.flatMap` (ES2019, Chromium 69+) shipped inside the bundle and only crashed once the code actually ran on Chromium 63 — latent since the discovery feature landed, first executed on an old engine when 0.3.0 dropped the Support floor to 5.0, killing the discovery scan and the catalog render while the S90C (Chromium 94) never noticed. Nothing in CI caught it, because a modern-engine build and test run cannot exercise a missing method on a 2017 engine. Two guards now do: the WGT validator rejects bundle APIs outside the Support floor, and a headless old-engine smoke boots the real artifact in CI.
 
 **The Error panel is the answer to silent failure.** When the TV client hits an unhandled error, it shows the Error panel — a full-screen, readable, plain-language explanation — and reports the failure to the server's client-diagnostics channel. The client never fails silently; a dead screen is always diagnosable from the couch and from the server logs.
+
+## webOS TV client needs physical-LG verification
+
+The 0.6.0 webOS client ships with automated and available-runtime evidence only. The shared TV application is exercised on the Chromium 53 floor — `selenoid/chrome:53.0`, the engine the required webOS 4.x generation ships — and on current Chromium, including playback, seek, track, and startup-failure assertions, but no physical LG TV has been run. Audible audio-track switching, native subtitle-track presence and its delayed-cue support, the virtual-keyboard visibility event, Back long-press timing, browser handoff, suspend/resume behavior, per-model codec coverage, and incomplete-torrent seeking are pending hardware checks with exact steps in [WEBOS-VERIFICATION.md](WEBOS-VERIFICATION.md).
+
+The Tizen lesson applies unchanged: methods are not syntax. The floor guards on webOS are the core-js polyfills for the audited `Object.entries`/`padStart`/`padEnd` gaps, the `getOwnPropertyDescriptors` fallback that must load before the bundle evaluates, the `@supports not (display: grid)` layout fallbacks, and the behaviorally probed scroll fallback; the packaging validator rejects ES-module launcher tags so a classic-script regression cannot ship silently.
 
 ## Catalog metadata coverage
 

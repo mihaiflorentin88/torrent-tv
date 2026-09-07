@@ -68,7 +68,7 @@ The optional TMDB API key is entered in browser settings and stored only in `dat
 
 The initial listener is `:8097`; requests are accepted only from loopback and RFC1918 private network ranges. Narrow the trusted CIDRs to the actual LAN when practical. Keep the service behind the home firewall and never port-forward it. Changing the listener requires restart.
 
-`instanceName` identifies the server in Tizen discovery results. Choose a short household-friendly name when more than one server exists on the LAN. Discovery validates `/api/v1/system/info`; it does not broadcast credentials or settings.
+`instanceName` identifies the server in TV discovery results on both Tizen and webOS. Choose a short household-friendly name when more than one server exists on the LAN. Discovery validates `/api/v1/system/info`; it does not broadcast credentials or settings.
 
 ## Logs
 
