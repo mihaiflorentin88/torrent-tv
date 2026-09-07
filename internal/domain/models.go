@@ -8,6 +8,10 @@ import (
 
 var ErrTorrentNotFound = errors.New("torrent not found in the active engine")
 
+// ErrEngineUnavailable reports that a download engine is not available:
+// either it failed to construct or it was marked unavailable at runtime.
+var ErrEngineUnavailable = errors.New("download engine unavailable")
+
 // ErrTorrentRemoved reports that the tracker no longer hosts a catalogued
 // release: FileList answers its download endpoint with an HTML error page
 // saying it cannot find the .torrent file.
