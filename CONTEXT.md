@@ -127,6 +127,10 @@ _Avoid_: target version (what a validation run is aimed at)
 The oldest Android TV platform TorrentTV, the Android TV client, runs on: Android 8.0, declared as `minSdk 26` — a pure floor; one APK serves every newer platform with no ceiling. Same posture as the Tizen Support floor.
 _Avoid_: target SDK (a build setting, not the support promise)
 
+
+**webOS floor**:
+The oldest LG webOS TV platform the webOS client is built to run on: webOS TV 4.0 (Chromium 53 engine floor). Declared in packaging as a pure floor; one IPK (`com.torrenttv.app`) serves every newer platform with no ceiling. Same posture as the Tizen Support floor and Android floor. Milestone A covers complete implementation and automated/available-runtime evidence; Milestone B covers physical-TV verification on named hardware.
+_Avoid_: target version
 **Verified TV**:
 A physical TV recorded in the Tizen verification log, where behavior counts as confirmed only by direct observation; the household's 2019 premium set and 2023 S90C are the Verified TVs. Any other Tizen set at or above the Support floor is best-effort. The Android client's verification log lives in docs/ANDROIDTV.md and starts with no named hardware.
 _Avoid_: target TV, test device
