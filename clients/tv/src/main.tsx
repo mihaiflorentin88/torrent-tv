@@ -796,6 +796,10 @@ export function App() {
     let failures = 0;
     let recovering = false;
     let recoveryGeneration = 0;
+    // Visibility-edge-scoped epoch for the visible-return snapshot refresh.
+    // onopen bumps recoveryGeneration (replay suppression only); it must not
+    // invalidate a pending visible-edge titles/facets/jobs refresh.
+    let visibilityEpoch = 0;
     const eventPayload = (event: MessageEvent) => { const envelope = JSON.parse(event.data); return typeof envelope.payload === 'string' ? JSON.parse(envelope.payload) : envelope.payload };
     const loadPortal = () => api.call<PortalState>('/portal/state').then(value => setPortal(value)).catch(() => setPortal(null));
     const loadUpdate = () => api.call<UpdateStatus>('/updates/current').then(value => setUpdateStatus(value)).catch(() => setUpdateStatus(null));
@@ -831,18 +835,19 @@ export function App() {
     const disposeVisibility = onAppVisibilityChange(visible => {
       window.clearTimeout(timer);
       recoveryGeneration++;
+      visibilityEpoch++;
       if (!visible) { suspended = true; stream?.close(); return; }
       suspended = false;
       open();
       void loadState();
       void refreshDownloads();
-      const generation = recoveryGeneration;
+      const epoch = visibilityEpoch;
       void Promise.all([
         api.titles({ pageSize: 12, sort: 'newest' }),
         api.facets(),
         api.jobs({ pageSize: 24 }).catch(() => ({ items: [], nextCursor: null, total: 0 })),
       ]).then(([titlePage, catalogFacets, jobPage]) => {
-        if (stopped || suspended || generation !== recoveryGeneration) return;
+        if (stopped || suspended || epoch !== visibilityEpoch) return;
         setTitles(titlePage.items);
         setFacets(catalogFacets);
         setJobs(jobPage.items);

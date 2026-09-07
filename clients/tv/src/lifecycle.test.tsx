@@ -488,6 +488,19 @@ describe('App SSE lifecycle and visible snapshot reconciliation', () => {
     delete window.FileListTVPlatform;
   });
   it('closes SSE stream on hidden, suppresses retry, and reopens exactly one stream on visible return', async () => {
+    let resolveTitles!: (res: Response) => void;
+    const titlePromise = new Promise<Response>(resolve => { resolveTitles = resolve; });
+    let interceptNextTitles = false;
+
+    globalThis.fetch = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/catalog/titles') && interceptNextTitles) {
+        interceptNextTitles = false;
+        return titlePromise;
+      }
+      return defaultFetchMock(input);
+    });
+
     render(h(App, null), container);
 
     // Allow connect() and initial SSE open() to execute
@@ -512,16 +525,38 @@ describe('App SSE lifecycle and visible snapshot reconciliation', () => {
     // No new streams created while hidden
     expect(MockEventSource.instances.length).toBe(1);
 
+    // Arm intercept for the visible return refresh
+    interceptNextTitles = true;
+
     // App returns to foreground (visible)
     visibilityListener?.(true);
-    await tick(50);
+    await tick(10);
 
     // 3. Opens exactly one new stream (no duplicates)
     expect(MockEventSource.instances.length).toBe(2);
     const stream2 = MockEventSource.instances[1];
     expect(stream2.closed).toBe(false);
 
-    // 4. Refreshes snapshots (titles, facets, jobs, state, downloads)
+    // 4. Stream handshake fires onopen BEFORE refresh fetches resolve
+    stream2.onopen?.();
+    await tick(10);
+
+    // Now titles fetch resolves after the onopen handshake
+    resolveTitles({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        items: [{ id: 'resumed-title', title: 'Resumed Film', kind: 'movie', resolutions: ['1080p'], categories: ['film'], bestSeeders: 10, sourceCount: 1 }],
+        nextCursor: null,
+        total: 1,
+      }),
+    } as unknown as Response);
+    await tick(50);
+
+    // Fresh rail data is applied (not discarded by onopen's generation bump)
+    expect(container.textContent).toContain('Resumed Film');
+
+    // 5. Refreshes snapshots (titles, facets, jobs, state, downloads)
     const fetchCalls = (globalThis.fetch as unknown as Mock).mock.calls.map((c: unknown[]) => String(c[0]));
     expect(fetchCalls.some((url: string) => url.includes('/catalog/titles'))).toBe(true);
     expect(fetchCalls.some((url: string) => url.includes('/catalog/facets'))).toBe(true);
@@ -553,7 +588,15 @@ describe('App SSE lifecycle and visible snapshot reconciliation', () => {
     visibilityListener?.(true);
     await tick(10);
 
+    expect(MockEventSource.instances.length).toBe(2);
+    const stream2 = MockEventSource.instances[1];
+
+    // Stream handshake lands first (does not invalidate epoch)
+    stream2.onopen?.();
+    await tick(10);
+
     // A fresh titles request is in flight. Now immediately suspend again before it resolves!
+    // This newer hidden edge advances visibilityEpoch
     visibilityListener?.(false);
 
     // Late response now arrives from the previous visible era
@@ -563,7 +606,6 @@ describe('App SSE lifecycle and visible snapshot reconciliation', () => {
       json: async () => ({ items: [{ id: 'stale-title', title: 'Stale', kind: 'movie', resolutions: ['1080p'], categories: ['film'], bestSeeders: 10, sourceCount: 1 }], nextCursor: null, total: 1 }),
     } as unknown as Response);
     await tick(30);
-
     // The stale title was dropped and not applied because generation was bumped by the hidden edge
     const titlesInDOM = container.textContent;
     expect(titlesInDOM).not.toContain('Stale');
