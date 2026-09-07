@@ -65,7 +65,7 @@ type CatalogTitle struct {
 	Overview         string          `json:"overview,omitempty"`
 	PosterURL        string          `json:"posterUrl,omitempty"`
 	BackdropURL      string          `json:"backdropUrl,omitempty"`
-	Trackers         []TrackerRef    `json:"trackers,omitempty"`
+	Trackers         []TrackerRef    `json:"trackers"`
 	Categories       []string        `json:"categories"`
 	Resolutions      []string        `json:"resolutions"`
 	SourceCount      int             `json:"sourceCount"`

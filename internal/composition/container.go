@@ -281,6 +281,15 @@ func (a *App) ListenAndServe() error {
 	return a.Server.ListenAndServe()
 }
 
+// RefreshTrackers forwards a settings save to the running service:
+// owned provider work is cancelled so the next discovery round uses the
+// current tracker settings.
+func (a *App) RefreshTrackers() {
+	if a != nil && a.Service != nil {
+		a.Service.RefreshTrackers()
+	}
+}
+
 // triggerStartupUpdate schedules the once-per-app post-readiness update
 // sequence: pending-operation recovery with the health acknowledgement,
 // then one bounded, fail-open automatic apply. It never blocks serving.

@@ -1,12 +1,14 @@
 package application
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
@@ -85,6 +87,19 @@ func (r *TrackerRegistry) Eligible(id string) bool {
 	return entry.Enabled() && entry.Configured()
 }
 
+func (r *TrackerRegistry) Configured(id string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entry, ok := r.registrations[id]
+	if !ok {
+		return false
+	}
+	return entry.Configured()
+}
+
 func (r *TrackerRegistry) EligibleIDs() []string {
 	if r == nil {
 		return nil
@@ -138,6 +153,70 @@ func (r *TrackerRegistry) Status() []TrackerStatus {
 		}
 	}
 	return out
+}
+
+// TrackerStatuses reports the registry's ordered statuses for clients.
+func (s *Service) TrackerStatuses() []TrackerStatus {
+	if s == nil || s.trackers == nil {
+		return nil
+	}
+	return s.trackers.Status()
+}
+
+// LookupTracker finds a registered tracker by ID, regardless of eligibility.
+func (s *Service) LookupTracker(id string) (Tracker, bool) {
+	if s == nil || s.trackers == nil {
+		return nil, false
+	}
+	return s.trackers.Lookup(id)
+}
+
+// TestTracker probes one registered tracker with a bounded, read-only
+// request. Eligibility is deliberately not required: a deliberate
+// connection test may contact a disabled-but-configured provider, and it
+// never ingests or upserts releases.
+func (s *Service) TestTracker(ctx context.Context, id string) (int, error) {
+	tracker, ok := s.LookupTracker(id)
+	if !ok {
+		return 0, fmt.Errorf("unknown tracker %q", id)
+	}
+	if !s.trackers.Configured(id) {
+		return 0, fmt.Errorf("%w: tracker %q is not configured", domain.ErrTrackerUnconfigured, tracker.Name())
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	items, err := tracker.Latest(ctx)
+	return len(items), err
+}
+
+// RefreshTrackers cancels the service's owned provider work — discovery
+// searches, title refreshes, and catalog sync — so the next round re-reads
+// the registry's live settings callbacks after a settings save. It is the
+// single notification both the HTTP settings handler and the desktop
+// bindings call.
+func (s *Service) RefreshTrackers() {
+	if s == nil {
+		return
+	}
+	s.providerMu.Lock()
+	defer s.providerMu.Unlock()
+	if s.providerCancel == nil {
+		return
+	}
+	s.providerCancel()
+	s.providerCtx, s.providerCancel = context.WithCancel(s.baseCtx)
+}
+
+func (s *Service) providerContext() context.Context {
+	if s == nil {
+		return context.Background()
+	}
+	s.providerMu.Lock()
+	defer s.providerMu.Unlock()
+	if s.providerCtx == nil {
+		return s.baseCtx
+	}
+	return s.providerCtx
 }
 
 func searchJobKey(q string) string {

@@ -46,6 +46,9 @@ type Service struct {
 	pendingMetadata   map[string]bool
 	mediaInfoMu       sync.Mutex
 	mediaInfoCache    map[string]cachedMediaInfo
+	providerMu        sync.Mutex
+	providerCtx       context.Context
+	providerCancel    context.CancelFunc
 	baseCtx           context.Context
 	cancelBase        context.CancelFunc
 	stopping          chan struct{}
@@ -76,6 +79,7 @@ func NewService(trackers *TrackerRegistry, e TorrentEngine, r Repository, s *con
 		limit = 10
 	}
 	base, cancel := context.WithCancel(context.Background())
+	provCtx, provCancel := context.WithCancel(base)
 	service := &Service{
 		trackers:         trackers,
 		engine:           e,
@@ -90,6 +94,8 @@ func NewService(trackers *TrackerRegistry, e TorrentEngine, r Repository, s *con
 		pendingMetadata:  map[string]bool{},
 		mediaInfoCache:   map[string]cachedMediaInfo{},
 		freeSpace:        freeDiskBytes,
+		providerCtx:      provCtx,
+		providerCancel:   provCancel,
 		baseCtx:          base,
 		cancelBase:       cancel,
 		stopping:         make(chan struct{}),
@@ -361,7 +367,7 @@ func (s *Service) SyncCatalog(mode string) (domain.Job, error) {
 func (s *Service) runCatalogSync(job domain.Job, mode string) {
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
-	ctx := s.baseCtx
+	ctx := s.providerContext()
 	job.State = "running"
 	job.Progress = .02
 	job.UpdatedAt = time.Now().UTC()
@@ -968,10 +974,6 @@ func (s *Service) upsertTrackerReleases(ctx context.Context, trackerID, trackerN
 	return s.repo.UpsertReleases(ctx, items)
 }
 
-func (s *Service) upsertReleases(ctx context.Context, items []domain.TorrentRelease) ([]domain.TorrentRelease, error) {
-	return s.upsertTrackerReleases(ctx, "filelist", "FileList", items)
-}
-
 func (s *Service) SearchTitles(ctx context.Context, q string) (domain.Page[domain.CatalogTitle], error) {
 	if len([]rune(strings.TrimSpace(q))) < 3 {
 		return domain.Page[domain.CatalogTitle]{}, fmt.Errorf("search query must contain at least three characters")
@@ -1041,7 +1043,7 @@ func (s *Service) runTrackerSearch(request trackerSearchRequest) {
 	s.publish("job.updated", job)
 	s.jobLog(job, "info", "tracker-search", "Submitted search started", map[string]any{"query": request.Query})
 
-	ctx, cancel := context.WithTimeout(s.baseCtx, time.Duration(s.settings.Get().TitleRefreshTimeoutMinutes)*time.Minute)
+	ctx, cancel := context.WithTimeout(s.providerContext(), time.Duration(s.settings.Get().TitleRefreshTimeoutMinutes)*time.Minute)
 	defer cancel()
 
 	page, err := s.Search(ctx, request.Query)
@@ -1161,7 +1163,7 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 	results := make([]refreshResult, len(eligible))
 	var wg sync.WaitGroup
 
-	ctx, cancel := context.WithTimeout(s.baseCtx, time.Duration(s.settings.Get().TitleRefreshTimeoutMinutes)*time.Minute)
+	ctx, cancel := context.WithTimeout(s.providerContext(), time.Duration(s.settings.Get().TitleRefreshTimeoutMinutes)*time.Minute)
 	defer cancel()
 
 	for i, id := range eligible {
@@ -1303,14 +1305,6 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 	s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": request.TitleID, "items": total, "job": job})
 }
 
-func (s *Service) TestFileList(ctx context.Context) (int, error) {
-	tracker, err := s.trackers.RequireEligible("filelist")
-	if err != nil {
-		return 0, err
-	}
-	items, err := tracker.Latest(ctx)
-	return len(items), err
-}
 func (s *Service) TestEngine(ctx context.Context) (string, error) { return s.engine.Test(ctx) }
 
 // ensureAllocationRoom is the starvation path of ADR-0004: before a new

@@ -23,11 +23,12 @@ import (
 // server. closeCalls counts Close invocations (exactly one per app);
 // closed reports the first Close; startups records StartupUpdate triggers.
 type fakeApp struct {
-	addr       string
-	serveErr   error
-	serve      chan error
-	closed     chan struct{}
-	closeCalls atomic.Int32
+	addr         string
+	serveErr     error
+	serve        chan error
+	closed       chan struct{}
+	closeCalls   atomic.Int32
+	refreshCalls atomic.Int32
 }
 
 func (f *fakeApp) ListenAndServe() error {
@@ -47,6 +48,8 @@ func (f *fakeApp) Close(context.Context) error {
 }
 
 func (f *fakeApp) ListenAddress() string { return f.addr }
+
+func (f *fakeApp) RefreshTrackers() { f.refreshCalls.Add(1) }
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -534,4 +537,27 @@ func TestAppAdapterWrapsCompositionApp(t *testing.T) {
 		t.Fatalf("request through wrapped app: %v", err)
 	}
 	resp.Body.Close()
+}
+
+func TestSupervisorRefreshTrackersNotifiesRunningApp(t *testing.T) {
+	serve := make(chan error)
+	app := &fakeApp{serve: serve, closed: make(chan struct{})}
+	sup := newTestSupervisor(t, app, nil, nil)
+	if err := sup.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sup.Stop() })
+	waitForState(t, sup, StateRunning)
+
+	sup.RefreshTrackers()
+	if app.refreshCalls.Load() != 1 {
+		t.Fatalf("refreshCalls = %d, want 1", app.refreshCalls.Load())
+	}
+
+	_ = sup.Stop()
+	waitForState(t, sup, StateStopped)
+	sup.RefreshTrackers()
+	if app.refreshCalls.Load() != 1 {
+		t.Fatalf("refreshCalls after stop = %d, want no extra call", app.refreshCalls.Load())
+	}
 }

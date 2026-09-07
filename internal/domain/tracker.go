@@ -33,4 +33,5 @@ var (
 	ErrTrackerDisabled     = errors.New("tracker is disabled")
 	ErrTrackerUnconfigured = errors.New("tracker is not configured")
 	ErrMagnetUnsupported   = errors.New("new magnets require qBittorrent 4.5.0 or newer, or the native engine")
+	ErrMetadataDeadline    = errors.New("torrent metadata deadline exceeded")
 )

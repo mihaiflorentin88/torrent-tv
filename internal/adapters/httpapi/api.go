@@ -68,6 +68,7 @@ func New(service *application.Service, settings *config.Store, log *slog.Logger,
 	mux.HandleFunc("GET /api/v1/settings/schema", a.settingsSchema)
 	mux.HandleFunc("POST /api/v1/dependencies/{name}/test", a.testDependency)
 	mux.HandleFunc("POST /api/v1/diagnostics/client", a.clientDiagnostic)
+	mux.HandleFunc("GET /api/v1/trackers", a.trackers)
 	mux.HandleFunc("GET /api/v1/catalog/categories", a.categories)
 	mux.HandleFunc("GET /api/v1/catalog/latest", a.catalog)
 	mux.HandleFunc("GET /api/v1/catalog/search", a.search)
@@ -202,7 +203,12 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	current := a.settings.Get()
 	restart := config.RestartRequired(old, current)
+	a.service.RefreshTrackers()
 	write(w, 200, map[string]any{"saved": true, "restartRequired": restart})
+}
+
+func (a *API) trackers(w http.ResponseWriter, r *http.Request) {
+	write(w, http.StatusOK, a.service.TrackerStatuses())
 }
 
 func (a *API) settingsSchema(w http.ResponseWriter, r *http.Request) {
@@ -212,14 +218,17 @@ func (a *API) settingsSchema(w http.ResponseWriter, r *http.Request) {
 func (a *API) testDependency(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 50*time.Second)
 	defer cancel()
-	switch r.PathValue("name") {
-	case "filelist":
-		n, err := a.service.TestFileList(ctx)
+	name := r.PathValue("name")
+	if tracker, ok := a.service.LookupTracker(name); ok {
+		n, err := a.service.TestTracker(ctx, name)
 		if err != nil {
 			problem(w, 502, err)
 			return
 		}
-		write(w, 200, map[string]any{"success": true, "message": "Connected to FileList", "count": n})
+		write(w, 200, map[string]any{"success": true, "message": "Connected to " + tracker.Name(), "count": n})
+		return
+	}
+	switch name {
 	case "qbittorrent":
 		v, err := a.service.TestEngine(ctx)
 		if err != nil {
@@ -352,7 +361,7 @@ func (a *API) searchTitles(w http.ResponseWriter, r *http.Request) {
 		problem(w, 409, err)
 		return
 	}
-	write(w, http.StatusAccepted, map[string]any{"items": page.Items, "nextCursor": page.NextCursor, "total": page.Total, "job": job})
+	write(w, http.StatusAccepted, map[string]any{"items": page.Items, "nextCursor": page.NextCursor, "total": page.Total, "job": job, "trackers": a.service.TrackerStatuses()})
 }
 
 func (a *API) refreshCatalogTitle(w http.ResponseWriter, r *http.Request) {
@@ -446,6 +455,24 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+func prepareProblem(w http.ResponseWriter, err error) {
+	var fit *domain.AllocationError
+	if errors.As(err, &fit) {
+		problem(w, http.StatusConflict, err)
+		return
+	}
+	switch {
+	case errors.Is(err, domain.ErrTrackerDisabled),
+		errors.Is(err, domain.ErrTrackerUnconfigured),
+		errors.Is(err, domain.ErrMagnetUnsupported):
+		problem(w, http.StatusConflict, err)
+	case errors.Is(err, domain.ErrMetadataDeadline), errors.Is(err, context.DeadlineExceeded):
+		problem(w, http.StatusGatewayTimeout, err)
+	default:
+		problem(w, http.StatusBadGateway, err)
+	}
+}
+
 func (a *API) prepare(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		FileIndex int `json:"fileIndex"`
@@ -459,14 +486,7 @@ func (a *API) prepare(w http.ResponseWriter, r *http.Request) {
 	}
 	d, err := a.service.Prepare(r.Context(), r.PathValue("id"), body.FileIndex)
 	if err != nil {
-		var fit *domain.AllocationError
-		if errors.As(err, &fit) {
-			// The starvation path of ADR-0004: a conflict, not a gateway
-			// failure — the detail names the Allocation and the space required.
-			problem(w, http.StatusConflict, err)
-			return
-		}
-		problem(w, 502, err)
+		prepareProblem(w, err)
 		return
 	}
 	write(w, 202, downloadDTO(d))
@@ -486,12 +506,7 @@ func (a *API) prepareSeason(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := a.service.PrepareSeason(r.Context(), r.PathValue("id"), body.Season)
 	if err != nil {
-		var fit *domain.AllocationError
-		if errors.As(err, &fit) {
-			problem(w, http.StatusConflict, err)
-			return
-		}
-		problem(w, http.StatusBadGateway, err)
+		prepareProblem(w, err)
 		return
 	}
 	out := make([]any, len(items))
@@ -1251,7 +1266,7 @@ func downloadDTO(d domain.Download) map[string]any {
 	if d.Progress >= 1 || state == domain.StateSeeding || strings.HasSuffix(state, "up") || state == "completed" {
 		playbackMode = "local"
 	}
-	return map[string]any{"id": d.ID, "releaseId": d.ReleaseID, "titleId": d.TitleID, "displayTitle": d.DisplayTitle, "releaseName": d.ReleaseName, "category": d.Category, "releaseSizeBytes": d.ReleaseSizeBytes, "trackerSeeders": d.TrackerSeeders, "rating": d.Rating, "ratingVotes": d.RatingVotes, "ratingProvider": d.RatingProvider, "parsed": d.Parsed, "engineId": d.EngineID, "fileIndex": d.FileIndex, "filePath": d.FilePath, "mimeType": contentType(d.FilePath), "sizeBytes": d.SizeBytes, "state": d.State, "progress": d.Progress, "playbackMode": playbackMode, "downloadedBytes": d.DownloadedBytes, "speedBytesPerSecond": d.SpeedBytesPerSecond, "uploadSpeedBytesPerSecond": d.UploadSpeedBytesPerSecond, "etaSeconds": d.ETASeconds, "peers": d.Peers, "seeds": d.Seeds, "bufferedBytes": d.BufferedBytes, "leased": d.Leased, "error": d.Error, "createdAt": d.CreatedAt, "updatedAt": d.UpdatedAt, "streamUrl": "/api/v1/streams/" + d.ID, "browserStreamUrl": "/api/v1/streams/" + d.ID + "/browser"}
+	return map[string]any{"id": d.ID, "releaseId": d.ReleaseID, "trackerId": d.TrackerID, "trackerName": d.TrackerName, "titleId": d.TitleID, "displayTitle": d.DisplayTitle, "releaseName": d.ReleaseName, "category": d.Category, "releaseSizeBytes": d.ReleaseSizeBytes, "trackerSeeders": d.TrackerSeeders, "rating": d.Rating, "ratingVotes": d.RatingVotes, "ratingProvider": d.RatingProvider, "parsed": d.Parsed, "engineId": d.EngineID, "fileIndex": d.FileIndex, "filePath": d.FilePath, "mimeType": contentType(d.FilePath), "sizeBytes": d.SizeBytes, "state": d.State, "progress": d.Progress, "playbackMode": playbackMode, "downloadedBytes": d.DownloadedBytes, "speedBytesPerSecond": d.SpeedBytesPerSecond, "uploadSpeedBytesPerSecond": d.UploadSpeedBytesPerSecond, "etaSeconds": d.ETASeconds, "peers": d.Peers, "seeds": d.Seeds, "bufferedBytes": d.BufferedBytes, "leased": d.Leased, "error": d.Error, "createdAt": d.CreatedAt, "updatedAt": d.UpdatedAt, "streamUrl": "/api/v1/streams/" + d.ID, "browserStreamUrl": "/api/v1/streams/" + d.ID + "/browser"}
 }
 
 func parseRange(h string, length int64) (int64, int64, bool, bool) {

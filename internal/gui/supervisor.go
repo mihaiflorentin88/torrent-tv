@@ -45,6 +45,7 @@ type appLike interface {
 	Shutdown(ctx context.Context) error
 	Close(ctx context.Context) error
 	ListenAddress() string
+	RefreshTrackers()
 }
 
 // appAdapter lifts composition.App (field-based ListenAddress) into the
@@ -55,6 +56,7 @@ func (w appAdapter) ListenAndServe() error              { return w.app.ListenAnd
 func (w appAdapter) Shutdown(ctx context.Context) error { return w.app.Server.Shutdown(ctx) }
 func (w appAdapter) Close(ctx context.Context) error    { return w.app.Close(ctx) }
 func (w appAdapter) ListenAddress() string              { return w.app.ListenAddress }
+func (w appAdapter) RefreshTrackers()                   { w.app.RefreshTrackers() }
 
 var _ appLike = appAdapter{}
 
@@ -269,4 +271,16 @@ func (s *Supervisor) Restart() error {
 		return err
 	}
 	return s.Start()
+}
+
+// RefreshTrackers forwards a settings-change notification to the running
+// server, cancelling owned provider work. Stopped servers have nothing to cancel.
+func (s *Supervisor) RefreshTrackers() {
+	s.mu.Lock()
+	app := s.app
+	s.mu.Unlock()
+	if app == nil {
+		return
+	}
+	app.RefreshTrackers()
 }

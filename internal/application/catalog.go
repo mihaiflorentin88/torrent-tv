@@ -78,7 +78,7 @@ func (s *Service) CatalogDetail(ctx context.Context, id string) (domain.CatalogD
 		return domain.CatalogDetail{}, fmt.Errorf("catalog title not found")
 	}
 	title := groupCatalog(allSources, true)[0]
-	var eligibleTrackers []domain.TrackerRef
+	eligibleTrackers := make([]domain.TrackerRef, 0, len(title.Trackers))
 	for _, ref := range title.Trackers {
 		if s.trackers.Eligible(ref.ID) {
 			eligibleTrackers = append(eligibleTrackers, ref)

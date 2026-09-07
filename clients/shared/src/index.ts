@@ -1,5 +1,11 @@
+export type TrackerRef = { id: string; name: string };
+export type TrackerStatus = TrackerRef & {
+ enabled: boolean;
+ configured: boolean;
+ capabilities: { imdbSearch: boolean; seasonFilter: boolean; episodeFilter: boolean; categories: boolean };
+};
 export interface Page<T> { items: T[]; nextCursor: string | null; total: number; stale?: boolean }
-export interface Release { id: string; name: string; category: string; sizeBytes: number; seeders: number; leechers: number; freeleech: boolean; imdbId?: string }
+export interface Release { id: string; trackerId: string; trackerName: string; providerId: string; categoryId: string; browseClass: string; name: string; category: string; sizeBytes: number; seeders: number; leechers: number; freeleech: boolean; imdbId?: string }
 export type MediaKind = 'movie' | 'series'
 export interface ParsedRelease { title: string; sortTitle: string; kind: MediaKind; year?: number; seasonStart?: number; seasonEnd?: number; episodeStart?: number; episodeEnd?: number; episodeTitle?: string; resolution?: string; quality?: string; videoCodec?: string; audio?: string; hdr?: string; edition?: string; releaseGroup?: string }
 export type DownloadState = 'none' | 'queued' | 'downloading' | 'partial' | 'downloaded' | 'error'
@@ -7,15 +13,15 @@ export type TransferState = 'idle' | 'queued' | 'active' | 'paused' | 'complete'
 export type WatchState = 'unwatched' | 'inProgress' | 'partial' | 'watched'
 export interface MediaState { downloadState: DownloadState; transferState?: TransferState; watchState: WatchState; downloadId?: string; progress?: number; positionMs?: number; durationMs?: number }
 export interface CatalogSource { release: Release; parsed: ParsedRelease; fileIndex?: number; filePath?: string; fileSizeBytes?: number; libraryState?: MediaState }
-export interface CatalogTitle { id: string; title: string; originalTitle?: string; kind: MediaKind; year?: number; imdbId?: string; overview?: string; posterUrl?: string; backdropUrl?: string; rating?: number; ratingVotes?: number; ratingProvider?: string; categories: string[]; resolutions: string[]; sourceCount: number; seasonCount?: number; episodeCount?: number; bestSeeders: number; largestSizeBytes: number; newestUpload?: string; sources?: CatalogSource[]; libraryState?: MediaState }
+export interface CatalogTitle { id: string; title: string; originalTitle?: string; kind: MediaKind; year?: number; imdbId?: string; overview?: string; posterUrl?: string; backdropUrl?: string; rating?: number; ratingVotes?: number; ratingProvider?: string; trackers: TrackerRef[]; categories: string[]; resolutions: string[]; sourceCount: number; seasonCount?: number; episodeCount?: number; bestSeeders: number; largestSizeBytes: number; newestUpload?: string; sources?: CatalogSource[]; libraryState?: MediaState }
 export interface CatalogEpisode { number: number; title: string; season: number; sourceCount: number; sources: CatalogSource[]; libraryState?: MediaState }
 export interface CatalogSeason { number: number; title: string; episodeCount: number; episodes: CatalogEpisode[]; packSources?: CatalogSource[]; libraryState?: MediaState }
 export interface CatalogDetail { title: CatalogTitle; seasons: CatalogSeason[]; sources: CatalogSource[] }
 export interface CatalogFacets { categories: string[]; kinds: string[]; resolutions: string[]; hdr: string[]; qualities: string[]; codecs: string[] }
-export interface Download { id: string; releaseId: string; titleId?: string; displayTitle?: string; releaseName?: string; category?: string; releaseSizeBytes?: number; trackerSeeders?: number; rating?: number; ratingVotes?: number; ratingProvider?: string; parsed?: ParsedRelease; engineId: string; fileIndex: number; filePath: string; mimeType: string; sizeBytes: number; state: string; progress: number; playbackMode: 'local' | 'progressive'; downloadedBytes: number; speedBytesPerSecond: number; uploadSpeedBytesPerSecond?: number; etaSeconds: number; peers: number; seeds: number; leased: boolean; error?: string; createdAt?: string; updatedAt?: string; streamUrl: string; browserStreamUrl?: string }
+export interface Download { id: string; releaseId: string; trackerId: string; trackerName: string; titleId?: string; displayTitle?: string; releaseName?: string; category?: string; releaseSizeBytes?: number; trackerSeeders?: number; rating?: number; ratingVotes?: number; ratingProvider?: string; parsed?: ParsedRelease; engineId: string; fileIndex: number; filePath: string; mimeType: string; sizeBytes: number; state: string; progress: number; playbackMode: 'local' | 'progressive'; downloadedBytes: number; speedBytesPerSecond: number; uploadSpeedBytesPerSecond?: number; etaSeconds: number; peers: number; seeds: number; leased: boolean; error?: string; createdAt?: string; updatedAt?: string; streamUrl: string; browserStreamUrl?: string }
 export interface MediaAudioTrack { streamIndex: number; language?: string; title?: string; codec?: string; channels?: number; default?: boolean }
 export interface MediaInfo { durationMs: number; audioTracks: MediaAudioTrack[]; probedAt?: string }
-const downloadRenderFingerprint = (item: Download) => [item.releaseId, item.titleId, item.displayTitle, item.releaseName, item.category, item.releaseSizeBytes, item.trackerSeeders, item.rating, item.ratingVotes, item.ratingProvider, item.engineId, item.fileIndex, item.filePath, item.mimeType, item.sizeBytes, item.state, item.progress, item.playbackMode, item.downloadedBytes, item.speedBytesPerSecond, item.etaSeconds, item.peers, item.seeds, item.leased, item.error, item.createdAt, item.updatedAt, item.streamUrl, item.parsed?.title, item.parsed?.seasonStart, item.parsed?.episodeStart, item.parsed?.resolution, item.parsed?.quality, item.parsed?.videoCodec, item.parsed?.audio].join('\u0000')
+const downloadRenderFingerprint = (item: Download) => [item.releaseId, item.trackerId, item.trackerName, item.titleId, item.displayTitle, item.releaseName, item.category, item.releaseSizeBytes, item.trackerSeeders, item.rating, item.ratingVotes, item.ratingProvider, item.engineId, item.fileIndex, item.filePath, item.mimeType, item.sizeBytes, item.state, item.progress, item.playbackMode, item.downloadedBytes, item.speedBytesPerSecond, item.etaSeconds, item.peers, item.seeds, item.leased, item.error, item.createdAt, item.updatedAt, item.streamUrl, item.parsed?.title, item.parsed?.seasonStart, item.parsed?.episodeStart, item.parsed?.resolution, item.parsed?.quality, item.parsed?.videoCodec, item.parsed?.audio].join('\u0000')
 export function reconcileDownloads(current: Download[], incoming: Download[]): Download[] { const unique: Download[] = []; const byID = new Map<string, Download>(); for (const item of incoming) { if (byID.has(item.id)) continue; byID.set(item.id, item); unique.push(item) } if (current.length === 0) return unique; const currentIDs = new Set(current.map(item => item.id)); const added = unique.filter(item => !currentIDs.has(item.id)); const retained: Download[] = []; for (const old of current) { const next = byID.get(old.id); if (!next) continue; retained.push(downloadRenderFingerprint(old) === downloadRenderFingerprint(next) ? old : { ...old, ...next }) } return [...added, ...retained] }
 export type DownloadSort = 'recent' | 'title' | 'progress' | 'size' | 'speed'
 export function orderDownloadIDs(items: Download[], sort: DownloadSort): string[] { return [...items].sort((a, b) => { const difference = sort === 'title' ? (a.displayTitle || a.filePath).localeCompare(b.displayTitle || b.filePath) : sort === 'progress' ? b.progress - a.progress : sort === 'size' ? b.sizeBytes - a.sizeBytes : sort === 'speed' ? b.speedBytesPerSecond - a.speedBytesPerSecond : Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''); return difference || a.id.localeCompare(b.id) }).map(item => item.id) }
@@ -29,9 +35,9 @@ export interface DownloadTransferActionItem { action: DownloadTransferAction; la
 const ACTIVE_TRANSFER_STATES: Record<string, true> = { allocating: true, downloading: true, forceddl: true, forcedmetadl: true, metadl: true, queueddl: true, stalleddl: true };
 const HALTED_TRANSFER_STATES: Record<string, true> = { pauseddl: true, pausedup: true, stoppeddl: true, stoppedup: true };
 export function downloadTransferActions(download: Pick<Download, 'state' | 'error'>): DownloadTransferActionItem[] { const state = (download.state || '').trim().toLowerCase(); if (download.error || state === 'error' || state === 'missingfiles') return [{ action: 'retry', label: 'Retry download', pendingLabel: 'Retrying…' }]; if (HALTED_TRANSFER_STATES[state]) return [{ action: 'resume', label: 'Resume', pendingLabel: 'Resuming…' }]; if (ACTIVE_TRANSFER_STATES[state]) return [{ action: 'pause', label: 'Pause', pendingLabel: 'Pausing…' }]; return [] }
-export interface Job { id: string; kind: string; state: string; label: string; dedupeKey: string; progress: number; attempt: number; error?: string; retryable: boolean; nextAttemptAt?: string; createdAt: string; updatedAt: string }
+export interface Job { id: string; trackerId?: string; kind: string; state: string; label: string; dedupeKey: string; progress: number; attempt: number; error?: string; retryable: boolean; nextAttemptAt?: string; createdAt: string; updatedAt: string }
 export interface JobLog { id: number; jobId: string; attempt: number; level: string; phase: string; message: string; context?: Record<string, unknown>; createdAt: string }
-export interface SearchResult extends Page<CatalogTitle> { job: Job }
+export interface SearchResult extends Page<CatalogTitle> { job: Job; trackers: TrackerStatus[] }
 export interface SettingsField { key: string; label: string; help: string; obtain?: string; tvVisible: boolean; sensitive: boolean; restartRequired: boolean; readOnly?: boolean }
 export interface PlaybackState { profileId: string; sourceId: string; releaseId: string; fileIndex: number; filePath: string; positionMs: number; durationMs: number; watched: boolean; updatedAt: string }
 export interface PlaybackPreferences { profileId?: string; sourceId?: string; audioLanguage: string; audioTrackIndex: number; subtitleLanguage: string; subtitleProvider?: string; subtitleCandidateId?: string; subtitleMode: 'auto' | 'off' | 'selected'; updatedAt?: string }
@@ -186,8 +192,17 @@ export class API {
  titles(query: Record<string, string | number | boolean | undefined> = {}) { const params = new URLSearchParams(); for (const [key, value] of Object.entries(query)) { if (value !== undefined && value !== '') params.set(key, String(value)) } return this.call<Page<CatalogTitle>>('/catalog/titles?' + params.toString()) }
  title(id: string) { return this.call<CatalogDetail>(`/catalog/titles/${encodeURIComponent(id)}`) }
  facets() { return this.call<CatalogFacets>('/catalog/facets') }
- prepare(id: string, fileIndex = -1) { return this.call<Download>(`/releases/${encodeURIComponent(id)}/prepare`, { method: 'POST', body: JSON.stringify({ fileIndex }) }) }
- prepareSeason(id: string, season: number) { return this.call<Page<Download>>(`/releases/${encodeURIComponent(id)}/prepare-season`, { method: 'POST', body: JSON.stringify({ season }) }) }
+ trackers() { return this.call<TrackerStatus[]>('/trackers') }
+ prepare(id: string, fileIndex = -1, signal?: AbortSignal) {
+  return this.call<Download>(`/releases/${encodeURIComponent(id)}/prepare`, {
+   method: 'POST', body: JSON.stringify({ fileIndex }), signal,
+  });
+ }
+ prepareSeason(id: string, season: number, signal?: AbortSignal) {
+  return this.call<Page<Download>>(`/releases/${encodeURIComponent(id)}/prepare-season`, {
+   method: 'POST', body: JSON.stringify({ season }), signal,
+  });
+ }
  downloads() { return this.call<Page<Download>>('/downloads') }
  mediaInfo(id: string) { return this.call<MediaInfo>(`/downloads/${encodeURIComponent(id)}/media-info`) }
  nextEpisode(id: string) { return this.call<Download | null>(`/downloads/${encodeURIComponent(id)}/next-episode`, { method: 'POST' }) }

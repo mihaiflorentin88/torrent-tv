@@ -154,6 +154,7 @@ func (b *Bindings) SaveSettings(next config.Settings) (SaveResult, error) {
 	current := store.Get()
 	result := SaveResult{Saved: true, RestartRequired: config.RestartRequired(old, current)}
 	sup := b.supervisor()
+	sup.RefreshTrackers()
 	if wasIncomplete && len(store.MissingRequired()) == 0 && sup.State() == StateStopped && !b.relocatingServer() {
 		go func() { _ = sup.Start() }()
 		result.AutoStarted = true

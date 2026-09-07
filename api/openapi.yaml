@@ -67,7 +67,7 @@ paths:
             schema:
               {
                 type: string,
-                enum: [filelist, qbittorrent, storage, tmdb, subtitles, subdl],
+                enum: [filelist, piratebay, qbittorrent, storage, tmdb, subtitles, subdl],
               },
           },
         ]
@@ -77,6 +77,19 @@ paths:
           "502": { $ref: "#/components/responses/Problem" },
           "503": { $ref: "#/components/responses/Problem" },
         }
+  /trackers:
+    get:
+      operationId: getTrackers
+      summary: Read-only tracker status and capability snapshot
+      responses:
+        "200":
+          description: Ordered list of registered tracker statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrackerStatus"
   /diagnostics/client:
     post:
       operationId: reportClientDiagnostic
@@ -181,7 +194,7 @@ paths:
         {
           "202":
             {
-              description: Cached canonical results returned immediately with a persistent asynchronous FileList search job; completion is published by SSE,
+              description: Cached canonical results returned immediately with a persistent asynchronous tracker search job; completion is published by SSE,
             },
         }
   /catalog/titles:
@@ -1273,6 +1286,28 @@ components:
           },
       }
   schemas:
+    TrackerRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    TrackerStatus:
+      allOf:
+        - $ref: "#/components/schemas/TrackerRef"
+        - type: object
+          required: [enabled, configured, capabilities]
+          properties:
+            enabled: { type: boolean }
+            configured: { type: boolean }
+            capabilities:
+              type: object
+              required: [imdbSearch, seasonFilter, episodeFilter, categories]
+              properties:
+                imdbSearch: { type: boolean }
+                seasonFilter: { type: boolean }
+                episodeFilter: { type: boolean }
+                categories: { type: boolean }
     SystemInfo:
       {
         type: object,
@@ -1289,10 +1324,15 @@ components:
     Release:
       {
         type: object,
-        required: [id, name, category, sizeBytes, seeders, leechers],
+        required: [id, name, category, sizeBytes, seeders, leechers, trackerId, trackerName, providerId, categoryId, browseClass],
         properties:
           {
             id: { type: string },
+            trackerId: { type: string },
+            trackerName: { type: string },
+            providerId: { type: string },
+            categoryId: { type: string },
+            browseClass: { type: string, enum: [video, audio, software, games, adult, other] },
             name: { type: string },
             category: { type: string },
             sizeBytes: { type: integer, format: int64 },
@@ -1386,6 +1426,7 @@ components:
             bestSeeders,
             largestSizeBytes,
             libraryState,
+            trackers,
           ],
         properties:
           {
@@ -1398,6 +1439,7 @@ components:
             overview: { type: string },
             posterUrl: { type: string },
             backdropUrl: { type: string },
+            trackers: { type: array, items: { $ref: "#/components/schemas/TrackerRef" } },
             categories: { type: array, items: { type: string } },
             resolutions: { type: array, items: { type: string } },
             sourceCount: { type: integer },
@@ -1504,6 +1546,8 @@ components:
           [
             id,
             releaseId,
+            trackerId,
+            trackerName,
             engineId,
             filePath,
             fileIndex,
@@ -1518,6 +1562,8 @@ components:
           {
             id: { type: string },
             releaseId: { type: string },
+            trackerId: { type: string },
+            trackerName: { type: string },
             releaseName: { type: string },
             releaseSizeBytes: { type: integer, format: int64 },
             titleId: { type: string },
@@ -1603,6 +1649,7 @@ components:
         properties:
           {
             id: { type: string },
+            trackerId: { type: string },
             kind: { type: string },
             state: { type: string, enum: [queued, running, completed, failed] },
             label: { type: string },
