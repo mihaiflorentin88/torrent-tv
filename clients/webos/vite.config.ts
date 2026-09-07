@@ -14,11 +14,16 @@ function packageStaticFiles(): Plugin {
   return {
     name: 'package-webos-static-files',
     generateBundle() {
-      for (const name of ['index.html', 'startup.js', 'fatal-error.js']) {
-        const source = name === 'index.html'
-          ? readFileSync(resolve(root, name))
-          : readFileSync(resolve(root, '../tv', name));
-        this.emitFile({ type: 'asset', fileName: name, source });
+      const files: Array<{ fileName: string; path: string }> = [
+        { fileName: 'index.html', path: resolve(root, 'index.html') },
+        { fileName: 'startup.js', path: resolve(root, '../tv/startup.js') },
+        { fileName: 'fatal-error.js', path: resolve(root, '../tv/fatal-error.js') },
+        { fileName: 'webOSTV.js', path: resolve(root, 'vendor/webOSTVjs-1.2.13/webOSTV.js') },
+        { fileName: 'webOSTV-dev.js', path: resolve(root, 'vendor/webOSTVjs-1.2.13/webOSTV-dev.js') },
+      ];
+      for (const file of files) {
+        const source = readFileSync(file.path);
+        this.emitFile({ type: 'asset', fileName: file.fileName, source });
       }
     },
   };

@@ -7,7 +7,7 @@ import { AVTrack, clampSeek, formatTime, hiddenKeyRoute, isDownloadComplete, nor
 import { householdSections, trackerCategories } from './catalog-data';
 import { discoverServers, DiscoveredServer, normalizeServerURL } from './discovery';
 import { appIdentity } from './app-name';
-import { exitApplication, openExternalURL, registerMediaKeys } from './platform';
+import { exitApplication, getNetworkInfo, openExternalURL, registerMediaKeys } from './platform';
 import './tv.css';
 import './performance.css';
 
@@ -337,15 +337,41 @@ function Player({ api, download, resumeMs, preferences, onClose, onStateChanged,
   </div></div>;
 }
 
-function Setup({ draft, server, status, onDraft, onConnect, onForget }: { draft: string; server: string; status: string; onDraft: (value: string) => void; onConnect: (url: string) => void; onForget: () => void }) {
+export function Setup({ draft, server, status, onDraft, onConnect, onForget }: { draft: string; server: string; status: string; onDraft: (value: string) => void; onConnect: (url: string) => void; onForget: () => void }) {
   const address = useRef<HTMLInputElement>(null);
   const connect = useRef<HTMLButtonElement>(null);
   const rescan = useRef<HTMLButtonElement>(null);
+  const scanGeneration = useRef(0);
   const [manual, setManual] = useState(Boolean(server));
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<DiscoveredServer[]>([]);
   const [discoveryStatus, setDiscoveryStatus] = useState('');
-  const scan = async () => { if (searching) return; setSearching(true); setResults([]); try { const network = window.webapis?.network; if (!network?.getIp || !network?.getSubnetMask) throw new Error('Automatic discovery is unavailable on this device. Use Manual address.'); const ip = String(network.getIp() || ''); const mask = String(network.getSubnetMask() || ''); let customPort = 0; try { customPort = Number(new URL(normalizeServerURL(draft)).port || (/^https:/i.test(draft) ? 443 : 80)) } catch { } const found = await discoverServers(ip, mask, [8097, customPort], (done, total) => { if (done === total || done % 32 === 0) setDiscoveryStatus(`Searching your network… ${done} of ${total}`) }); setResults(found); setDiscoveryStatus(found.length ? `${found.length} Torrent TV server${found.length === 1 ? '' : 's'} found.` : 'No Torrent TV server was found. Check that it is running or use Manual address.') } catch (error) { setDiscoveryStatus((error as Error).message); setManual(true) } finally { setSearching(false) } };
+  useEffect(() => () => { scanGeneration.current++; }, []);
+  const scan = async () => {
+    if (searching) return;
+    const generation = ++scanGeneration.current;
+    setSearching(true);
+    setResults([]);
+    try {
+      const info = await getNetworkInfo();
+      if (!info?.ip || !info.subnetMask) throw new Error('Automatic discovery is unavailable on this device. Use Manual address.');
+      let customPort = 0;
+      try { customPort = Number(new URL(normalizeServerURL(draft)).port || (/^https:/i.test(draft) ? 443 : 80)) } catch { }
+      const found = await discoverServers(info.ip, info.subnetMask, [8097, customPort], (done, total) => {
+        if (generation !== scanGeneration.current) return;
+        if (done === total || done % 32 === 0) setDiscoveryStatus(`Searching your network… ${done} of ${total}`);
+      });
+      if (generation !== scanGeneration.current) return;
+      setResults(found);
+      setDiscoveryStatus(found.length ? `${found.length} Torrent TV server${found.length === 1 ? '' : 's'} found.` : 'No Torrent TV server was found. Check that it is running or use Manual address.');
+    } catch (error) {
+      if (generation !== scanGeneration.current) return;
+      setDiscoveryStatus((error as Error).message);
+      setManual(true);
+    } finally {
+      if (generation === scanGeneration.current) setSearching(false);
+    }
+  };
   useEffect(() => { if (!server) void scan() }, []);
   useEffect(() => { if (!results.length) return; const timer = window.setTimeout(() => { if (document.activeElement === rescan.current) focusElement(document.querySelector<HTMLElement>('[data-focus-key="discovered-server-0"]')) }, 0); return () => window.clearTimeout(timer) }, [results.length]);
   useTVNavigation({ getInitialFocus: () => rescan.current || connect.current, inputExitTarget: () => connect.current, onBack: () => { if (manual && !server) { setManual(false); window.setTimeout(() => focusElement(rescan.current), 0) } else exitApplication() } });
@@ -360,12 +386,14 @@ const menuGroups: Array<{ label: string; items: Array<{ id: TVRoute; label: stri
   { label: '', items: [{ id: 'jobs', label: 'Jobs', icon: '↻' }, { id: 'events', label: 'Events', icon: '!' }, { id: 'settings', label: 'Settings', icon: '⚙' }] },
 ];
 
-function Catalog({ api, status, titles, facets, household, downloads, jobs, restoreFocus, portal, updateStatus, onUpdateStatus, onFocus, onRetry, onChangeServer, onForgetServer, onPlay, onPlayDownload, onManageDownload, onManageSeasonPack, onRefreshDownloads, onFavorite }: { api: API; status: string; titles: CatalogTitle[]; facets: CatalogFacets; household: HouseholdState; downloads: Download[]; jobs: Job[]; restoreFocus: string | null; portal: PortalState | null; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; onFocus: (key: string) => void; onRetry: () => void; onChangeServer: () => void; onForgetServer: () => void; onPlay: (release: Release, fileIndex?: number, resumeMs?: number) => void; onPlayDownload: (download: Download) => void; onManageDownload: (download: Download, action: string) => Promise<void>; onManageSeasonPack: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onRefreshDownloads: () => Promise<void>; onFavorite: (title: CatalogTitle, value: boolean) => void }) {
+export function Catalog({ api, status, titles, facets, household, downloads, jobs, restoreFocus, portal, updateStatus, onUpdateStatus, onFocus, onRetry, onChangeServer, onForgetServer, onPlay, onPlayDownload, onManageDownload, onManageSeasonPack, onRefreshDownloads, onFavorite }: { api: API; status: string; titles: CatalogTitle[]; facets: CatalogFacets; household: HouseholdState; downloads: Download[]; jobs: Job[]; restoreFocus: string | null; portal: PortalState | null; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; onFocus: (key: string) => void; onRetry: () => void; onChangeServer: () => void; onForgetServer: () => void; onPlay: (release: Release, fileIndex?: number, resumeMs?: number) => void; onPlayDownload: (download: Download) => void; onManageDownload: (download: Download, action: string) => Promise<void>; onManageSeasonPack: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onRefreshDownloads: () => Promise<void>; onFavorite: (title: CatalogTitle, value: boolean) => void }) {
   const [route, setRoute] = useState<TVRoute>('home');
   const [menuOpen, setMenuOpen] = useState(false);
   const [projectsMessage, setProjectsMessage] = useState('');
   const [updateConfirm, setUpdateConfirm] = useState(false);
   const updateReturnKey = useRef<string | null>(null);
+  const catalogMounted = useRef(true);
+  useEffect(() => () => { catalogMounted.current = false; }, []);
   const [draftQuery, setDraftQuery] = useState('');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -403,9 +431,11 @@ function Catalog({ api, status, titles, facets, household, downloads, jobs, rest
   // Projects route: activation hands the link to the platform browser. When
   // no browser takes it (several ATV boxes ship none) the address stays on
   // the card and the hint says so — the URL is the fallback.
-  const openProjectLink = (link: PortalState['links'][number]) => {
-    if (openExternalURL(link.url)) { setProjectsMessage(''); return }
-    setProjectsMessage(`No browser opened — type this address on another device: ${link.url}`);
+  const openProjectLink = async (link: PortalState['links'][number]) => {
+    const launched = await openExternalURL(link.url);
+    if (!catalogMounted.current) return;
+    if (launched) setProjectsMessage('');
+    else setProjectsMessage('Open this address on another device: ' + link.url);
   };
   useEffect(() => { if (confirmDialogStale(updateConfirm, updateStatus)) setUpdateConfirm(false) }, [updateConfirm, updateStatus]);
   useEffect(() => {
@@ -536,9 +566,12 @@ function TVJobDetail({ detail, onBack, onOlder }: { detail: { job: Job; logs: Jo
 
 function TVEvents({ api }: { api: API }) { const [message, setMessage] = useState(''); const [coverage, setCoverage] = useState<Record<string, unknown> | null>(null); useEffect(() => { api.call<Record<string, unknown>>('/catalog/status').then(setCoverage).catch(error => setMessage(error.message)) }, []); async function run(mode: 'latest' | 'rebuild') { try { const job = await api.syncCatalog(mode); setMessage(`${job.label} queued. Follow it on Jobs.`) } catch (error) { setMessage((error as Error).message) } } return <section class="tv-settings"><h2>Server events</h2>{coverage && <><p><strong>{Number(coverage.observedReleases).toLocaleString()}</strong> releases retained · <strong>{Number(coverage.discoverableReleases).toLocaleString()}</strong> currently seeded</p><p>{Number(coverage.hiddenZeroSeeders).toLocaleString()} zero-seeder releases are retained but hidden from discovery.</p></>}<p>Run the same safe catalog actions available in the browser.</p><button data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="event-latest" class="primary" onClick={() => void run('latest')}>Fetch latest data</button><button data-focus-region="content" data-focus-row="2" data-focus-col="0" data-focus-key="event-rebuild" onClick={() => void run('rebuild')}>Rebuild catalog cache</button><p aria-live="polite">{message}</p></section> }
 
-function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, onUpdateStatus, confirmOpen, onConfirmOpen, onConfirmClose }: { api: API; onChangeServer: () => void; onForgetServer: () => void; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; confirmOpen: boolean; onConfirmOpen: () => void; onConfirmClose: () => void }) {
+export function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, onUpdateStatus, confirmOpen, onConfirmOpen, onConfirmClose }: { api: API; onChangeServer: () => void; onForgetServer: () => void; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; confirmOpen: boolean; onConfirmOpen: () => void; onConfirmClose: () => void }) {
   const [value, setValue] = useState<Record<string, unknown> | null>(null); const [managed, setManaged] = useState<Set<string>>(new Set()); const [message, setMessage] = useState('Loading settings…');
   const [checking, setChecking] = useState(false); const [applying, setApplying] = useState(false); const [updateMessage, setUpdateMessage] = useState('');
+  const settingsMounted = useRef(true);
+  useEffect(() => () => { settingsMounted.current = false; }, []);
+  const openReleaseLink = async (event: MouseEvent, url: string) => { event.preventDefault(); const launched = await openExternalURL(url); if (!settingsMounted.current) return; if (!launched) setUpdateMessage('Open this address on another device: ' + url); };
   useEffect(() => { Promise.all([api.call<Record<string, unknown>>('/settings'), api.call<{ items: SettingsField[] }>('/settings/schema')]).then(([settings, schema]) => { setValue(settings); setManaged(new Set(schema.items.filter(field => field.readOnly).map(field => field.key))); setMessage('') }).catch(error => setMessage(error.message)) }, []);
   useEffect(() => {
     if (!updateStatus?.applying) return;
@@ -573,7 +606,7 @@ function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, onUpdat
     <label>Title refresh timeout (minutes){managed.has('titleRefreshTimeoutMinutes') && <small>Environment managed</small>}<input disabled={managed.has('titleRefreshTimeoutMinutes')} type="number" min="5" max="120" data-focus-region="content" data-focus-row="6" data-focus-col="0" data-focus-key="setting-title-timeout" value={String(value.titleRefreshTimeoutMinutes || 30)} onInput={event => setValue({ ...value, titleRefreshTimeoutMinutes: Number(event.currentTarget.value) })} /></label>
     <button class="primary" data-focus-region="content" data-focus-row="7" data-focus-col="0" data-focus-key="settings-save" onClick={() => void save()}>Save preferences</button>
   </div>}<div class="tv-test-buttons">{['filelist', 'qbittorrent', 'storage', 'tmdb', 'subdl'].map((name, index) => <button data-focus-region="content" data-focus-row={8 + index} data-focus-col="0" data-focus-key={`test-${name}`} onClick={() => void test(name)}>Test {name}</button>)}</div><button data-focus-region="content" data-focus-row="14" data-focus-col="0" data-focus-key="change-server" onClick={onChangeServer}>Change server address</button><button data-focus-region="content" data-focus-row="15" data-focus-col="0" data-focus-key="forget-server" onClick={onForgetServer}>Forget this server</button>
-    {updateStatus && <div class="tv-update-panel"><p>Server version {updateStatus.currentVersion}{updateStatus.applying ? ' · installing an update' : ''}</p>{updateNoticeVisible(updateStatus) && <div class="tv-update-notice"><strong>{updateStatus.available ? `Version ${updateStatus.latest} is available.` : 'This server updates only by hand.'}</strong><p>Updates install on the server machine and interrupt playback on every connected player; this TV installs nothing itself.</p><a href={updateStatus.releasesUrl}>{updateStatus.releasesUrl}</a></div>}</div>}
+    {updateStatus && <div class="tv-update-panel"><p>Server version {updateStatus.currentVersion}{updateStatus.applying ? ' · installing an update' : ''}</p>{updateNoticeVisible(updateStatus) && <div class="tv-update-notice"><strong>{updateStatus.available ? `Version ${updateStatus.latest} is available.` : 'This server updates only by hand.'}</strong><p>Updates install on the server machine and interrupt playback on every connected player; this TV installs nothing itself.</p><a href={updateStatus.releasesUrl} onClick={event => void openReleaseLink(event, updateStatus.releasesUrl)}>{updateStatus.releasesUrl}</a></div>}</div>}
     <button data-focus-region="content" data-focus-row={UPDATE_CHECK_ROW} data-focus-col="0" data-focus-key="update-check" disabled={checking} onClick={() => void checkUpdate()}>{checking ? 'Checking…' : 'Check for server updates'}</button>
     <button data-focus-region="content" data-focus-row={UPDATE_APPLY_ROW} data-focus-col="0" data-focus-key="update-apply" disabled={updateApplyDisabled(updateStatus, applying)} onClick={onConfirmOpen}>{updateStatus?.applying || applying ? 'Installing…' : 'Install server update'}</button>
     <p aria-live="polite">{updateMessage}</p>
@@ -612,7 +645,7 @@ function TVPromotions({ api }: { api: API }) {
   }, [api]);
   if (!promotion) return null;
   const url = api.promotionClickURL(promotion.provider, promotion.id);
-  return <button class="tv-promo" data-focus-region="content" data-focus-row="95" data-focus-col="0" data-focus-key="promo" onClick={() => { openExternalURL(url) }}><small>Advertisement</small>{/^https?:\/\//.test(promotion.image) && <img src={promotion.image} alt="" />}{promotion.title && <strong>{promotion.title}</strong>}{promotion.text && <p>{promotion.text}</p>}<code>{url}</code></button>;
+  return <button class="tv-promo" data-focus-region="content" data-focus-row="95" data-focus-col="0" data-focus-key="promo" onClick={() => { void openExternalURL(url) }}><small>Advertisement</small>{/^https?:\/\//.test(promotion.image) && <img src={promotion.image} alt="" />}{promotion.title && <strong>{promotion.title}</strong>}{promotion.text && <p>{promotion.text}</p>}<code>{url}</code></button>;
 }
 
 function TitleCard({ api, title, row, col, focusRef, onOpen }: { api: API; title: CatalogTitle; row: number; col: number; focusRef?: { current: HTMLButtonElement | null }; onOpen: () => void }) {
