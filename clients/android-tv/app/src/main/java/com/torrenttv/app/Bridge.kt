@@ -56,6 +56,6 @@ class Bridge(
     @JavascriptInterface fun close() = avplay.close()
     @JavascriptInterface fun getDuration(): Double = avplay.getDuration()
     @JavascriptInterface fun getTotalTrackInfo(): String = avplay.getTotalTrackInfo()
-    @JavascriptInterface fun setSelectTrack(type: String, index: Int) = avplay.setSelectTrack(type, index)
+    @JavascriptInterface fun setSelectTrack(type: String, index: Int): Boolean = avplay.setSelectTrack(type, index)
     @JavascriptInterface fun setSilentSubtitle(silent: Boolean) = avplay.setSilentSubtitle(silent)
 }

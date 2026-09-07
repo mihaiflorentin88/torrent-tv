@@ -1,10 +1,12 @@
-.PHONY: help check test build build-arm64 build-arm64-headless build-amd64-headless build-all desktop-assets package-darwin wails-cross web frontend tizen-wgt validate-tizen-wgt smoke-tizen-engine torrenttv-apk deploy-pi bootstrap-server-dry-run
+.PHONY: help check test build build-arm64 build-arm64-headless build-amd64-headless build-all desktop-assets package-darwin wails-cross web frontend tizen-wgt validate-tizen-wgt smoke-tizen-engine webos-ipk validate-webos-ipk smoke-webos-engine torrenttv-apk deploy-pi bootstrap-server-dry-run
 
 VERSION ?= $(shell tr -d '[:space:]' < VERSION)
 PI_HOST ?=
 TIZEN_VERSION ?= $(VERSION)
 TIZEN_TARGET ?= 7.0
 TIZEN_WGT := clients/tizen/.build/artifacts/torrent-tv-$(TIZEN_VERSION)-samsung-tizen.wgt
+WEBOS_VERSION ?= $(VERSION)
+WEBOS_IPK := clients/webos/.build/artifacts/torrent-tv-$(WEBOS_VERSION)-webos.ipk
 GO_CACHE ?= /tmp/torrent-tv-go-cache
 GO_LDFLAGS := -s -w -X github.com/mihaiflorentin88/torrent-tv/internal/composition.Version=$(VERSION)
 
@@ -169,6 +171,22 @@ validate-tizen-wgt:
 	python3 tools/tizen_wgt.py validate \
 		--file "$(TIZEN_WGT)" \
 		--target-tizen "$(TIZEN_TARGET)"
+## webos-ipk: pack the webOS TV app -> clients/webos/.build/artifacts/torrent-tv-$(WEBOS_VERSION)-webos.ipk
+webos-ipk:
+	python3 tools/webos_ipk.py pack \
+		--source clients/webos/dist \
+		--appinfo clients/webos/appinfo.json \
+		--icon clients/webos/icon.png \
+		--large-icon clients/webos/largeIcon.png \
+		--bg-image clients/webos/bgImage.png \
+		--splash-background clients/webos/splashBackground.png \
+		--output "$(WEBOS_IPK)"
+
+## validate-webos-ipk: validate the packed IPK against webOS packaging standards
+validate-webos-ipk:
+	python3 tools/webos_ipk.py validate \
+		--file "$(WEBOS_IPK)"
+
 
 # Headless old-engine boot smoke (ticket #84, parent #79): boots the real
 # clients/tv/dist in the pinned oldest reliably obtainable old Chromium,
@@ -191,6 +209,19 @@ smoke-tizen-engine:
 		exit 1; \
 	fi
 	@echo "smoke-tizen-engine: PASS — clean boot and injected-error panel verified on Google Chrome 63.0.3239.84; broken fixture rejected."
+
+## smoke-webos-engine: boot the webOS TV bundle in pinned Chromium 53 (selenoid/chrome:53.0, Docker required)
+smoke-webos-engine:
+	@echo "smoke-webos-engine: pinned engine selenoid/chrome:53.0 (Google Chrome 53.0.2785.143) — webOS 4.x Chromium 53 floor"
+	node tools/smoke_webos_engine/smoke.mjs --cases clean,fatal
+	@status=0; node tools/smoke_webos_engine/smoke.mjs --case broken || status=$$?; \
+	if [ "$$status" -eq 3 ]; then \
+		echo "smoke-webos-engine: broken-bundle fixture correctly rejected (case 3, exit 3)"; \
+	else \
+		echo "smoke-webos-engine: FAIL — the broken-bundle case must exit 3 (harness detection proven); got $$status" >&2; \
+		exit 1; \
+	fi
+	@echo "smoke-webos-engine: PASS — clean boot and fatal-error panel verified on Google Chrome 53; broken fixture rejected."
 
 ## deploy-pi: build-arm64-headless, then stage binary + systemd units to PI_HOST (make deploy-pi PI_HOST=user@host)
 deploy-pi: build-arm64-headless

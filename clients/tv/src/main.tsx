@@ -7,7 +7,7 @@ import { AVTrack, clampSeek, formatTime, hiddenKeyRoute, isDownloadComplete, nor
 import { householdSections, trackerCategories } from './catalog-data';
 import { discoverServers, DiscoveredServer, normalizeServerURL } from './discovery';
 import { appIdentity } from './app-name';
-import { exitApplication, openExternalURL, registerMediaKeys } from './platform';
+import { exitApplication, getNetworkInfo, onAppVisibilityChange, openExternalURL, registerMediaKeys } from './platform';
 import './tv.css';
 import './performance.css';
 
@@ -40,7 +40,7 @@ function subtitleMenuRows(candidates: SubtitleCandidate[], firstRow: number, key
   return rows;
 }
 
-function Player({ api, download, resumeMs, preferences, onClose, onStateChanged, onComplete }: { api: API; download: Download; resumeMs: number; preferences?: PlaybackPreferences; onClose: () => void; onStateChanged: () => void; onComplete: (preferences: PlaybackPreferences) => void }) {
+export function Player({ api, download, resumeMs, preferences, onClose, onStateChanged, onComplete }: { api: API; download: Download; resumeMs: number; preferences?: PlaybackPreferences; onClose: () => void; onStateChanged: () => void; onComplete: (preferences: PlaybackPreferences) => void }) {
   const [message, setMessage] = useState('Opening stream…');
   const [phase, setPhase] = useState<'opening' | 'playing' | 'paused' | 'buffering' | 'waiting' | 'failed'>('opening');
   const [position, setPosition] = useState(resumeMs);
@@ -62,11 +62,13 @@ function Player({ api, download, resumeMs, preferences, onClose, onStateChanged,
   const scrubTimer = useRef(0);
   const messageTimer = useRef(0);
   const scrubTarget = useRef<number | null>(null);
+  const audioTimer = useRef(0);
+  const autoplayIntent = useRef(true);
+  const suspendedState = useRef<{ position: number; playing: boolean } | null>(null);
   const controlsVisibleRef = useRef(true);
   const subtitleDelayRef = useRef(0);
   const subtitleCues = useRef<SubtitleCue[]>([]);
   const playing = useRef(false);
-  const externalSubtitlePath = useRef('');
   const autoSubtitleAttempted = useRef(false);
   const preferenceRef = useRef<PlaybackPreferences>(preferences || { audioLanguage: 'en', audioTrackIndex: -1, subtitleLanguage: 'ro', subtitleMode: 'auto' });
   const phaseRef = useRef(phase);
@@ -150,6 +152,7 @@ function Player({ api, download, resumeMs, preferences, onClose, onStateChanged,
     const av = window.webapis?.avplay;
     try {
       const shouldPlay = force ?? !playing.current;
+      autoplayIntent.current = shouldPlay;
       if (shouldPlay) { av.play(); playing.current = true; setPhase('playing'); setMessage(''); controls.setPlaying(true); revealControls(); }
       else { av.pause(); playing.current = false; setPhase('paused'); setMessage('Paused'); controls.setPlaying(false); revealControls(); save(); }
     } catch { }
@@ -192,36 +195,53 @@ function Player({ api, download, resumeMs, preferences, onClose, onStateChanged,
     revealControls(true);
   }
 
-  function openPlayer(startAt: number, shouldPlay = true) {
+  function openPlayer(position: number, autoplay = true) {
     const av = window.webapis?.avplay;
     if (!av) { setPhase('failed'); setMessage('AVPlay is unavailable on this device.'); return; }
     window.clearTimeout(pollTimer.current);
     const token = ++session.current;
+    autoplayIntent.current = autoplay;
     stopAVPlay();
     setPhase('opening'); setMessage(liveDownload.playbackMode === 'progressive' ? 'Opening progressive stream…' : 'Opening downloaded file…'); revealControls(true);
     try {
       av.open(api.streamURL(download.streamUrl));
       av.setDisplayRect(0, 0, 1920, 1080);
       av.setDisplayMethod(aspect);
-      if (externalSubtitlePath.current) av.setExternalSubtitlePath(externalSubtitlePath.current);
       av.setListener({
         onbufferingstart: () => { if (token === session.current) { playing.current = false; setPhase('buffering'); setMessage('Buffering…'); controls.setPlaying(false); revealControls(true); } },
         onbufferingprogress: (progress: number) => { if (token === session.current) setMessage(`Buffering ${progress}%`); },
-        onbufferingcomplete: () => { if (token === session.current) { playing.current = true; setPhase('playing'); setMessage(''); refreshTracks(); controls.setPlaying(true); revealControls(); } },
+        onbufferingcomplete: () => {
+          if (token === session.current) {
+            refreshTracks();
+            if (autoplayIntent.current) {
+              playing.current = true;
+              setPhase('playing');
+              setMessage('');
+              controls.setPlaying(true);
+              revealControls();
+            } else {
+              playing.current = false;
+              setPhase('paused');
+              setMessage('Paused');
+              controls.setPlaying(false);
+              revealControls(true);
+            }
+          }
+        },
         onstreamcompleted: () => { if (token === session.current) { current.current = duration.current; void save().then(() => onComplete(preferenceRef.current)); } },
         oncurrentplaytime: (value: number) => { if (token === session.current) { current.current = value; if (scrubTarget.current === null) setPosition(value); if (subtitleCues.current.length) setExternalSubtitle(subtitleAt(subtitleCues.current, value, subtitleDelayRef.current)); if (Date.now() - lastSaved.current >= 10_000) { lastSaved.current = Date.now(); save(); } } },
         onsubtitlechange: (_duration: number, text: string) => { if (token === session.current) setExternalSubtitle(String(text || '')); },
+        ontrackschanged: () => { if (token === session.current) refreshTracks(); },
         onerror: (error: string) => void recover(error, token),
       });
       av.prepareAsync(() => {
         if (token !== session.current) return;
         duration.current = av.getDuration(); setTotal(duration.current);
         const allTracks = (av.getTotalTrackInfo?.() || []).map(normalizeTrack); setTracks(allTracks); applyAudioPreference(allTracks);
-        if (externalSubtitlePath.current) { try { av.setSilentSubtitle(false); } catch { } }
-        else if (!autoSubtitleAttempted.current) { autoSubtitleAttempted.current = true; void autoSelectSubtitles(allTracks); }
-        if (startAt > 0 && startAt < duration.current) av.seekTo(clampSeek(startAt, duration.current));
-        if (shouldPlay) { av.play(); playing.current = true; setPhase('playing'); setMessage(''); controls.setPlaying(true); revealControls(); }
-        else { playing.current = false; setPhase('paused'); setMessage('Paused'); controls.setPlaying(false); revealControls(); }
+        if (!autoSubtitleAttempted.current) { autoSubtitleAttempted.current = true; void autoSelectSubtitles(allTracks); }
+        if (position > 0 && position < duration.current) av.seekTo(clampSeek(position, duration.current));
+        if (autoplay) { av.play(); playing.current = true; setPhase('playing'); setMessage(''); controls.setPlaying(true); revealControls(); }
+        else { playing.current = false; setPhase('paused'); setMessage('Paused'); controls.setPlaying(false); revealControls(true); }
       }, (error: string) => void recover(error || 'AVPlay could not prepare this source.', token));
     } catch (error) { void recover((error as Error).message, token); }
   }
@@ -229,7 +249,26 @@ function Player({ api, download, resumeMs, preferences, onClose, onStateChanged,
   useEffect(() => {
     let cancelled = false; void (async () => { try { preferenceRef.current = preferences || await api.playbackPreferences(download.id) } catch { } if (!cancelled) openPlayer(resumeMs) })();
     const focusTimer = window.setTimeout(() => focusElement(document.querySelector<HTMLElement>('[data-player-control="play"]')), 0);
-    return () => { cancelled = true; session.current++; window.clearTimeout(focusTimer); window.clearTimeout(pollTimer.current); controls.dispose(); window.clearTimeout(scrubTimer.current); window.clearTimeout(messageTimer.current); void save(); stopAVPlay(); };
+    const disposeVisibility = onAppVisibilityChange(visible => {
+      if (!visible) {
+        void save();
+        suspendedState.current = { position: current.current, playing: playing.current };
+        session.current++;
+        window.clearTimeout(pollTimer.current);
+        window.clearTimeout(scrubTimer.current);
+        window.clearTimeout(messageTimer.current);
+        window.clearTimeout(audioTimer.current);
+        controls.dispose();
+        stopAVPlay();
+        return;
+      }
+      if (suspendedState.current) {
+        const { position, playing: wasPlaying } = suspendedState.current;
+        suspendedState.current = null;
+        openPlayer(position, wasPlaying);
+      }
+    });
+    return () => { cancelled = true; disposeVisibility(); session.current++; window.clearTimeout(focusTimer); window.clearTimeout(pollTimer.current); controls.dispose(); window.clearTimeout(scrubTimer.current); window.clearTimeout(messageTimer.current); window.clearTimeout(audioTimer.current); void save(); stopAVPlay(); };
   }, [download.id]);
   useEffect(() => {
     const remember = (event: FocusEvent) => {
@@ -277,7 +316,36 @@ function Player({ api, download, resumeMs, preferences, onClose, onStateChanged,
 
   function chooseTrack(type: 'AUDIO' | 'TEXT', index: number | null) {
     const av = window.webapis?.avplay;
-    try { if (type === 'TEXT' && index === null) { av.setSilentSubtitle(true); subtitleCues.current = []; setExternalSubtitle(''); } else { if (type === 'TEXT') { av.setSilentSubtitle(false); subtitleCues.current = []; setExternalSubtitle(''); } av.setSelectTrack(type, index); if (type === 'AUDIO') { const wasPlaying = playing.current; if (!wasPlaying) av.play(); window.setTimeout(() => { try { av.seekTo(clampSeek(current.current, duration.current)); if (!wasPlaying) av.pause(); refreshTracks(); } catch { } }, 120); } } } catch { }
+    try {
+      if (type === 'TEXT' && index === null) {
+        av.setSilentSubtitle(true);
+        subtitleCues.current = [];
+        setExternalSubtitle('');
+      } else {
+        if (type === 'TEXT') {
+          av.setSilentSubtitle(false);
+          subtitleCues.current = [];
+          setExternalSubtitle('');
+        }
+        av.setSelectTrack(type, index);
+        if (type === 'AUDIO') {
+          const wasPlaying = playing.current;
+          if (!wasPlaying) av.play();
+          window.clearTimeout(audioTimer.current);
+          audioTimer.current = window.setTimeout(() => {
+            try {
+              av.seekTo(clampSeek(current.current, duration.current));
+              if (!wasPlaying) av.pause();
+              refreshTracks();
+            } catch { }
+          }, 120);
+        }
+      }
+    } catch (error) {
+      setMessage('Could not select the ' + (type === 'AUDIO' ? 'audio track' : 'subtitle') + ': ' + (error as Error).message);
+      closeMenu();
+      return;
+    }
     closeMenu();
     const selected = index === null ? null : tracks.find(track => track.type === type && track.index === index);
     if (type === 'AUDIO' && selected) void savePreferences({ ...preferenceRef.current, audioLanguage: selected.language || 'en', audioTrackIndex: selected.index });
@@ -301,7 +369,7 @@ function Player({ api, download, resumeMs, preferences, onClose, onStateChanged,
     setMessage(`Preparing ${candidate.title}…`); if (menuRef.current) closeMenu(); else revealControls(true);
     try {
       const asset = await api.prepareSubtitle(download.id, candidate.provider, candidate.id, 'vtt');
-      const response = await fetch(api.streamURL(asset.url)); if (!response.ok) throw new Error(`server returned ${response.status}`); const cues = parseVTT(await response.text()); if (!cues.length) throw new Error('the downloaded subtitle contained no readable cues'); subtitleCues.current = cues; externalSubtitlePath.current = ''; try { window.webapis?.avplay.setSilentSubtitle(true); } catch { } setExternalSubtitle(subtitleAt(cues, current.current, subtitleDelayRef.current)); if (persist) await savePreferences({ ...preferenceRef.current, subtitleLanguage: candidate.language || 'en', subtitleProvider: candidate.provider, subtitleCandidateId: candidate.id, subtitleMode: 'selected' }); showTransientMessage(`${candidate.language || 'Subtitle'} selected`); revealControls(); return true;
+      const response = await fetch(api.streamURL(asset.url)); if (!response.ok) throw new Error(`server returned ${response.status}`); const cues = parseVTT(await response.text()); if (!cues.length) throw new Error('the downloaded subtitle contained no readable cues'); subtitleCues.current = cues; try { window.webapis?.avplay.setSilentSubtitle(true); } catch { } setExternalSubtitle(subtitleAt(cues, current.current, subtitleDelayRef.current)); if (persist) await savePreferences({ ...preferenceRef.current, subtitleLanguage: candidate.language || 'en', subtitleProvider: candidate.provider, subtitleCandidateId: candidate.id, subtitleMode: 'selected' }); showTransientMessage(`${candidate.language || 'Subtitle'} selected`); revealControls(); return true;
     } catch (error) { setMessage(`Subtitle preparation failed: ${(error as Error).message}`); return false; }
   }
   function changeDelay(delta: number) { const next = Math.max(-10_000, Math.min(10_000, subtitleDelay + delta)); setSubtitleDelay(next); try { window.webapis?.avplay.setSubtitlePosition(next); } catch { } }
@@ -337,15 +405,41 @@ function Player({ api, download, resumeMs, preferences, onClose, onStateChanged,
   </div></div>;
 }
 
-function Setup({ draft, server, status, onDraft, onConnect, onForget }: { draft: string; server: string; status: string; onDraft: (value: string) => void; onConnect: (url: string) => void; onForget: () => void }) {
+export function Setup({ draft, server, status, onDraft, onConnect, onForget }: { draft: string; server: string; status: string; onDraft: (value: string) => void; onConnect: (url: string) => void; onForget: () => void }) {
   const address = useRef<HTMLInputElement>(null);
   const connect = useRef<HTMLButtonElement>(null);
   const rescan = useRef<HTMLButtonElement>(null);
+  const scanGeneration = useRef(0);
   const [manual, setManual] = useState(Boolean(server));
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<DiscoveredServer[]>([]);
   const [discoveryStatus, setDiscoveryStatus] = useState('');
-  const scan = async () => { if (searching) return; setSearching(true); setResults([]); try { const network = window.webapis?.network; if (!network?.getIp || !network?.getSubnetMask) throw new Error('Automatic discovery is unavailable on this device. Use Manual address.'); const ip = String(network.getIp() || ''); const mask = String(network.getSubnetMask() || ''); let customPort = 0; try { customPort = Number(new URL(normalizeServerURL(draft)).port || (/^https:/i.test(draft) ? 443 : 80)) } catch { } const found = await discoverServers(ip, mask, [8097, customPort], (done, total) => { if (done === total || done % 32 === 0) setDiscoveryStatus(`Searching your network… ${done} of ${total}`) }); setResults(found); setDiscoveryStatus(found.length ? `${found.length} Torrent TV server${found.length === 1 ? '' : 's'} found.` : 'No Torrent TV server was found. Check that it is running or use Manual address.') } catch (error) { setDiscoveryStatus((error as Error).message); setManual(true) } finally { setSearching(false) } };
+  useEffect(() => () => { scanGeneration.current++; }, []);
+  const scan = async () => {
+    if (searching) return;
+    const generation = ++scanGeneration.current;
+    setSearching(true);
+    setResults([]);
+    try {
+      const info = await getNetworkInfo();
+      if (!info?.ip || !info.subnetMask) throw new Error('Automatic discovery is unavailable on this device. Use Manual address.');
+      let customPort = 0;
+      try { customPort = Number(new URL(normalizeServerURL(draft)).port || (/^https:/i.test(draft) ? 443 : 80)) } catch { }
+      const found = await discoverServers(info.ip, info.subnetMask, [8097, customPort], (done, total) => {
+        if (generation !== scanGeneration.current) return;
+        if (done === total || done % 32 === 0) setDiscoveryStatus(`Searching your network… ${done} of ${total}`);
+      });
+      if (generation !== scanGeneration.current) return;
+      setResults(found);
+      setDiscoveryStatus(found.length ? `${found.length} Torrent TV server${found.length === 1 ? '' : 's'} found.` : 'No Torrent TV server was found. Check that it is running or use Manual address.');
+    } catch (error) {
+      if (generation !== scanGeneration.current) return;
+      setDiscoveryStatus((error as Error).message);
+      setManual(true);
+    } finally {
+      if (generation === scanGeneration.current) setSearching(false);
+    }
+  };
   useEffect(() => { if (!server) void scan() }, []);
   useEffect(() => { if (!results.length) return; const timer = window.setTimeout(() => { if (document.activeElement === rescan.current) focusElement(document.querySelector<HTMLElement>('[data-focus-key="discovered-server-0"]')) }, 0); return () => window.clearTimeout(timer) }, [results.length]);
   useTVNavigation({ getInitialFocus: () => rescan.current || connect.current, inputExitTarget: () => connect.current, onBack: () => { if (manual && !server) { setManual(false); window.setTimeout(() => focusElement(rescan.current), 0) } else exitApplication() } });
@@ -360,12 +454,14 @@ const menuGroups: Array<{ label: string; items: Array<{ id: TVRoute; label: stri
   { label: '', items: [{ id: 'jobs', label: 'Jobs', icon: '↻' }, { id: 'events', label: 'Events', icon: '!' }, { id: 'settings', label: 'Settings', icon: '⚙' }] },
 ];
 
-function Catalog({ api, status, titles, facets, household, downloads, jobs, restoreFocus, portal, updateStatus, onUpdateStatus, onFocus, onRetry, onChangeServer, onForgetServer, onPlay, onPlayDownload, onManageDownload, onManageSeasonPack, onRefreshDownloads, onFavorite }: { api: API; status: string; titles: CatalogTitle[]; facets: CatalogFacets; household: HouseholdState; downloads: Download[]; jobs: Job[]; restoreFocus: string | null; portal: PortalState | null; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; onFocus: (key: string) => void; onRetry: () => void; onChangeServer: () => void; onForgetServer: () => void; onPlay: (release: Release, fileIndex?: number, resumeMs?: number) => void; onPlayDownload: (download: Download) => void; onManageDownload: (download: Download, action: string) => Promise<void>; onManageSeasonPack: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onRefreshDownloads: () => Promise<void>; onFavorite: (title: CatalogTitle, value: boolean) => void }) {
+export function Catalog({ api, status, titles, facets, household, downloads, jobs, restoreFocus, portal, updateStatus, onUpdateStatus, onFocus, onRetry, onChangeServer, onForgetServer, onPlay, onPlayDownload, onManageDownload, onManageSeasonPack, onRefreshDownloads, onFavorite }: { api: API; status: string; titles: CatalogTitle[]; facets: CatalogFacets; household: HouseholdState; downloads: Download[]; jobs: Job[]; restoreFocus: string | null; portal: PortalState | null; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; onFocus: (key: string) => void; onRetry: () => void; onChangeServer: () => void; onForgetServer: () => void; onPlay: (release: Release, fileIndex?: number, resumeMs?: number) => void; onPlayDownload: (download: Download) => void; onManageDownload: (download: Download, action: string) => Promise<void>; onManageSeasonPack: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onRefreshDownloads: () => Promise<void>; onFavorite: (title: CatalogTitle, value: boolean) => void }) {
   const [route, setRoute] = useState<TVRoute>('home');
   const [menuOpen, setMenuOpen] = useState(false);
   const [projectsMessage, setProjectsMessage] = useState('');
   const [updateConfirm, setUpdateConfirm] = useState(false);
   const updateReturnKey = useRef<string | null>(null);
+  const catalogMounted = useRef(true);
+  useEffect(() => () => { catalogMounted.current = false; }, []);
   const [draftQuery, setDraftQuery] = useState('');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -403,9 +499,11 @@ function Catalog({ api, status, titles, facets, household, downloads, jobs, rest
   // Projects route: activation hands the link to the platform browser. When
   // no browser takes it (several ATV boxes ship none) the address stays on
   // the card and the hint says so — the URL is the fallback.
-  const openProjectLink = (link: PortalState['links'][number]) => {
-    if (openExternalURL(link.url)) { setProjectsMessage(''); return }
-    setProjectsMessage(`No browser opened — type this address on another device: ${link.url}`);
+  const openProjectLink = async (link: PortalState['links'][number]) => {
+    const launched = await openExternalURL(link.url);
+    if (!catalogMounted.current) return;
+    if (launched) setProjectsMessage('');
+    else setProjectsMessage('Open this address on another device: ' + link.url);
   };
   useEffect(() => { if (confirmDialogStale(updateConfirm, updateStatus)) setUpdateConfirm(false) }, [updateConfirm, updateStatus]);
   useEffect(() => {
@@ -536,9 +634,12 @@ function TVJobDetail({ detail, onBack, onOlder }: { detail: { job: Job; logs: Jo
 
 function TVEvents({ api }: { api: API }) { const [message, setMessage] = useState(''); const [coverage, setCoverage] = useState<Record<string, unknown> | null>(null); useEffect(() => { api.call<Record<string, unknown>>('/catalog/status').then(setCoverage).catch(error => setMessage(error.message)) }, []); async function run(mode: 'latest' | 'rebuild') { try { const job = await api.syncCatalog(mode); setMessage(`${job.label} queued. Follow it on Jobs.`) } catch (error) { setMessage((error as Error).message) } } return <section class="tv-settings"><h2>Server events</h2>{coverage && <><p><strong>{Number(coverage.observedReleases).toLocaleString()}</strong> releases retained · <strong>{Number(coverage.discoverableReleases).toLocaleString()}</strong> currently seeded</p><p>{Number(coverage.hiddenZeroSeeders).toLocaleString()} zero-seeder releases are retained but hidden from discovery.</p></>}<p>Run the same safe catalog actions available in the browser.</p><button data-focus-region="content" data-focus-row="1" data-focus-col="0" data-focus-key="event-latest" class="primary" onClick={() => void run('latest')}>Fetch latest data</button><button data-focus-region="content" data-focus-row="2" data-focus-col="0" data-focus-key="event-rebuild" onClick={() => void run('rebuild')}>Rebuild catalog cache</button><p aria-live="polite">{message}</p></section> }
 
-function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, onUpdateStatus, confirmOpen, onConfirmOpen, onConfirmClose }: { api: API; onChangeServer: () => void; onForgetServer: () => void; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; confirmOpen: boolean; onConfirmOpen: () => void; onConfirmClose: () => void }) {
+export function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, onUpdateStatus, confirmOpen, onConfirmOpen, onConfirmClose }: { api: API; onChangeServer: () => void; onForgetServer: () => void; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; confirmOpen: boolean; onConfirmOpen: () => void; onConfirmClose: () => void }) {
   const [value, setValue] = useState<Record<string, unknown> | null>(null); const [managed, setManaged] = useState<Set<string>>(new Set()); const [message, setMessage] = useState('Loading settings…');
   const [checking, setChecking] = useState(false); const [applying, setApplying] = useState(false); const [updateMessage, setUpdateMessage] = useState('');
+  const settingsMounted = useRef(true);
+  useEffect(() => () => { settingsMounted.current = false; }, []);
+  const openReleaseLink = async (event: MouseEvent, url: string) => { event.preventDefault(); const launched = await openExternalURL(url); if (!settingsMounted.current) return; if (!launched) setUpdateMessage('Open this address on another device: ' + url); };
   useEffect(() => { Promise.all([api.call<Record<string, unknown>>('/settings'), api.call<{ items: SettingsField[] }>('/settings/schema')]).then(([settings, schema]) => { setValue(settings); setManaged(new Set(schema.items.filter(field => field.readOnly).map(field => field.key))); setMessage('') }).catch(error => setMessage(error.message)) }, []);
   useEffect(() => {
     if (!updateStatus?.applying) return;
@@ -573,7 +674,7 @@ function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, onUpdat
     <label>Title refresh timeout (minutes){managed.has('titleRefreshTimeoutMinutes') && <small>Environment managed</small>}<input disabled={managed.has('titleRefreshTimeoutMinutes')} type="number" min="5" max="120" data-focus-region="content" data-focus-row="6" data-focus-col="0" data-focus-key="setting-title-timeout" value={String(value.titleRefreshTimeoutMinutes || 30)} onInput={event => setValue({ ...value, titleRefreshTimeoutMinutes: Number(event.currentTarget.value) })} /></label>
     <button class="primary" data-focus-region="content" data-focus-row="7" data-focus-col="0" data-focus-key="settings-save" onClick={() => void save()}>Save preferences</button>
   </div>}<div class="tv-test-buttons">{['filelist', 'qbittorrent', 'storage', 'tmdb', 'subdl'].map((name, index) => <button data-focus-region="content" data-focus-row={8 + index} data-focus-col="0" data-focus-key={`test-${name}`} onClick={() => void test(name)}>Test {name}</button>)}</div><button data-focus-region="content" data-focus-row="14" data-focus-col="0" data-focus-key="change-server" onClick={onChangeServer}>Change server address</button><button data-focus-region="content" data-focus-row="15" data-focus-col="0" data-focus-key="forget-server" onClick={onForgetServer}>Forget this server</button>
-    {updateStatus && <div class="tv-update-panel"><p>Server version {updateStatus.currentVersion}{updateStatus.applying ? ' · installing an update' : ''}</p>{updateNoticeVisible(updateStatus) && <div class="tv-update-notice"><strong>{updateStatus.available ? `Version ${updateStatus.latest} is available.` : 'This server updates only by hand.'}</strong><p>Updates install on the server machine and interrupt playback on every connected player; this TV installs nothing itself.</p><a href={updateStatus.releasesUrl}>{updateStatus.releasesUrl}</a></div>}</div>}
+    {updateStatus && <div class="tv-update-panel"><p>Server version {updateStatus.currentVersion}{updateStatus.applying ? ' · installing an update' : ''}</p>{updateNoticeVisible(updateStatus) && <div class="tv-update-notice"><strong>{updateStatus.available ? `Version ${updateStatus.latest} is available.` : 'This server updates only by hand.'}</strong><p>Updates install on the server machine and interrupt playback on every connected player; this TV installs nothing itself.</p><a href={updateStatus.releasesUrl} onClick={event => void openReleaseLink(event, updateStatus.releasesUrl)}>{updateStatus.releasesUrl}</a></div>}</div>}
     <button data-focus-region="content" data-focus-row={UPDATE_CHECK_ROW} data-focus-col="0" data-focus-key="update-check" disabled={checking} onClick={() => void checkUpdate()}>{checking ? 'Checking…' : 'Check for server updates'}</button>
     <button data-focus-region="content" data-focus-row={UPDATE_APPLY_ROW} data-focus-col="0" data-focus-key="update-apply" disabled={updateApplyDisabled(updateStatus, applying)} onClick={onConfirmOpen}>{updateStatus?.applying || applying ? 'Installing…' : 'Install server update'}</button>
     <p aria-live="polite">{updateMessage}</p>
@@ -612,7 +713,7 @@ function TVPromotions({ api }: { api: API }) {
   }, [api]);
   if (!promotion) return null;
   const url = api.promotionClickURL(promotion.provider, promotion.id);
-  return <button class="tv-promo" data-focus-region="content" data-focus-row="95" data-focus-col="0" data-focus-key="promo" onClick={() => { openExternalURL(url) }}><small>Advertisement</small>{/^https?:\/\//.test(promotion.image) && <img src={promotion.image} alt="" />}{promotion.title && <strong>{promotion.title}</strong>}{promotion.text && <p>{promotion.text}</p>}<code>{url}</code></button>;
+  return <button class="tv-promo" data-focus-region="content" data-focus-row="95" data-focus-col="0" data-focus-key="promo" onClick={() => { void openExternalURL(url) }}><small>Advertisement</small>{/^https?:\/\//.test(promotion.image) && <img src={promotion.image} alt="" />}{promotion.title && <strong>{promotion.title}</strong>}{promotion.text && <p>{promotion.text}</p>}<code>{url}</code></button>;
 }
 
 function TitleCard({ api, title, row, col, focusRef, onOpen }: { api: API; title: CatalogTitle; row: number; col: number; focusRef?: { current: HTMLButtonElement | null }; onOpen: () => void }) {
@@ -687,7 +788,7 @@ function TitleDetail({ api, detail, target, message, resume, favorite, onClose, 
   </main>;
 }
 
-function App() {
+export function App() {
   const [server, setServer] = useState(localStorage.getItem(STORAGE) || '');
   const [draft, setDraft] = useState(server || 'http://server.lan:8097');
   const [api, setAPI] = useState<API | null>(null);
@@ -703,7 +804,7 @@ function App() {
   const catalogFocus = useRef<string | null>(null);
   const viewportInput = useRef(0);
   const loadState = async (client = api) => { if (client) try { setHousehold(await client.state()); } catch (error) { setStatus((error as Error).message); } };
-  async function connect(url = draft) { setStatus('Connecting…'); try { const normalized = normalizeServerURL(url); const client = new API(normalized); const info = await client.info(); const [titlePage, catalogFacets, downloadPage, jobPage] = await Promise.all([client.titles({ pageSize: 12, sort: 'newest' }), client.facets(), client.downloads().catch(() => ({ items: [], nextCursor: null, total: 0 })), client.jobs({ pageSize: 24 }).catch(() => ({ items: [], nextCursor: null, total: 0 }))]); localStorage.setItem(STORAGE, normalized); setServer(normalized); setDraft(normalized); setAPI(client); setStatus(`${info.instanceName || info.name} ${info.version}`); setTitles(titlePage.items); setFacets(catalogFacets); void client.ensureMetadata(titlePage.items.map(item => item.id)).catch(() => { }); setDownloads(downloadPage.items); setJobs(jobPage.items); await loadState(client); } catch (error) { setStatus((error as Error).message); } }
+  async function connect(url = draft) { setStatus('Connecting…'); try { const normalized = normalizeServerURL(url); const client = new API(normalized); const info = await client.info(); const [titlePage, catalogFacets, downloadPage, jobPage] = await Promise.all([client.titles({ pageSize: 12, sort: 'newest' }), client.facets(), client.downloads().catch(() => ({ items: [], nextCursor: null, total: 0 })), client.jobs({ pageSize: 24 }).catch(() => ({ items: [], nextCursor: null, total: 0 }))]); localStorage.setItem(STORAGE, normalized); setServer(normalized); setDraft(normalized); setAPI(client); setStatus(`${info.instanceName || info.name} ${info.version}`); setTitles(titlePage.items); setFacets(catalogFacets); void client.ensureMetadata(titlePage.items.map(item => item.id)); } catch (error) { setStatus((error as Error).message); } }
   async function play(release: Release, fileIndex = -1, resumeMs = 0) { if (!api) return; setStatus('Preparing source…'); try { const download = await api.prepare(release.id, fileIndex); if (!resumeMs) resumeMs = await api.playback(download.id).then(value => value.watched ? 0 : value.positionMs).catch(() => 0); setPlayer({ download, resumeMs }); } catch (error) { setStatus((error as Error).message); } }
   async function favorite(title: CatalogTitle, value: boolean) { if (!api) return; try { await api.titleFavorite(title.id, value); await loadState(); } catch (error) { setStatus((error as Error).message); } }
   const refreshDownloads = async () => { if (!api) return; const anchor = captureTVDownloadAnchor(); const inputVersion = viewportInput.current; try { const incoming = (await api.downloads()).items; setDownloads(current => reconcileDownloads(current, incoming)); window.requestAnimationFrame(() => { if (inputVersion === viewportInput.current) restoreTVDownloadAnchor(anchor) }) } catch (error) { setStatus((error as Error).message) } };
@@ -718,9 +819,14 @@ function App() {
     let stream: EventSource | null = null;
     let timer = 0;
     let stopped = false;
+    let suspended = false;
     let failures = 0;
     let recovering = false;
     let recoveryGeneration = 0;
+    // Visibility-edge-scoped epoch for the visible-return snapshot refresh.
+    // onopen bumps recoveryGeneration (replay suppression only); it must not
+    // invalidate a pending visible-edge titles/facets/jobs refresh.
+    let visibilityEpoch = 0;
     const eventPayload = (event: MessageEvent) => { const envelope = JSON.parse(event.data); return typeof envelope.payload === 'string' ? JSON.parse(envelope.payload) : envelope.payload };
     const loadPortal = () => api.call<PortalState>('/portal/state').then(value => setPortal(value)).catch(() => setPortal(null));
     const loadUpdate = () => api.call<UpdateStatus>('/updates/current').then(value => setUpdateStatus(value)).catch(() => setUpdateStatus(null));
@@ -731,7 +837,7 @@ function App() {
     const updateStatusEvent = (event: MessageEvent) => { if (!snapshotEventAllowed(recovering, 'updates.status')) return; try { setUpdateStatus(eventPayload(event) as UpdateStatus) } catch (error) { void api.diagnostic('warn', 'Could not process update event', { error: String(error) }).catch(() => { }) } };
     const updateFailedEvent = (event: MessageEvent) => { if (!snapshotEventAllowed(recovering, 'updates.failed')) return; try { const payload = eventPayload(event) as { message?: string }; setStatus(payload.message || 'A server update had a problem.') } catch (error) { void api.diagnostic('warn', 'Could not process update failure', { error: String(error) }).catch(() => { }) } };
     const open = () => {
-      if (stopped) return;
+      if (stopped || suspended) return;
       stream?.close();
       stream = new EventSource(`${api.base}/api/v1/events`);
       stream.onopen = () => {
@@ -751,12 +857,35 @@ function App() {
       stream.addEventListener('portal.state', portalStateEvent as EventListener);
       stream.addEventListener('updates.status', updateStatusEvent as EventListener);
       stream.addEventListener('updates.failed', updateFailedEvent as EventListener);
-      stream.onerror = () => { stream?.close(); if (stopped) return; failures++; const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(5, failures - 1))); setStatus(`Server connection lost. Reconnecting in ${Math.ceil(delay / 1000)}s…`); void api.diagnostic('warn', 'TV event stream disconnected', { attempt: failures }).catch(() => { }); window.clearTimeout(timer); timer = window.setTimeout(open, delay); };
+      stream.onerror = () => { stream?.close(); if (stopped || suspended) return; failures++; const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(5, failures - 1))); setStatus(`Server connection lost. Reconnecting in ${Math.ceil(delay / 1000)}s…`); void api.diagnostic('warn', 'TV event stream disconnected', { attempt: failures }).catch(() => { }); window.clearTimeout(timer); timer = window.setTimeout(open, delay); };
     };
+    const disposeVisibility = onAppVisibilityChange(visible => {
+      window.clearTimeout(timer);
+      recoveryGeneration++;
+      visibilityEpoch++;
+      if (!visible) { suspended = true; stream?.close(); return; }
+      suspended = false;
+      open();
+      void loadState();
+      void refreshDownloads();
+      const epoch = visibilityEpoch;
+      void Promise.all([
+        api.titles({ pageSize: 12, sort: 'newest' }),
+        api.facets(),
+        api.jobs({ pageSize: 24 }).catch(() => ({ items: [], nextCursor: null, total: 0 })),
+      ]).then(([titlePage, catalogFacets, jobPage]) => {
+        if (stopped || suspended || epoch !== visibilityEpoch) return;
+        setTitles(titlePage.items);
+        setFacets(catalogFacets);
+        setJobs(jobPage.items);
+      }).catch(() => { });
+    });
     void loadPortal();
     void loadUpdate();
+    void loadState();
+    void refreshDownloads();
     open();
-    return () => { stopped = true; window.clearTimeout(timer); stream?.close() };
+    return () => { stopped = true; disposeVisibility(); window.clearTimeout(timer); stream?.close() };
   }, [api]);
   if (player && api) return <Player key={player.download.id} api={api} download={player.download} resumeMs={player.resumeMs} preferences={player.preferences} onStateChanged={() => loadState()} onComplete={advanceEpisode} onClose={() => setPlayer(null)} />;
   if (!api) return <Setup draft={draft} server={server} status={status} onDraft={setDraft} onConnect={url => void connect(url)} onForget={() => { localStorage.removeItem(STORAGE); setServer(''); setDraft(''); setStatus('Saved server forgotten.') }} />;

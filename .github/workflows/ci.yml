@@ -79,6 +79,51 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  webos:
+    name: webOS TV client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install locked dependencies
+        run: npm ci
+      - name: webOS client unit tests
+        run: npm run test -w @torrent-tv/webos
+      - name: Build shared TV app and sync into Android assets
+        run: |
+          npm run build -w @torrent-tv/tv
+          cd clients/android-tv && ./gradlew :app:syncWebApp
+      - name: Build webOS TV client
+        run: npm run build:webos
+      - name: Same-bundle check after webOS build
+        run: |
+          cmp clients/tv/dist/app.js clients/android-tv/app/src/main/assets/www/app.js
+          cmp clients/tv/dist/app.css clients/android-tv/app/src/main/assets/www/app.css
+      - name: webOS packaging unit tests
+        run: python3 -m unittest tools.tests.test_webos_ipk
+      - name: Package and validate webOS IPK
+        run: make webos-ipk validate-webos-ipk
+      - name: Headless old-engine boot smoke on the pinned Chrome 53 floor
+        run: |
+          docker pull selenoid/chrome:53.0@sha256:5e3d995ded003752cf9a8450657caa163308fec51578708c23c624f37b97c0ea
+          docker tag selenoid/chrome:53.0@sha256:5e3d995ded003752cf9a8450657caa163308fec51578708c23c624f37b97c0ea selenoid/chrome:53.0
+          make smoke-webos-engine
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: webos-ipk-ci
+          path: clients/webos/.build/artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+
   tooling:
     name: Packaging and repository checks
     runs-on: ubuntu-latest

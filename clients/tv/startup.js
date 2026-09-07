@@ -7,6 +7,28 @@
   // render, so post-launch errors surface instead of being swallowed.
   if (window.FileListFatalError) window.FileListFatalError.install({ endpoint: '/api/v1/diagnostics/client' });
 
+  // Engines older than Chromium 54 (such as Chromium 53 on webOS 4.x) lack
+  // Object.getOwnPropertyDescriptors, which esbuild's object spread helper
+  // reads at module-evaluation time before bundle imports can run. Installing
+  // it here guarantees the method exists before app.js evaluates.
+  if (!Object.getOwnPropertyDescriptors) {
+    Object.getOwnPropertyDescriptors = function(object) {
+      if (object === null || object === undefined) throw new TypeError('Cannot convert undefined or null to object');
+      var keys = Object.getOwnPropertyNames(object);
+      var descriptors = {};
+      for (var i = 0; i < keys.length; i++) {
+        descriptors[keys[i]] = Object.getOwnPropertyDescriptor(object, keys[i]);
+      }
+      if (Object.getOwnPropertySymbols) {
+        var symbols = Object.getOwnPropertySymbols(object);
+        for (var j = 0; j < symbols.length; j++) {
+          descriptors[symbols[j]] = Object.getOwnPropertyDescriptor(object, symbols[j]);
+        }
+      }
+      return descriptors;
+    };
+  }
+
   var ready = false;
   var stage = 'Loading application bundle';
 

@@ -53,11 +53,18 @@
   getTotalTrackInfo: function() {
    try { return JSON.parse(native.getTotalTrackInfo()); } catch (error) { return []; }
   },
-  setSelectTrack: function(type, index) { native.setSelectTrack(String(type), Number(index)); },
+  setSelectTrack: function(type, index) {
+   if (!native || typeof native.setSelectTrack !== 'function') {
+    throw new RangeError('Native track selection unavailable');
+   }
+   var result = native.setSelectTrack(String(type), Number(index));
+   if (result === false) {
+    throw new Error('Android refused the track selection');
+   }
+  },
   // Server-prepared VTT subtitles render in the page's HTML overlay, and
   // the overlay applies its own delay, so these two are deliberate no-ops.
   setSilentSubtitle: function(value) { native.setSilentSubtitle(Boolean(value)); },
-  setExternalSubtitlePath: function() { },
   setSubtitlePosition: function() { }
  };
 

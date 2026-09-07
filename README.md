@@ -1,6 +1,6 @@
 # Torrent TV
 
-A self-hosted Go media server with a built-in torrent engine, a responsive web application, a Samsung Tizen TV client, and a desktop app for browsing FileList and streaming downloads as they arrive. It is designed for a trusted private LAN and a small server such as a Raspberry Pi 4.
+A self-hosted Go media server with a built-in torrent engine, a responsive web application, Samsung Tizen and LG webOS TV clients, an Android TV client (TorrentTV), and a desktop app for browsing FileList and streaming downloads as they arrive. It is designed for a trusted private LAN and a small server such as a Raspberry Pi 4.
 
 Version **0.3.0** adds the built-in torrent engine — no qBittorrent or Docker required — first-run setup prompts, and automatic ffmpeg/ffprobe detection. Progressive HTTP Range playback from an incomplete download is server-verified; physical Samsung AVPlay verification below 100% remains pending.
 
@@ -48,6 +48,7 @@ The README uses 360 px WebP thumbnails and optimized WebP full views so the gall
 | [User guide](docs/USER_GUIDE.md) | Browsing, season packs, downloads, playback, resume, subtitles, TV operation, and troubleshooting. |
 | [Configuration reference](docs/CONFIGURATION.md) | Settings, paths, limits, language preferences, and provider configuration. |
 | [Tizen guide](docs/TIZEN.md) | Build, signing, Developer Mode, Apps2Samsung installation, D-pad behavior, and physical-TV verification. |
+| [webOS guide](docs/WEBOS.md) | Build and packaging with ares CLI, Developer Mode install, D-pad and playback behavior, and Milestone A verification log. |
 | [Subtitle architecture](docs/SUBTITLES.md) | Existing subtitle discovery, preparation, selection, storage, and playback behavior. |
 | [API reference](docs/API.md) | HTTP endpoints and response contracts for clients and integrations. |
 | [Architecture](docs/ARCHITECTURE.md) | Boundaries, domain model, adapters, storage, streaming, and client structure. |
@@ -70,9 +71,16 @@ The first start asks for the three settings it cannot guess: a writable download
 The default trusted networks are loopback and RFC1918 private address ranges. Narrow them in Settings when practical. Do not expose this no-login service to the internet.
 
 
-## Frontend and TV package
+## Frontend and TV packages
 
 `make frontend` builds and tests the browser and Tizen clients in Docker, then creates and validates the unsigned Apps2Samsung artifact at `clients/tizen/.build/artifacts/torrent-tv-<version>-samsung-tizen.wgt`. Apps2Samsung signs it for the selected TV during installation. See [the Tizen build and installation guide](docs/TIZEN.md), including the living physical-TV verification log.
+
+| Client | Platform | Build | Package | Verify | Guide |
+| --- | --- | --- | --- | --- | --- |
+| **Web** | Modern browsers | `npm run build:web` | Embedded in Go binary | `npm run test:clients` | [Architecture](docs/ARCHITECTURE.md) |
+| **Samsung Tizen** | Tizen 5.0+ | `npm run build:tv` / `make frontend` | `make tizen-wgt` | `make validate-tizen-wgt` | [Tizen guide](docs/TIZEN.md) |
+| **Android TV** | Android 8.0+ | `make torrenttv-apk` | `make torrenttv-apk` | `make torrenttv-apk` | [Android TV guide](docs/ANDROIDTV.md) |
+| **LG webOS TV** | webOS 4.0+ | `npm run build:webos` | `make webos-ipk` | `make validate-webos-ipk` / `make smoke-webos-engine` | [webOS guide](docs/WEBOS.md) |
 
 ## Raspberry Pi deployment
 

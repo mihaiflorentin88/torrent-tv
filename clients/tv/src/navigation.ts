@@ -1,4 +1,5 @@
-import {useEffect, useRef} from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
+import { onVirtualKeyboardChange } from './platform';
 
 export type Direction = 'left' | 'right' | 'up' | 'down';
 
@@ -25,14 +26,14 @@ export function remoteAction(key: string, keyCode: number): Direction | 'enter' 
   if (key === 'ArrowUp' || keyCode === 38) return 'up';
   if (key === 'ArrowDown' || keyCode === 40) return 'down';
   if (key === 'Enter' || key === 'Return' || keyCode === 13) return 'enter';
-  if (key === 'XF86Back' || key === 'Back' || keyCode === 10009) return 'back';
+  if (key === 'XF86Back' || key === 'Back' || keyCode === 10009 || keyCode === 461) return 'back';
   return null;
 }
 
 export function chooseDirectionalTarget<T>(current: RectLike, candidates: NavigationCandidate<T>[], direction: Direction): T | null {
   const currentX = current.left + current.width / 2;
   const currentY = current.top + current.height / 2;
-  let best: {value: T; score: number} | null = null;
+  let best: { value: T; score: number } | null = null;
   for (const candidate of candidates) {
     const x = candidate.rect.left + candidate.rect.width / 2;
     const y = candidate.rect.top + candidate.rect.height / 2;
@@ -43,7 +44,7 @@ export function chooseDirectionalTarget<T>(current: RectLike, candidates: Naviga
       ? candidate.rect.bottom >= current.top && candidate.rect.top <= current.bottom
       : candidate.rect.right >= current.left && candidate.rect.left <= current.right;
     const score = primary + cross * 4 + (overlaps ? 0 : 1000);
-    if (!best || score < best.score) best = {value: candidate.value, score};
+    if (!best || score < best.score) best = { value: candidate.value, score };
   }
   return best?.value ?? null;
 }
@@ -54,7 +55,7 @@ function visibleFocusables(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>(focusableSelector)).filter(element => element.offsetWidth > 0 && element.offsetHeight > 0);
 }
 
-function numberAttribute(element: HTMLElement, name: 'focusRow'|'focusCol'): number | null {
+function numberAttribute(element: HTMLElement, name: 'focusRow' | 'focusCol'): number | null {
   const value = Number(element.dataset[name]);
   return Number.isFinite(value) ? value : null;
 }
@@ -67,8 +68,8 @@ export function chooseStructuredTarget(current: HTMLElement, elements: HTMLEleme
   const peers = elements.filter(element => element !== current && element.dataset.focusRegion === region);
   if (direction === 'left' || direction === 'right') {
     const candidates = peers.filter(element => numberAttribute(element, 'focusRow') === row)
-      .map(element => ({element, col: numberAttribute(element, 'focusCol')}))
-      .filter((candidate): candidate is {element: HTMLElement; col: number} => candidate.col !== null)
+      .map(element => ({ element, col: numberAttribute(element, 'focusCol') }))
+      .filter((candidate): candidate is { element: HTMLElement; col: number } => candidate.col !== null)
       .filter(candidate => direction === 'left' ? candidate.col < col : candidate.col > col)
       .sort((a, b) => Math.abs(a.col - col) - Math.abs(b.col - col));
     return candidates[0]?.element || null;
@@ -79,7 +80,7 @@ export function chooseStructuredTarget(current: HTMLElement, elements: HTMLEleme
   const targetRow = rows[0];
   if (targetRow === undefined) return null;
   return peers.filter(element => numberAttribute(element, 'focusRow') === targetRow)
-    .map(element => ({element, distance: Math.abs((numberAttribute(element, 'focusCol') || 0) - col)}))
+    .map(element => ({ element, distance: Math.abs((numberAttribute(element, 'focusCol') || 0) - col) }))
     .sort((a, b) => a.distance - b.distance)[0]?.element || null;
 }
 
@@ -87,11 +88,82 @@ function isTextInput(element: Element | null): element is HTMLInputElement | HTM
   return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement;
 }
 
+let optionsSupported: boolean | null = null;
+
+// Behavioral capability probe: Chrome ~41 had 'scrollBehavior' in style, but
+// scrollIntoView(options) was only implemented in Chrome 61. In an engine that
+// ignores options, passing { block: 'nearest' } evaluates truthy and aligns the
+// target to the container top (scrollTop 100), whereas an engine that honors
+// options performs nearest movement (scrollTop 50). Evaluated lazily on first
+// scroll call so module-evaluation remains side-effect free.
+export function supportsScrollIntoViewOptions(): boolean {
+  if (optionsSupported !== null) return optionsSupported;
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function' || !document.body) {
+    return false;
+  }
+  try {
+    const outer = document.createElement('div');
+    outer.style.cssText = 'position:fixed;top:-1000px;left:-1000px;width:100px;height:100px;overflow:hidden;visibility:hidden;';
+    const inner = document.createElement('div');
+    inner.style.cssText = 'width:100px;height:200px;';
+    const target = document.createElement('div');
+    target.style.cssText = 'width:100px;height:50px;margin-top:100px;';
+    inner.appendChild(target);
+    outer.appendChild(inner);
+    document.body.appendChild(outer);
+    target.scrollIntoView({ block: 'nearest' });
+    optionsSupported = outer.scrollTop === 50;
+    document.body.removeChild(outer);
+  } catch {
+    optionsSupported = false;
+  }
+  return optionsSupported;
+}
+
+// Engines that ignore scrollIntoView options (such as Chromium 53 on webOS 4.x)
+// treat the options argument as truthy and align the target to the container top.
+// This fallback walks scrollable ancestors, computes item bounds relative to each
+// scrollport, and adjusts only the axes needed: nearest vertical movement and
+// centered horizontal rail movement, clamped to scroll bounds.
+export function revealElement(element: HTMLElement | null): void {
+  if (!element) return;
+  if (supportsScrollIntoViewOptions()) {
+    element.scrollIntoView({ block: 'nearest', inline: 'center' });
+    return;
+  }
+  const ancestors: HTMLElement[] = [];
+  for (let parent = element.parentElement; parent && parent !== document.body && parent !== document.documentElement; parent = parent.parentElement) {
+    const style = parent.ownerDocument?.defaultView?.getComputedStyle(parent);
+    if (!style) continue;
+    const canScrollX = /(auto|scroll)/.test(style.overflowX) && parent.scrollWidth > parent.clientWidth;
+    const canScrollY = /(auto|scroll)/.test(style.overflowY) && parent.scrollHeight > parent.clientHeight;
+    if (canScrollX || canScrollY) ancestors.push(parent);
+  }
+  ancestors.reverse();
+  for (const parent of ancestors) {
+    const style = parent.ownerDocument?.defaultView?.getComputedStyle(parent);
+    if (!style) continue;
+    const box = parent.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    if (parent.scrollHeight > parent.clientHeight && /(auto|scroll)/.test(style.overflowY)) {
+      if (rect.height > box.height || rect.top < box.top) {
+        parent.scrollTop = Math.max(0, Math.min(parent.scrollTop + (rect.top - box.top), parent.scrollHeight - parent.clientHeight));
+      } else if (rect.bottom > box.bottom) {
+        parent.scrollTop = Math.max(0, Math.min(parent.scrollTop + (rect.bottom - box.bottom), parent.scrollHeight - parent.clientHeight));
+      }
+    }
+    if (parent.scrollWidth > parent.clientWidth && /(auto|scroll)/.test(style.overflowX)) {
+      const delta = (rect.left + rect.width / 2) - (box.left + parent.clientWidth / 2);
+      parent.scrollLeft = Math.max(0, Math.min(parent.scrollLeft + delta, parent.scrollWidth - parent.clientWidth));
+    }
+  }
+}
+
 export function focusElement(element: HTMLElement | null): void {
   if (!element) return;
   if (isTextInput(element) && element.dataset.tvEditing !== 'true') element.readOnly = true;
   element.focus();
-  element.scrollIntoView({block: 'nearest', inline: 'center'});
+  revealElement(element);
 }
 
 export function useTVNavigation(options: {
@@ -114,35 +186,58 @@ export function useTVNavigation(options: {
     const focus = (event: FocusEvent) => {
       const element = event.target as HTMLElement | null;
       if (!element) return;
-      element.scrollIntoView({block: 'nearest', inline: 'center'});
+      revealElement(element);
       const key = element.dataset.focusKey;
       if (key) latest.current.onFocusKey?.(key);
     };
-    let backStarted=0;let backTimer=0;
+    let backStarted = 0; let backTimer = 0;
+    let editingElement: HTMLInputElement | HTMLTextAreaElement | null = null;
+    let finishTime = 0;
+    const finishEditing = () => {
+      const element = editingElement;
+      if (!element) return;
+      editingElement = null;
+      finishTime = Date.now();
+      element.dataset.tvEditing = 'false';
+      element.readOnly = true;
+      element.blur();
+      window.setTimeout(() => focusElement(latest.current.inputExitTarget?.() || element), 0);
+    };
+    const disposeKeyboard = onVirtualKeyboardChange(visible => {
+      if (!visible) finishEditing();
+    });
     const keydown = (event: KeyboardEvent) => {
       const action = remoteAction(event.key, event.keyCode);
       const active = document.activeElement;
       if (isTextInput(active) && active.dataset.tvEditing !== 'true' && action === 'enter') {
         event.preventDefault();
+        editingElement = active;
         active.dataset.tvEditing = 'true';
         active.readOnly = false;
         active.blur();
         window.setTimeout(() => { active.focus(); if (typeof active.select === 'function') active.select(); }, 0);
         return;
       }
+      if (editingElement) {
+        if (action === 'ime-done' || action === 'ime-cancel' || action === 'back') {
+          event.preventDefault();
+          finishEditing();
+        }
+        return;
+      }
       if (isTextInput(active) && active.dataset.tvEditing === 'true') {
         if (action === 'ime-done' || action === 'ime-cancel' || action === 'back') {
-          active.dataset.tvEditing = 'false';
-          active.readOnly = true;
-          active.blur();
-          window.setTimeout(() => focusElement(latest.current.inputExitTarget?.() || active), 0);
+          event.preventDefault();
+          editingElement = active;
+          finishEditing();
         }
         return;
       }
       if (!action) return;
       if (action === 'back') {
         event.preventDefault();
-        if(latest.current.onLongBack){if(!backStarted){backStarted=Date.now();backTimer=window.setTimeout(()=>{backStarted=0;latest.current.onLongBack?.()},5000)};return}
+        if (Date.now() - finishTime < 350) return;
+        if (latest.current.onLongBack) { if (!backStarted) { backStarted = Date.now(); backTimer = window.setTimeout(() => { backStarted = 0; latest.current.onLongBack?.() }, 5000) }; return }
         latest.current.onBack();
         return;
       }
@@ -159,19 +254,20 @@ export function useTVNavigation(options: {
       const current = active instanceof HTMLElement && elements.includes(active) ? active : latest.current.getInitialFocus();
       if (!current) return;
       if (latest.current.onDirection?.(action, current)) return;
-      const structured=Boolean(current.dataset.focusRegion&&current.dataset.focusRow!==undefined&&current.dataset.focusCol!==undefined);
-      const target = chooseStructuredTarget(current, elements, action) || (!structured?chooseDirectionalTarget(current.getBoundingClientRect(),elements.filter(element => element !== current).map(element => ({value: element, rect: element.getBoundingClientRect()})),action):null);
+      const structured = Boolean(current.dataset.focusRegion && current.dataset.focusRow !== undefined && current.dataset.focusCol !== undefined);
+      const target = chooseStructuredTarget(current, elements, action) || (!structured ? chooseDirectionalTarget(current.getBoundingClientRect(), elements.filter(element => element !== current).map(element => ({ value: element, rect: element.getBoundingClientRect() })), action) : null);
       focusElement(target);
     };
-    const keyup=(event:KeyboardEvent)=>{if(remoteAction(event.key,event.keyCode)!=='back'||!latest.current.onLongBack)return;event.preventDefault();if(backStarted){window.clearTimeout(backTimer);backStarted=0;latest.current.onBack()}};
+    const keyup = (event: KeyboardEvent) => { if (remoteAction(event.key, event.keyCode) !== 'back' || !latest.current.onLongBack) return; event.preventDefault(); if (backStarted) { window.clearTimeout(backTimer); backStarted = 0; latest.current.onBack() } };
     document.addEventListener('focusin', focus);
     document.addEventListener('keydown', keydown);
-    document.addEventListener('keyup',keyup);
+    document.addEventListener('keyup', keyup);
     return () => {
       window.clearTimeout(timer);
+      disposeKeyboard();
       document.removeEventListener('focusin', focus);
       document.removeEventListener('keydown', keydown);
-      document.removeEventListener('keyup',keyup);window.clearTimeout(backTimer);
+      document.removeEventListener('keyup', keyup); window.clearTimeout(backTimer);
     };
   }, []);
 }

@@ -8,9 +8,11 @@ and behavior (see the Parity contract in
 Kotlin WebView shell that plays video on a native surface through media3
 ExoPlayer behind the same AVPlay-shaped API the Tizen app uses. The app
 displays as TorrentTV with the TT monogram; everything else is
-byte-identical to the Tizen bundle. Codec reality matches the Tizen posture:
-direct play only, so DTS-class audio or AV1 sources that a 2018-era set
-cannot decode are avoided by choosing another release (see `docs/adr/0009`).
+byte-identical to the Tizen bundle. (The same shared TV web application also
+serves the LG webOS TV client; see `docs/WEBOS.md` and `docs/adr/0010-webos-tv-client.md`.)
+Codec reality matches the Tizen posture: direct play only, so DTS-class audio
+or AV1 sources that a 2018-era set cannot decode are avoided by choosing
+another release (see `docs/adr/0009`).
 
 ## Build the sideload APK
 

@@ -1,0 +1,17 @@
+Vendored LG webOS TV SDK
+========================
+
+Upstream: https://webostv.developer.lge.com/assets/library/webOSTVjs-1.2.13.zip
+Version:  webOSTVjs 1.2.13 (LG official release; full support for webOS TV 4.0+,
+          the Chromium 53 floor of this client)
+SHA-256:  507c759f65a035122afead166608e8c7f444961468c3570245f0982c8f855ff6
+
+Extracted verbatim from that zip (no modifications):
+  webOSTVjs-1.2.13/webOSTV.js       window.webOS (deviceInfo, keyboard, service, ...)
+  webOSTVjs-1.2.13/webOSTV-dev.js   window.webOSDev (connection.getStatus, launch, ...)
+  webOSTVjs-1.2.13/LICENSE-2.0.txt  supplied Apache License 2.0
+
+The zip is pinned by the URL and SHA-256 above; re-download it to verify these
+copies. The application loads the vendored files from its own package (never
+fetches code from the network on the TV). Both scripts are transpiled ES5 and
+parse under the Chromium 53 target (verified by the webOS engine smoke run).
