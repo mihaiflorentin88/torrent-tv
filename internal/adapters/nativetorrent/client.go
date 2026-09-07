@@ -63,6 +63,11 @@ type Client struct {
 	// keeps the registered callback reachable so tests can fire it.
 	writeErrs     map[string]writeErrRec
 	writeErrHooks map[string]func(error)
+
+	// gateMu guards hashGates, which serializes Add and ResolveMagnet per
+	// info hash. Lock ordering: acquire the gate before c.mu everywhere.
+	gateMu    sync.Mutex
+	hashGates map[metainfo.Hash]*hashGate
 }
 
 // writeErrRec is a recorded storage write failure and when it happened.
@@ -146,6 +151,7 @@ func New(cfg Config) (*Client, error) {
 		selected:      make(map[string][]int),
 		writeErrs:     make(map[string]writeErrRec),
 		writeErrHooks: make(map[string]func(error)),
+		hashGates:     make(map[metainfo.Hash]*hashGate),
 	}
 	if err := c.loadSession(); err != nil {
 		_ = cl.Close()
@@ -234,7 +240,10 @@ func (c *Client) Add(ctx context.Context, r io.Reader, _ string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("torrent metainfo: %w", err)
 	}
-	hash := mi.HashInfoBytes().HexString()
+	ih := mi.HashInfoBytes()
+	hash := ih.HexString()
+	gate := c.acquireHashGate(ih)
+	defer c.releaseHashGate(ih, gate)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if t := c.torrent(hash); t != nil {
