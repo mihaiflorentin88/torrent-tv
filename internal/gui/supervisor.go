@@ -46,6 +46,9 @@ type appLike interface {
 	Close(ctx context.Context) error
 	ListenAddress() string
 	RefreshTrackers()
+	// EngineDefault names the acquisition engine the served app issues new
+	// downloads under (its startup-fixed engine set's default).
+	EngineDefault() string
 }
 
 // appAdapter lifts composition.App (field-based ListenAddress) into the
@@ -57,6 +60,7 @@ func (w appAdapter) Shutdown(ctx context.Context) error { return w.app.Server.Sh
 func (w appAdapter) Close(ctx context.Context) error    { return w.app.Close(ctx) }
 func (w appAdapter) ListenAddress() string              { return w.app.ListenAddress }
 func (w appAdapter) RefreshTrackers()                   { w.app.RefreshTrackers() }
+func (w appAdapter) EngineDefault() string              { return w.app.Service.EngineDefault() }
 
 var _ appLike = appAdapter{}
 
@@ -156,6 +160,19 @@ func (s *Supervisor) RunningAddress() (string, bool) {
 		return "", false
 	}
 	return s.address, true
+}
+
+// EngineDefault names the acquisition engine the running server issues new
+// downloads under. Every other phase — stopped, starting, stopping,
+// failed — has no running engine to report, so the answer is "" and never
+// the saved selection: live feedback must not echo a form value.
+func (s *Supervisor) EngineDefault() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state != StateRunning || s.app == nil {
+		return ""
+	}
+	return s.app.EngineDefault()
 }
 
 // transition commits a state change and returns the callback to fire.

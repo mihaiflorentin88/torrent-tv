@@ -455,8 +455,16 @@ func TestTrackerDependencyTestRoutesRegisteredIDs(t *testing.T) {
 	if fl.Code != http.StatusOK {
 		t.Fatalf("filelist test status = %d: %s", fl.Code, fl.Body.String())
 	}
-	if !strings.Contains(fl.Body.String(), `"message":"Connected to FileList"`) || !strings.Contains(fl.Body.String(), `"count":1`) {
-		t.Fatalf("filelist test result = %s, want the established shape and wording", fl.Body.String())
+	var flResult struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Count   int    `json:"count"`
+	}
+	if err := json.Unmarshal(fl.Body.Bytes(), &flResult); err != nil {
+		t.Fatal(err)
+	}
+	if !flResult.Success || flResult.Count != 1 || !strings.Contains(flResult.Message, "FileList") {
+		t.Fatalf("filelist test result = %+v, want success naming the tracker with a count", flResult)
 	}
 
 	// The probe never ingests releases, even with an explicit eligible set.

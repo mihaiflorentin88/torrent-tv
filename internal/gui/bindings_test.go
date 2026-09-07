@@ -351,10 +351,10 @@ type parityRepo struct{ application.Repository }
 type stubEngine struct{ application.TorrentEngine }
 
 // testEngineSet builds the single-engine routing set the service constructor
-// takes.
+// takes, defaulting to the native engine the fakeApp reports.
 func testEngineSet(t *testing.T) *application.EngineSet {
 	t.Helper()
-	es, err := application.NewEngineSet("qb:", map[string]application.TorrentEngine{"qb:": stubEngine{}})
+	es, err := application.NewEngineSet("native:", map[string]application.TorrentEngine{"native:": stubEngine{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +363,9 @@ func testEngineSet(t *testing.T) *application.EngineSet {
 
 // TestBindingsSettingsSurfaceParityWithHTTP pins that LoadSettings and
 // SettingsSchema serve byte-identical JSON shapes to GET /api/v1/settings
-// and /api/v1/settings/schema for the same store.
+// and /api/v1/settings/schema for the same store — with the running engine
+// feedback while the server runs, and, on a stopped server, the empty
+// string (the key still on the wire) on both serving paths.
 func TestBindingsSettingsSurfaceParityWithHTTP(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(config.EnvironmentPrefix+"LISTEN_ADDRESS", ":9999") // exercises readOnly flags
@@ -387,7 +389,12 @@ func TestBindingsSettingsSurfaceParityWithHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := httpapi.New(application.NewService(nil, testEngineSet(t), parityRepo{}, store), store, testLogger(), "test")
-	b := &Bindings{settings: store}
+	app := &fakeApp{serve: make(chan error), closed: make(chan struct{})}
+	b, sup := newBindingsFixture(t, app, store, nil)
+	if err := sup.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waitForState(t, sup, StateRunning)
 
 	getJSON := func(target any, url string, payload any) {
 		t.Helper()
@@ -431,6 +438,33 @@ func TestBindingsSettingsSurfaceParityWithHTTP(t *testing.T) {
 	}
 	if !reflect.DeepEqual(wantSchema, schema) {
 		t.Fatalf("SettingsSchema JSON diverges from HTTP:\nwant %v\ngot  %v", wantSchema, schema)
+	}
+
+	// A stopped server has no running engine to report: LoadSettings serves
+	// the empty string, and the shared view keeps the engineRunning key on
+	// the wire (present and empty, never omitted or stale) for that case.
+	stopped, _ := newBindingsFixture(t, &fakeApp{closed: make(chan struct{})}, store, nil)
+	stoppedJSON, err := json.Marshal(stopped.LoadSettings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stoppedSettings map[string]any
+	if err := json.Unmarshal(stoppedJSON, &stoppedSettings); err != nil {
+		t.Fatal(err)
+	}
+	if stoppedSettings["engineRunning"] != "" {
+		t.Fatalf("stopped desktop engineRunning = %v, want an empty string", stoppedSettings["engineRunning"])
+	}
+	wire, err := json.Marshal(httpapi.RedactedSettings(store.Get(), store.Path(), ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wireSettings map[string]any
+	if err := json.Unmarshal(wire, &wireSettings); err != nil {
+		t.Fatal(err)
+	}
+	if wireSettings["engineRunning"] != "" {
+		t.Fatalf("HTTP view with no running engine engineRunning = %v, want an empty string", wireSettings["engineRunning"])
 	}
 
 	if missing := b.MissingRequired(); len(missing) != 0 {

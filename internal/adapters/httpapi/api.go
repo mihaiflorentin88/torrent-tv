@@ -183,7 +183,7 @@ func (a *API) clientDiagnostic(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
 	v := a.settings.Get()
-	write(w, 200, RedactedSettings(v, a.settings.Path()))
+	write(w, 200, RedactedSettings(v, a.settings.Path(), a.service.EngineDefault()))
 }
 
 func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
@@ -235,11 +235,12 @@ func (a *API) testDependency(w http.ResponseWriter, r *http.Request) {
 			problem(w, 502, err)
 			return
 		}
-		engine := a.settings.Get().DownloadEngine
-		if engine == "" {
-			engine = "native"
-		}
-		write(w, 200, map[string]any{"success": true, "message": "Connected to " + engine + " torrent engine: " + v})
+		// The engine set is startup-fixed, so the probed version and the
+		// reported identity cannot diverge: naming the saved selection here
+		// is what mislabeled native probes as "native torrent engine" for
+		// qb-saved servers and the reverse.
+		engine := a.service.EngineDefault()
+		write(w, 200, map[string]any{"success": true, "message": "Connected to " + engine + " torrent engine: " + v, "engine": engine})
 	case "storage":
 		message, err := a.service.TestStorage()
 		if err != nil {

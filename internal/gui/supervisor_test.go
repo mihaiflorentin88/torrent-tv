@@ -51,6 +51,8 @@ func (f *fakeApp) ListenAddress() string { return f.addr }
 
 func (f *fakeApp) RefreshTrackers() { f.refreshCalls.Add(1) }
 
+func (f *fakeApp) EngineDefault() string { return "native" }
+
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

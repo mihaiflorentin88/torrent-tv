@@ -127,11 +127,13 @@ func (b *Bindings) StopServer() error { return b.supervisor().Stop() }
 func (b *Bindings) RestartServer() error { return b.supervisor().Restart() }
 
 // LoadSettings returns the settings exactly as GET /api/v1/settings serves
-// them: secrets blanked, Configured flags, settings file path.
+// them: secrets blanked, Configured flags, settings file path, and the
+// running acquisition engine alongside the saved downloadEngine (empty
+// while the server is stopped — there is no running engine to report).
 func (b *Bindings) LoadSettings() httpapi.SettingsView {
 	store, _, _ := b.snapshot()
 	v := store.Get()
-	return httpapi.RedactedSettings(v, store.Path())
+	return httpapi.RedactedSettings(v, store.Path(), b.supervisor().EngineDefault())
 }
 
 // SaveSettings mirrors the HTTP PUT /api/v1/settings contract: native-path

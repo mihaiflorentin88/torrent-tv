@@ -112,7 +112,7 @@ func TestPortalAPIKeyRedactedAndSchemaSensitive(t *testing.T) {
 	v.FileListPasskey = "filelist-secret"
 	v.QBittorrentPassword = "qb-secret"
 	v.TMDBAPIKey = "tmdb-secret"
-	b, err := json.Marshal(RedactedSettings(v, "data/settings.json"))
+	b, err := json.Marshal(RedactedSettings(v, "data/settings.json", "native"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestPortalAPIKeyRedactedAndSchemaSensitive(t *testing.T) {
 	if !strings.Contains(text, `"portalAPIKeyConfigured":true`) || !strings.Contains(text, `"fileListPasskeyConfigured":true`) || !strings.Contains(text, `"qbittorrentPasswordConfigured":true`) {
 		t.Fatal("configured indicators missing")
 	}
-	blank := RedactedSettings(config.Defaults(), "data/settings.json")
+	blank := RedactedSettings(config.Defaults(), "data/settings.json", "")
 	if blank.PortalAPIKeyConfigured {
 		t.Fatal("portalAPIKeyConfigured must be false for a blank key")
 	}
@@ -301,7 +301,9 @@ func getSettingsBody(t *testing.T, handler http.Handler) map[string]any {
 func putSettingsBody(t *testing.T, handler http.Handler, body map[string]any) *httptest.ResponseRecorder {
 	t.Helper()
 	for key := range body {
-		if strings.HasSuffix(key, "Configured") || key == "settingsPath" {
+		// View-only feedback: the strict PUT decoder rejects unknown fields,
+		// so echo-backs strip them exactly like the web and TV clients do.
+		if strings.HasSuffix(key, "Configured") || key == "settingsPath" || key == "engineRunning" {
 			delete(body, key)
 		}
 	}
@@ -607,6 +609,87 @@ func TestPutSettingsCreatesMissingNativeSessionDir(t *testing.T) {
 	}
 	if info, err := os.Stat(created); err != nil || !info.IsDir() {
 		t.Fatalf("session dir must be created on save: %v", err)
+	}
+}
+
+// — The settings view and the torrent-engine diagnostic name the RUNNING
+// engine (a startup-fixed identity), never the saved selection: feedback
+// that mirrored the form would mislabel a qb-saved server probed natively.
+
+// versionEngine is a TorrentEngine whose probe answers a fixed version, so
+// tests observe which engine the handler actually probed.
+type versionEngine struct{ application.TorrentEngine }
+
+func (versionEngine) Test(context.Context) (string, error) { return "v4.3.9", nil }
+
+// newEngineFeedbackHandler builds a handler whose running default is the
+// native engine while the settings file saves savedEngine: the running-vs-
+// saved mismatch the feedback contract must survive.
+func newEngineFeedbackHandler(t *testing.T, savedEngine string) http.Handler {
+	t.Helper()
+	dir := t.TempDir()
+	b, err := json.Marshal(map[string]any{
+		"databasePath":      filepath.Join(dir, "test.db"),
+		"downloadRoot":      filepath.Join(dir, "downloads"),
+		"trustedCidrs":      []string{"127.0.0.0/8", "::1/128", "192.0.2.0/24"},
+		"torrentSessionDir": filepath.Join(dir, "torrent-session"),
+		"downloadEngine":    savedEngine,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(config.EnvironmentPrefix+"SETTINGS_PATH", path)
+	store, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	engineSet, err := application.NewEngineSet("native:", map[string]application.TorrentEngine{"native:": versionEngine{}, "qb:": versionEngine{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := application.NewService(nil, engineSet, stubRepo{}, store)
+	return New(service, store, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
+}
+
+func TestSettingsExposeRunningEngineAlongsideSaved(t *testing.T) {
+	handler := newEngineFeedbackHandler(t, "qbittorrent")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/settings", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/settings status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		DownloadEngine string `json:"downloadEngine"`
+		EngineRunning  string `json:"engineRunning"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.DownloadEngine != "qbittorrent" || body.EngineRunning != "native" {
+		t.Fatalf("settings served downloadEngine=%q engineRunning=%q, want the saved selection alongside the running engine", body.DownloadEngine, body.EngineRunning)
+	}
+}
+
+func TestTorrentEngineDiagnosticNamesRunningEngine(t *testing.T) {
+	handler := newEngineFeedbackHandler(t, "qbittorrent")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/dependencies/qbittorrent/test", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/v1/dependencies/qbittorrent/test status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Success bool   `json:"success"`
+		Engine  string `json:"engine"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.Success || body.Engine != "native" {
+		t.Fatalf("diagnostic reported success=%v engine=%q, want the probed engine's identity", body.Success, body.Engine)
 	}
 }
 

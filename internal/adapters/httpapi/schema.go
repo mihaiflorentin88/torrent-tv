@@ -19,8 +19,10 @@ type SchemaField struct {
 }
 
 // SettingsView is the GET /api/v1/settings body: the settings with the five
-// secrets blanked, one Configured flag per secret, and the settings file
-// path. The HTTP handler and the desktop bindings both serve this shape.
+// secrets blanked, one Configured flag per secret, the settings file path,
+// and the running acquisition engine alongside the saved downloadEngine
+// (empty when no server is running). The HTTP handler and the desktop
+// bindings both serve this shape.
 type SettingsView struct {
 	config.Settings
 	FileListPasskeyConfigured     bool   `json:"fileListPasskeyConfigured"`
@@ -29,12 +31,14 @@ type SettingsView struct {
 	SubDLAPIKeyConfigured         bool   `json:"subDLApiKeyConfigured"`
 	PortalAPIKeyConfigured        bool   `json:"portalAPIKeyConfigured"`
 	SettingsPath                  string `json:"settingsPath"`
+	EngineRunning                 string `json:"engineRunning"`
 }
 
 // RedactedSettings builds the view: secrets are blanked in the payload and
-// surfaced only as Configured flags, so responses never carry credentials.
-func RedactedSettings(v config.Settings, path string) SettingsView {
-	view := SettingsView{Settings: v, FileListPasskeyConfigured: v.FileListPasskey != "", QBittorrentPasswordConfigured: v.QBittorrentPassword != "", TMDBAPIKeyConfigured: v.TMDBAPIKey != "", SubDLAPIKeyConfigured: v.SubDLAPIKey != "", PortalAPIKeyConfigured: v.PortalAPIKey != "", SettingsPath: path}
+// surfaced only as Configured flags, so responses never carry credentials;
+// engineRunning names the acquisition engine actually running ("" when none).
+func RedactedSettings(v config.Settings, path string, engineRunning string) SettingsView {
+	view := SettingsView{Settings: v, FileListPasskeyConfigured: v.FileListPasskey != "", QBittorrentPasswordConfigured: v.QBittorrentPassword != "", TMDBAPIKeyConfigured: v.TMDBAPIKey != "", SubDLAPIKeyConfigured: v.SubDLAPIKey != "", PortalAPIKeyConfigured: v.PortalAPIKey != "", SettingsPath: path, EngineRunning: engineRunning}
 	view.Settings.FileListPasskey = ""
 	view.Settings.QBittorrentPassword = ""
 	view.Settings.TMDBAPIKey = ""
@@ -60,7 +64,7 @@ func SettingsSchema(s *config.Store) []SchemaField {
 		{Key: "qbittorrentUrl", Label: "qBittorrent URL", Help: "Address of qBittorrent Web UI used to add and manage this app's downloads. Only used by the optional qBittorrent engine.", Obtain: "Install qBittorrent from https://www.qbittorrent.org and enable its Web UI under Tools → Options → Web UI."},
 		{Key: "qbittorrentUsername", Label: "qBittorrent username", Help: "Username configured in qBittorrent Web UI authentication.", Obtain: "Set it in qBittorrent under Tools → Options → Web UI → Authentication.", Sensitive: true},
 		{Key: "qbittorrentPassword", Label: "qBittorrent password", Help: "Password configured in qBittorrent Web UI authentication.", Obtain: "Set it in qBittorrent under Tools → Options → Web UI → Authentication.", Sensitive: true},
-		{Key: "downloadEngine", Label: "Download engine", Help: "Selects how downloads are acquired: the built-in torrent engine (default) or the external qBittorrent Web UI. Changing it requires restart.", RestartRequired: true},
+		{Key: "downloadEngine", Label: "Download engine", Help: "Selects the engine that acquires new downloads: the built-in torrent engine (default) or the external qBittorrent Web UI. Downloads already stored keep the engine that owns them. Changing it requires restart.", RestartRequired: true},
 		{Key: "torrentPeerPort", Label: "Torrent peer port", Help: "Port the built-in engine listens on for peer connections. Changing it requires restart.", Obtain: "A fixed port improves seeding reachability; forward it on your router only if you want inbound peers.", RestartRequired: true},
 		{Key: "torrentSessionDir", Label: "Torrent session directory", Help: "Directory where the built-in engine keeps its fast-resume session state. Changing it requires restart.", RestartRequired: true},
 		{Key: "downloadRoot", Label: "Download root", Help: "Server filesystem path where downloads are stored. The built-in engine writes here directly; it must be writable by the server."},
