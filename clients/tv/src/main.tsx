@@ -462,7 +462,7 @@ export type TVPreparingState = {
   hint?: string;
 };
 
-export function Catalog({ api, status, titles, facets, household, downloads, jobs, restoreFocus, portal, updateStatus, onUpdateStatus, onFocus, onRetry, onChangeServer, onForgetServer, onPlay, onPlayDownload, onManageDownload, onManageSeasonPack, onRefreshDownloads, onFavorite, preparing, onCancelPrepare, onRetryPrepare }: { api: API; status: string; titles: CatalogTitle[]; facets: CatalogFacets; household: HouseholdState; downloads: Download[]; jobs: Job[]; restoreFocus: string | null; portal: PortalState | null; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; onFocus: (key: string) => void; onRetry: () => void; onChangeServer: () => void; onForgetServer: () => void; onPlay: (release: Release, fileIndex?: number, resumeMs?: number) => void; onPlayDownload: (download: Download) => void; onManageDownload: (download: Download, action: string) => Promise<void>; onManageSeasonPack: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onRefreshDownloads: () => Promise<void>; onFavorite: (title: CatalogTitle, value: boolean) => void; preparing?: TVPreparingState | null; onCancelPrepare?: () => void; onRetryPrepare?: () => void }) {
+export function Catalog({ api, status, titles, facets, household, downloads, jobs, restoreFocus, portal, updateStatus, onUpdateStatus, onFocus, onRetry, onChangeServer, onForgetServer, onPlay, onPlayDownload, onManageDownload, onManageSeasonPack, onRefreshDownloads, onFavorite, preparing, onCancelPrepare, onRetryPrepare }: { api: API; status: string; titles: CatalogTitle[]; facets: CatalogFacets; household: HouseholdState; downloads: Download[]; jobs: Job[]; restoreFocus: string | null; portal: PortalState | null; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; onFocus: (key: string) => void; onRetry: () => void; onChangeServer: () => void; onForgetServer: () => void; onPlay: (release: Release, fileIndex?: number, resumeMs?: number) => void; onPlayDownload: (download: Download) => void; onManageDownload: (download: Download, action: string) => Promise<void>; onManageSeasonPack: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void | boolean>; onRefreshDownloads: () => Promise<void>; onFavorite: (title: CatalogTitle, value: boolean) => void; preparing?: TVPreparingState | null; onCancelPrepare?: () => void; onRetryPrepare?: () => void }) {
   const [route, setRoute] = useState<TVRoute>('home');
   const [menuOpen, setMenuOpen] = useState(false);
   const [projectsMessage, setProjectsMessage] = useState('');
@@ -506,7 +506,8 @@ export function Catalog({ api, status, titles, facets, household, downloads, job
     const isAcquire = action === 'download' || (action === 'retry' && !source.libraryState?.downloadId);
     if (!isAcquire) setDetailMessage(`Updating season ${season} download…`);
     try {
-      await onManageSeasonPack(source, season, action);
+      const ok = await onManageSeasonPack(source, season, action);
+      if (ok === false) return;
       if (detailRef.current) {
         const next = await api.title(detailRef.current.title.id).catch(() => null);
         if (next) { setDetail(next); setDetailTarget({ season }); }
@@ -838,7 +839,7 @@ function sourceActionLabel(source: CatalogSource) { return source.libraryState?.
 function SourceButton({ source, row, onPlay }: { source: CatalogSource; row: number; onPlay: (release: Release, fileIndex?: number) => void }) { return <button class="source-button" data-focus-region="content" data-focus-row={row} data-focus-col="0" data-focus-key={`source-${source.release.id}-${source.fileIndex ?? -1}`} onClick={() => onPlay(source.release, source.fileIndex)}><span class="source-copy"><strong>{source.parsed.resolution || 'Source'}{source.parsed.hdr ? ` · ${source.parsed.hdr}` : ''}</strong><small class="source-filename">{source.filePath || source.release.name}</small><small>{source.parsed.quality || source.release.category} · {source.parsed.videoCodec || 'codec unknown'}</small><small>Tracker: {source.release.trackerName}</small></span><span class="source-action"><TVStateBadges state={source.libraryState} /><b class="source-action-label">{sourceActionLabel(source)}</b><small>{formatBytes(source.fileSizeBytes || source.release.sizeBytes)} · {source.release.seeders} seeders</small></span></button> }
 
 type SeasonPackAction = 'download' | 'pause' | 'resume' | 'retry' | 'delete';
-function TVSeasonPackCard({ source, season, index, open, onToggle, onAction, onDelete }: { source: CatalogSource; season: number; index: number; open: boolean; onToggle: () => void; onAction: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void>; onDelete: () => void }) {
+function TVSeasonPackCard({ source, season, index, open, onToggle, onAction, onDelete }: { source: CatalogSource; season: number; index: number; open: boolean; onToggle: () => void; onAction: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void | boolean>; onDelete: () => void }) {
   const state = source.libraryState; const [busy, setBusy] = useState(''); const managed = Boolean(state?.downloadId); const paused = state?.transferState === 'paused'; const complete = state?.downloadState === 'downloaded'; const error = state?.downloadState === 'error';
   const run = async (action: SeasonPackAction) => { if (busy) return; setBusy(action); try { await onAction(source, season, action) } finally { setBusy('') } };
   return <article class={`season-pack-card ${open ? 'expanded' : ''}`}>
@@ -850,7 +851,7 @@ function TVSeasonPackCard({ source, season, index, open, onToggle, onAction, onD
   </article>;
 }
 
-function TitleDetail({ api, detail, target, message, resume, favorite, onClose, onFavorite, onResume, onPlay, onPackAction }: { api: API; detail: CatalogDetail; target: DetailTarget; message: string; resume?: HouseholdItem; favorite: boolean; onClose: () => void; onFavorite: (title: CatalogTitle, value: boolean) => void; onResume: (item: HouseholdItem) => void; onPlay: (release: Release, fileIndex?: number) => void; onPackAction: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void> }) {
+function TitleDetail({ api, detail, target, message, resume, favorite, onClose, onFavorite, onResume, onPlay, onPackAction }: { api: API; detail: CatalogDetail; target: DetailTarget; message: string; resume?: HouseholdItem; favorite: boolean; onClose: () => void; onFavorite: (title: CatalogTitle, value: boolean) => void; onResume: (item: HouseholdItem) => void; onPlay: (release: Release, fileIndex?: number) => void; onPackAction: (source: CatalogSource, season: number, action: SeasonPackAction) => Promise<void | boolean> }) {
   const [season, setSeason] = useState(target.season || detail.seasons[0]?.number || 0);
   const [expanded, setExpanded] = useState(target.episode ? `${target.season}:${target.episode}` : '');
   const [expandedPack, setExpandedPack] = useState('');
@@ -928,8 +929,8 @@ export function App() {
   const viewportInput = useRef(0);
   const loadState = async (client = api) => { if (client) try { setHousehold(await client.state()); } catch (error) { setStatus((error as Error).message); } };
   async function connect(url = draft) { setStatus('Connecting…'); try { const normalized = normalizeServerURL(url); const client = new API(normalized); const info = await client.info(); const [titlePage, catalogFacets, downloadPage, jobPage] = await Promise.all([client.titles({ pageSize: 12, sort: 'newest' }), client.facets(), client.downloads().catch(() => ({ items: [], nextCursor: null, total: 0 })), client.jobs({ pageSize: 24 }).catch(() => ({ items: [], nextCursor: null, total: 0 }))]); localStorage.setItem(STORAGE, normalized); setServer(normalized); setDraft(normalized); setAPI(client); setStatus(`${info.instanceName || info.name} ${info.version}`); setTitles(titlePage.items); setFacets(catalogFacets); void client.ensureMetadata(titlePage.items.map(item => item.id)); } catch (error) { setStatus((error as Error).message); } }
-  async function runPrepare(attempt: PrepareAttempt) {
-    if (!api) return;
+  async function runPrepare(attempt: PrepareAttempt): Promise<boolean> {
+    if (!api) return false;
     prepareAttempt.current = attempt;
     const token = ++prepareToken.current;
     const capabilities = detectCapabilities();
@@ -943,7 +944,7 @@ export function App() {
     try {
       if (attempt.kind === 'source') {
         const download = await api.prepare(attempt.release.id, attempt.fileIndex, controller?.signal);
-        if (token !== prepareToken.current) return;
+        if (token !== prepareToken.current) return false;
         prepareController.current = null;
         prepareAttempt.current = null;
         prepareOriginKey.current = null;
@@ -955,7 +956,7 @@ export function App() {
         setPlayer({ download, resumeMs });
       } else {
         await api.prepareSeason(attempt.source.release.id, attempt.season, controller?.signal);
-        if (token !== prepareToken.current) return;
+        if (token !== prepareToken.current) return false;
         prepareController.current = null;
         prepareAttempt.current = null;
         const origin = prepareOriginKey.current;
@@ -965,8 +966,9 @@ export function App() {
         setStatus(`Season ${attempt.season} added to Downloads.`);
         if (origin) window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(origin)}"]`)), 0);
       }
+      return true;
     } catch (error) {
-      if (token !== prepareToken.current) return;
+      if (token !== prepareToken.current) return false;
       prepareController.current = null;
       const err = error as Error & { status?: number };
       const canceled = controller?.signal.aborted === true || err.name === 'AbortError';
@@ -976,7 +978,7 @@ export function App() {
         prepareOriginKey.current = null;
         setPreparing(null);
         if (origin) window.setTimeout(() => focusElement(document.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(origin)}"]`)), 0);
-        return;
+        return false;
       }
       let hint = '';
       if (err.status === 409) {
@@ -985,6 +987,7 @@ export function App() {
         hint = 'Metadata search timed out. Check the swarm health or try again.';
       }
       setPreparing(current => current ? { ...current, error: err.message, hint } : current);
+      return false;
     }
   }
   function cancelPrepare() {
@@ -1008,16 +1011,15 @@ export function App() {
   }
   async function favorite(title: CatalogTitle, value: boolean) { if (!api) return; try { await api.titleFavorite(title.id, value); await loadState(); } catch (error) { setStatus((error as Error).message); } }
   const refreshDownloads = async () => { if (!api) return; const anchor = captureTVDownloadAnchor(); const inputVersion = viewportInput.current; try { const incoming = (await api.downloads()).items; setDownloads(current => reconcileDownloads(current, incoming)); window.requestAnimationFrame(() => { if (inputVersion === viewportInput.current) restoreTVDownloadAnchor(anchor) }) } catch (error) { setStatus((error as Error).message) } };
-  async function downloadSeason(source: CatalogSource, season: number) {
+  async function downloadSeason(source: CatalogSource, season: number): Promise<boolean> {
     if (!api) throw new Error('Server is not connected.');
     prepareOriginKey.current = document.activeElement instanceof HTMLElement ? document.activeElement.dataset.focusKey || null : null;
-    await runPrepare({ kind: 'season', source, season });
+    return await runPrepare({ kind: 'season', source, season });
   }
-  async function manageSeasonPack(source: CatalogSource, season: number, action: SeasonPackAction) {
+  async function manageSeasonPack(source: CatalogSource, season: number, action: SeasonPackAction): Promise<boolean> {
     if (!api) throw new Error('Server is not connected.');
     if (action === 'download' || (action === 'retry' && !source.libraryState?.downloadId)) {
-      await downloadSeason(source, season);
-      return;
+      return await downloadSeason(source, season);
     }
     const id = source.libraryState?.downloadId;
     if (!id) throw new Error('This season download is not registered yet. Refresh the title and try again.');
@@ -1025,6 +1027,7 @@ export function App() {
       if (action === 'delete') await api.deleteDownload(id);
       else await api.call(`/downloads/${encodeURIComponent(id)}/${action}`, { method: 'POST' });
       await refreshDownloads();
+      return true;
     } catch (error) {
       setStatus((error as Error).message);
       throw error;

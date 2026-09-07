@@ -1,1867 +1,1805 @@
 /* Spacing convention: flex/grid gap is off-limits on the Tizen 5.0 floor (ADR-0006); emulate with adjacent-sibling margins plus compensating container margins. */
 :root {
- font-family: Arial, "Helvetica Neue", sans-serif;
- color: #f4f7f8;
- background: #090d10;
- --ink: #090d10;
- --panel: #11181d;
- --soft: #1a242b;
- --line: #334149;
- --muted: #a8b3b9;
- --teal: #55dfc1;
- --focus: #8ff4de
+   font-family: Arial, "Helvetica Neue", sans-serif;
+   color: #f4f7f8;
+   background: #090d10;
+   --ink: #090d10;
+   --panel: #11181d;
+   --soft: #1a242b;
+   --line: #334149;
+   --muted: #a8b3b9;
+   --teal: #55dfc1;
+   --focus: #8ff4de
 }
 
 * {
- box-sizing: border-box
+   box-sizing: border-box
 }
 
 html,
 body,
 #app {
- margin: 0;
- width: 1920px;
- height: 1080px;
- overflow: hidden;
- background: #090d10
+   margin: 0;
+   width: 1920px;
+   height: 1080px;
+   overflow: hidden;
+   background: #090d10
 }
 
 button,
 input {
- font: inherit;
- color: inherit;
- background: #182229;
- border: 3px solid transparent;
- border-radius: 8px;
- padding: 17px 24px
+   font: inherit;
+   color: inherit;
+   background: #182229;
+   border: 3px solid transparent;
+   border-radius: 8px;
+   padding: 17px 24px
 }
 
 button:focus,
 input:focus {
- outline: 0;
- border-color: #fff;
- box-shadow: 0 0 0 5px var(--teal), 0 12px 34px #000b;
- transform: scale(1.045);
- position: relative;
- z-index: 30
+   outline: 0;
+   border-color: #fff;
+   box-shadow: 0 0 0 5px var(--teal), 0 12px 34px #000b;
+   transform: scale(1.045);
+   position: relative;
+   z-index: 30
 }
 
 button.primary {
- background: var(--teal);
- color: #06241e;
- font-weight: 700
+   background: var(--teal);
+   color: #06241e;
+   font-weight: 700
 }
 
 .setup {
- width: 1050px;
- margin: 160px auto
+   width: 1050px;
+   margin: 160px auto
 }
 
 .setup h1 {
- font-size: 70px
+   font-size: 70px
 }
 
 .setup-controls {
- display: flex;
- align-items: center;
- margin: 35px 0
+   display: flex;
+   align-items: center;
+   margin: 35px 0
 }
 
 .setup-controls>*+* {
- margin-left: 24px
+   margin-left: 24px
 }
 
 .setup input {
- width: 760px
+   width: 760px
 }
 
 .focus-hint {
- color: var(--muted);
- font-size: 22px
+   color: var(--muted);
+   font-size: 22px
 }
 
 .tv-app {
- display: grid;
- grid-template-columns: 104px 1fr;
- height: 1080px;
- background: var(--ink);
- transition: grid-template-columns .2s ease
+   display: grid;
+   grid-template-columns: 104px 1fr;
+   height: 1080px;
+   background: var(--ink);
+   transition: grid-template-columns .2s ease
 }
 
 .tv-app.menu-open {
- grid-template-columns: 350px 1fr
+   grid-template-columns: 350px 1fr
 }
 
 .tv-sidebar {
- position: relative;
- z-index: 20;
- height: 1080px;
- padding: 30px 17px;
- background: #0c1216f5;
- border-right: 1px solid #202b31;
- overflow: hidden;
- box-shadow: 15px 0 45px #0005
+   position: relative;
+   z-index: 20;
+   height: 1080px;
+   padding: 30px 17px;
+   background: #0c1216f5;
+   border-right: 1px solid #202b31;
+   overflow: hidden;
+   box-shadow: 15px 0 45px #0005
 }
 
 .tv-brand {
- height: 78px;
- display: flex;
- align-items: center;
- white-space: nowrap;
- margin-bottom: 25px
+   height: 78px;
+   display: flex;
+   align-items: center;
+   white-space: nowrap;
+   margin-bottom: 25px
 }
 
 .tv-brand>*+* {
- margin-left: 17px
+   margin-left: 17px
 }
 
 .tv-brand>span {
- display: flex;
- align-items: center;
- justify-content: center;
- min-width: 66px;
- height: 52px;
- border-radius: 8px;
- background: var(--teal);
- color: #09241f;
- font-size: 22px;
- font-weight: 900
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   min-width: 66px;
+   height: 52px;
+   border-radius: 8px;
+   background: var(--teal);
+   color: #09241f;
+   font-size: 22px;
+   font-weight: 900
 }
 
 .tv-brand b {
- font-size: 24px;
- opacity: 0;
- transition: opacity .15s
+   font-size: 24px;
+   opacity: 0;
+   transition: opacity .15s
 }
 
 .menu-open .tv-brand b {
- opacity: 1
+   opacity: 1
 }
 
 .tv-menu-group {
- margin: 0 0 20px
+   margin: 0 0 20px
 }
 
 .tv-menu-group>small {
- display: block;
- margin: 0 14px 8px;
- color: #728089;
- text-transform: uppercase;
- letter-spacing: .15em;
- white-space: nowrap;
- opacity: 0
+   display: block;
+   margin: 0 14px 8px;
+   color: #728089;
+   text-transform: uppercase;
+   letter-spacing: .15em;
+   white-space: nowrap;
+   opacity: 0
 }
 
 .menu-open .tv-menu-group>small {
- opacity: 1
+   opacity: 1
 }
 
 .tv-sidebar button {
- display: flex;
- align-items: center;
- width: 316px;
- height: 57px;
- margin: 4px 0;
- padding: 6px 13px;
- background: transparent;
- white-space: nowrap;
- text-align: left
+   display: flex;
+   align-items: center;
+   width: 316px;
+   height: 57px;
+   margin: 4px 0;
+   padding: 6px 13px;
+   background: transparent;
+   white-space: nowrap;
+   text-align: left
 }
 
 .tv-sidebar button i {
- display: flex;
- align-items: center;
- justify-content: center;
- width: 52px;
- min-width: 52px;
- color: #aebbc2;
- font-style: normal;
- font-size: 25px
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   width: 52px;
+   min-width: 52px;
+   color: #aebbc2;
+   font-style: normal;
+   font-size: 25px
 }
 
 .tv-sidebar button span {
- opacity: 0;
- font-size: 19px
+   opacity: 0;
+   font-size: 19px
 }
 
 .menu-open .tv-sidebar button span {
- opacity: 1
+   opacity: 1
 }
 
 .tv-sidebar button.active {
- background: #1b282e;
- color: #fff
+   background: #1b282e;
+   color: #fff
 }
 
 .tv-sidebar button.active i {
- color: var(--teal)
+   color: var(--teal)
 }
 
 .tv-content {
- height: 1080px;
- overflow-y: auto;
- padding: 36px 60px 90px
+   height: 1080px;
+   overflow-y: auto;
+   padding: 36px 60px 90px
 }
 
 .tv-top {
- height: 85px;
- display: flex;
- align-items: center
+   height: 85px;
+   display: flex;
+   align-items: center
 }
 
 .tv-top>*+* {
- margin-left: 28px
+   margin-left: 28px
 }
 
 .tv-top>div {
- margin-right: auto
+   margin-right: auto
 }
 
 .tv-top small,
 .eyebrow {
- color: var(--teal);
- font-size: 15px;
- font-weight: 700;
- letter-spacing: .14em;
- text-transform: uppercase
+   color: var(--teal);
+   font-size: 15px;
+   font-weight: 700;
+   letter-spacing: .14em;
+   text-transform: uppercase
 }
 
 .tv-top h1 {
- font-size: 36px;
- margin: 5px 0
+   font-size: 36px;
+   margin: 5px 0
 }
 
 .tv-top>span {
- max-width: 580px;
- color: var(--muted);
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis
+   max-width: 580px;
+   color: var(--muted);
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
 }
 
 .tv-top button {
- padding: 12px 20px
+   padding: 12px 20px
 }
 
 .tv-search {
- padding: 22px 0
+   padding: 22px 0
 }
 
 .tv-search input {
- width: 760px;
- font-size: 24px
+   width: 760px;
+   font-size: 24px
 }
 
 .tv-hero {
- height: 430px;
- margin: 10px 0 34px;
- border-radius: 12px;
- background: linear-gradient(125deg, #17242a, #0d1317);
- background-size: cover;
- background-position: center;
- display: flex;
- align-items: center;
- padding: 55px;
- box-shadow: inset 0 -100px 120px #090d1044
+   height: 430px;
+   margin: 10px 0 34px;
+   border-radius: 12px;
+   background: linear-gradient(125deg, #17242a, #0d1317);
+   background-size: cover;
+   background-position: center;
+   display: flex;
+   align-items: center;
+   padding: 55px;
+   box-shadow: inset 0 -100px 120px #090d1044
 }
 
 .tv-hero>div {
- width: 720px
+   width: 720px
 }
 
 .tv-hero h2 {
- font-size: 62px;
- line-height: 1;
- margin: 16px 0
+   font-size: 62px;
+   line-height: 1;
+   margin: 16px 0
 }
 
 .tv-hero p {
- font-size: 22px;
- line-height: 1.5;
- color: #d2d9dc;
- max-height: 100px;
- overflow: hidden
+   font-size: 22px;
+   line-height: 1.5;
+   color: #d2d9dc;
+   max-height: 100px;
+   overflow: hidden
 }
 
 .tv-hero button {
- font-size: 21px
+   font-size: 21px
 }
 
 .row-heading {
- display: flex;
- align-items: baseline;
- margin: 20px 0 4px
+   display: flex;
+   align-items: baseline;
+   margin: 20px 0 4px
 }
 
 .row-heading>*+* {
- margin-left: 20px
+   margin-left: 20px
 }
 
 .row-heading h2 {
- font-size: 29px
+   font-size: 29px
 }
 
 .row-heading span {
- color: var(--muted)
+   color: var(--muted)
 }
 
 .poster-rail {
- display: grid;
- grid-auto-flow: column;
- grid-auto-columns: 280px;
- overflow-x: auto;
- padding: 14px 12px 28px;
- margin-left: -12px;
- margin-right: -20px
+   display: grid;
+   grid-auto-flow: column;
+   grid-auto-columns: 280px;
+   overflow-x: auto;
+   padding: 14px 12px 28px;
+   margin-left: -12px;
+   margin-right: -20px
 }
 
 .poster-rail>* {
- margin-right: 20px
+   margin-right: 20px
 }
 
 .poster-card {
- width: 260px;
- height: 410px;
- padding: 0;
- overflow: hidden;
- text-align: left;
- background: #121a1f
+   width: 260px;
+   height: 410px;
+   padding: 0;
+   overflow: hidden;
+   text-align: left;
+   background: #121a1f
 }
 
 .poster-card img,
 .poster-fallback {
- width: 100%;
- height: 300px;
- object-fit: cover;
- background: linear-gradient(145deg, #234049, #11181d);
- display: flex;
- align-items: center;
- justify-content: center;
- font-size: 90px;
- color: #60978d
+   width: 100%;
+   height: 300px;
+   object-fit: cover;
+   background: linear-gradient(145deg, #234049, #11181d);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   font-size: 90px;
+   color: #60978d
 }
 
 .poster-copy {
- height: 110px;
- padding: 13px 15px;
- display: flex;
- flex-direction: column
+   height: 110px;
+   padding: 13px 15px;
+   display: flex;
+   flex-direction: column
 }
 
 .poster-copy>*+* {
- margin-top: 5px
+   margin-top: 5px
 }
 
 .poster-copy strong {
- font-size: 20px;
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis
+   font-size: 20px;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
 }
 
 .poster-copy span,
 .poster-copy small {
- color: var(--muted);
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis
+   color: var(--muted);
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
 }
 
 .poster-copy small {
- color: #75d9c4
+   color: #75d9c4
 }
 
 .tv-empty,
 .tv-settings {
- margin: 100px auto;
- max-width: 850px;
- padding: 50px;
- background: var(--panel);
- border: 1px solid var(--line);
- border-radius: 12px
+   margin: 100px auto;
+   max-width: 850px;
+   padding: 50px;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: 12px
 }
 
 .tv-settings p,
 .tv-empty p {
- font-size: 22px;
- color: var(--muted);
- line-height: 1.5
+   font-size: 22px;
+   color: var(--muted);
+   line-height: 1.5
 }
 
 .tv-settings button {
- display: block;
- margin: 18px 0
+   display: block;
+   margin: 18px 0
 }
 
 .detail-screen {
- height: 1080px;
- overflow-y: auto;
- padding: 55px 95px 100px;
- background-color: #090d10;
- background-size: cover;
- background-attachment: fixed;
- background-position: center
+   height: 1080px;
+   overflow-y: auto;
+   padding: 55px 95px 100px;
+   background-color: #090d10;
+   background-size: cover;
+   background-attachment: fixed;
+   background-position: center
 }
 
 .detail-copy {
- width: 800px;
- margin: 100px 0 70px
+   width: 800px;
+   margin: 100px 0 70px
 }
 
 .detail-copy h1 {
- font-size: 70px;
- line-height: 1;
- margin: 18px 0
+   font-size: 70px;
+   line-height: 1;
+   margin: 18px 0
 }
 
 .detail-copy p {
- font-size: 23px;
- line-height: 1.55;
- color: #c8d1d5
+   font-size: 23px;
+   line-height: 1.55;
+   color: #c8d1d5
 }
 
 .detail-actions {
- display: flex;
- margin-top: 30px
+   display: flex;
+   margin-top: 30px
 }
 
 .detail-actions>*+* {
- margin-left: 18px
+   margin-left: 18px
 }
 
 .season-browser,
 .source-list {
- width: 1280px;
- padding: 30px;
- background: #0b1115e8;
- border: 1px solid var(--line);
- border-radius: 12px
+   width: 1280px;
+   padding: 30px;
+   background: #0b1115e8;
+   border: 1px solid var(--line);
+   border-radius: 12px
 }
 
 .season-tabs {
- display: flex;
- margin: 20px 0 35px
+   display: flex;
+   margin: 20px 0 35px
 }
 
 .season-tabs>*+* {
- margin-left: 12px
+   margin-left: 12px
 }
 
 .season-tabs button.active {
- background: var(--teal);
- color: #08231e
+   background: var(--teal);
+   color: #08231e
 }
 
 .episode-row {
- padding: 20px 0;
- border-top: 1px solid #2a353b
+   padding: 20px 0;
+   border-top: 1px solid #2a353b
 }
 
 .episode-row>div {
- display: flex;
- justify-content: space-between;
- font-size: 22px;
- margin-bottom: 12px
+   display: flex;
+   justify-content: space-between;
+   font-size: 22px;
+   margin-bottom: 12px
 }
 
 .episode-row>div span {
- color: var(--muted)
+   color: var(--muted)
 }
 
 .source-button {
- display: flex;
- justify-content: space-between;
- align-items: center;
- width: 100%;
- margin: 10px 0;
- text-align: left
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   width: 100%;
+   margin: 10px 0;
+   text-align: left
 }
 
 .source-button>span {
- display: flex;
- flex-direction: column
+   display: flex;
+   flex-direction: column
 }
 
 .source-button>span>*+* {
- margin-top: 7px
+   margin-top: 7px
 }
 
 .source-button>span:last-child {
- text-align: right
+   text-align: right
 }
 
 .source-button small {
- color: var(--muted)
+   color: var(--muted)
 }
 
 .player-shell {
- position: fixed;
- top: 0;
- right: 0;
- bottom: 0;
- left: 0;
- width: 1920px;
- height: 1080px;
- background: #000
+   position: fixed;
+   top: 0;
+   right: 0;
+   bottom: 0;
+   left: 0;
+   width: 1920px;
+   height: 1080px;
+   background: #000
 }
 
 .player-shell #av-player {
- position: absolute;
- top: 0;
- right: 0;
- bottom: 0;
- left: 0;
- width: 1920px;
- height: 1080px;
- z-index: 0
+   position: absolute;
+   top: 0;
+   right: 0;
+   bottom: 0;
+   left: 0;
+   width: 1920px;
+   height: 1080px;
+   z-index: 0
 }
 
 .player {
- position: absolute;
- top: 0;
- right: 0;
- bottom: 0;
- left: 0;
- width: 1920px;
- height: 1080px;
- z-index: 2
+   position: absolute;
+   top: 0;
+   right: 0;
+   bottom: 0;
+   left: 0;
+   width: 1920px;
+   height: 1080px;
+   z-index: 2
 }
 
 .player-message {
- position: absolute;
- z-index: 5;
- top: 80px;
- left: 50%;
- transform: translateX(-50%);
- max-width: 1400px;
- padding: 20px 30px;
- background: #071018e8;
- border-radius: 12px;
- font-size: 26px;
- text-align: center
+   position: absolute;
+   z-index: 5;
+   top: 80px;
+   left: 50%;
+   transform: translateX(-50%);
+   max-width: 1400px;
+   padding: 20px 30px;
+   background: #071018e8;
+   border-radius: 12px;
+   font-size: 26px;
+   text-align: center
 }
 
 .player-controls {
- position: absolute;
- left: 0;
- right: 0;
- bottom: 0;
- padding: 150px 72px 48px;
- background: linear-gradient(transparent, #020609 42%);
- opacity: 0;
- visibility: hidden;
- transition: opacity .2s;
- z-index: 3
+   position: absolute;
+   left: 0;
+   right: 0;
+   bottom: 0;
+   padding: 150px 72px 48px;
+   background: linear-gradient(transparent, #020609 42%);
+   opacity: 0;
+   visibility: hidden;
+   transition: opacity .2s;
+   z-index: 3
 }
 
 .controls-visible .player-controls {
- opacity: 1;
- visibility: visible
+   opacity: 1;
+   visibility: visible
 }
 
 .player-title {
- font-size: 30px;
- font-weight: bold;
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis;
- margin-bottom: 18px
+   font-size: 30px;
+   font-weight: bold;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   margin-bottom: 18px
 }
 
 .player-timeline {
- display: block;
- position: relative;
- width: 100%;
- height: 30px;
- padding: 0;
- border: 0;
- border-radius: 15px;
- background: #61717e;
- overflow: hidden
+   display: block;
+   position: relative;
+   width: 100%;
+   height: 30px;
+   padding: 0;
+   border: 0;
+   border-radius: 15px;
+   background: #61717e;
+   overflow: hidden
 }
 
 .player-timeline span {
- display: block;
- height: 100%;
- background: var(--teal)
+   display: block;
+   height: 100%;
+   background: var(--teal)
 }
 
 .player-time {
- display: flex;
- justify-content: space-between;
- margin: 10px 0 18px;
- color: #d8e3e9;
- font-size: 22px
+   display: flex;
+   justify-content: space-between;
+   margin: 10px 0 18px;
+   color: #d8e3e9;
+   font-size: 22px
 }
 
 .player-toolbar {
- display: flex;
- align-items: center
+   display: flex;
+   align-items: center
 }
 
 .player-toolbar>*+* {
- margin-left: 14px
+   margin-left: 14px
 }
 
 .player-toolbar button,
 .player-retry {
- position: static;
- padding: 15px 20px
+   position: static;
+   padding: 15px 20px
 }
 
 .player-retry {
- margin-top: 18px;
- background: #9b3948
+   margin-top: 18px;
+   background: #9b3948
 }
 
 .player-dialog {
- position: absolute;
- right: 70px;
- top: 70px;
- width: 580px;
- max-height: 900px;
- overflow: auto;
- z-index: 10;
- padding: 34px;
- background: #071018f5;
- border: 2px solid #3d5667;
- border-radius: 18px;
- box-shadow: 0 20px 70px #000
+   position: absolute;
+   right: 70px;
+   top: 70px;
+   width: 580px;
+   max-height: 900px;
+   overflow: auto;
+   z-index: 10;
+   padding: 34px;
+   background: #071018f5;
+   border: 2px solid #3d5667;
+   border-radius: 18px;
+   box-shadow: 0 20px 70px #000
 }
 
 .player-dialog h2 {
- font-size: 34px;
- margin: 0 0 22px
+   font-size: 34px;
+   margin: 0 0 22px
 }
 
 .player-dialog p {
- font-size: 23px;
- color: #c8d5dc
+   font-size: 23px;
+   color: #c8d5dc
 }
 
 .player-dialog button {
- display: block;
- position: static;
- width: 100%;
- margin: 12px 0;
- text-align: left;
- padding: 16px 20px
+   display: block;
+   position: static;
+   width: 100%;
+   margin: 12px 0;
+   text-align: left;
+   padding: 16px 20px
 }
 
 .tv-list {
- width: 1420px;
- margin-top: 35px
+   width: 1420px;
+   margin-top: 35px
 }
 
 .tv-list>p {
- color: var(--muted);
- font-size: 22px
+   color: var(--muted);
+   font-size: 22px
 }
 
 .tv-list article {
- display: grid;
- grid-template-columns: 1fr auto;
- align-items: center;
- margin: 14px 0;
- padding: 24px 28px;
- border: 1px solid var(--line);
- border-radius: 10px;
- background: var(--panel)
+   display: grid;
+   grid-template-columns: 1fr auto;
+   align-items: center;
+   margin: 14px 0;
+   padding: 24px 28px;
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   background: var(--panel)
 }
 
 .tv-list article>div:first-child {
- display: flex;
- flex-direction: column;
- margin-right: 28px
+   display: flex;
+   flex-direction: column;
+   margin-right: 28px
 }
 
 .tv-list article>div:first-child>*+* {
- margin-top: 8px
+   margin-top: 8px
 }
 
 .tv-list article strong {
- font-size: 24px
+   font-size: 24px
 }
 
 .tv-list article span,
 .tv-list article small {
- color: var(--muted)
+   color: var(--muted)
 }
 
 .tv-list article>div:last-child {
- display: flex
+   display: flex
 }
 
 .tv-list article>div:last-child>*+* {
- margin-left: 10px
+   margin-left: 10px
 }
 
 .tv-list article button {
- padding: 13px 18px
+   padding: 13px 18px
 }
 
 .external-subtitle {
- position: absolute;
- z-index: 4;
- left: 180px;
- right: 180px;
- bottom: 115px;
- color: #fff;
- font-size: 43px;
- line-height: 1.25;
- font-weight: 700;
- text-align: center;
- white-space: pre-line;
- text-shadow: -2px -2px 2px #000, 2px -2px 2px #000, -2px 2px 2px #000, 2px 2px 2px #000, 0 4px 9px #000
+   position: absolute;
+   z-index: 4;
+   left: 180px;
+   right: 180px;
+   bottom: 115px;
+   color: #fff;
+   font-size: 43px;
+   line-height: 1.25;
+   font-weight: 700;
+   text-align: center;
+   white-space: pre-line;
+   text-shadow: -2px -2px 2px #000, 2px -2px 2px #000, -2px 2px 2px #000, 2px 2px 2px #000, 0 4px 9px #000
 }
 
 .controls-visible .external-subtitle {
- bottom: 340px
+   bottom: 340px
 }
 
 .job-detail {
- max-width: 1420px
+   max-width: 1420px
 }
 
 .job-detail .job-log {
- display: flex;
- flex-direction: column;
- align-items: stretch;
- width: 100%;
- margin: 14px 0;
- padding: 24px 28px;
- border-left: 5px solid #46606b;
- text-align: left
+   display: flex;
+   flex-direction: column;
+   align-items: stretch;
+   width: 100%;
+   margin: 14px 0;
+   padding: 24px 28px;
+   border-left: 5px solid #46606b;
+   text-align: left
 }
 
 .job-detail .job-log.warn {
- border-left-color: #d7a84b
+   border-left-color: #d7a84b
 }
 
 .job-detail .job-log.error {
- border-left-color: #ef6262
+   border-left-color: #ef6262
 }
 
 .job-log-heading {
- display: flex;
- justify-content: space-between
+   display: flex;
+   justify-content: space-between
 }
 
 .job-log-heading>*+* {
- margin-left: 24px
+   margin-left: 24px
 }
 
 .job-log-heading i {
- color: var(--teal);
- font-style: normal
+   color: var(--teal);
+   font-style: normal
 }
 
 .job-log-expanded {
- margin-top: 18px;
- padding-top: 18px;
- border-top: 1px solid var(--line)
+   margin-top: 18px;
+   padding-top: 18px;
+   border-top: 1px solid var(--line)
 }
 
 .job-log-expanded dl {
- display: grid;
- grid-template-columns: 148px 1fr;
- margin: 0 0 10px
+   display: grid;
+   grid-template-columns: 148px 1fr;
+   margin: 0 0 10px
 }
 
 .job-log-expanded dt {
- color: var(--muted);
- margin-right: 8px;
- margin-bottom: 8px
+   color: var(--muted);
+   margin-right: 8px;
+   margin-bottom: 8px
 }
 
 .job-log-expanded dd {
- margin: 0 0 8px;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   margin: 0 0 8px;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 .job-log-expanded pre {
- max-height: 360px;
- margin: 0;
- padding: 18px;
- overflow: auto;
- background: #080d10;
- color: #dce8ed;
- white-space: pre-wrap;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   max-height: 360px;
+   margin: 0;
+   padding: 18px;
+   overflow: auto;
+   background: #080d10;
+   color: #dce8ed;
+   white-space: pre-wrap;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 .job-log-expanded p {
- margin: 0;
- color: var(--muted)
+   margin: 0;
+   color: var(--muted)
 }
 
 .tv-download-row>div:first-child {
- min-width: 0
+   min-width: 0
 }
 
 .tv-download-row .tv-release-name {
- color: #f4f7f8;
- font-size: 20px;
- font-weight: 700;
- white-space: normal;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   color: #f4f7f8;
+   font-size: 20px;
+   font-weight: 700;
+   white-space: normal;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 .tv-download-row small {
- max-width: 900px;
- white-space: normal;
- overflow-wrap: break-word;
- overflow-wrap: anywhere;
- line-height: 1.3
+   max-width: 900px;
+   white-space: normal;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere;
+   line-height: 1.3
 }
 
 .tv-download-tools {
- align-items: stretch
+   align-items: stretch
 }
 
 .tv-download-tools input {
- width: 640px;
- font-size: 21px
+   width: 640px;
+   font-size: 21px
 }
 
 .tv-download-tools button {
- min-width: 250px;
- text-align: left
+   min-width: 250px;
+   text-align: left
 }
 
 .tv-download-count {
- margin: 0 0 18px;
- color: var(--muted);
- font-size: 19px
+   margin: 0 0 18px;
+   color: var(--muted);
+   font-size: 19px
 }
 
 .tv-removal-confirm {
- max-width: 1050px
+   max-width: 1050px
 }
 
 .tv-removal-confirm>strong {
- display: block;
- font-size: 27px;
- line-height: 1.35;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   display: block;
+   font-size: 27px;
+   line-height: 1.35;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 .tv-removal-confirm button {
- width: 100%
+   width: 100%
 }
 
 .tv-removal-confirm button:disabled {
- opacity: .55
+   opacity: .55
 }
 
 .tv-removal-confirm .danger-button {
- color: #ff9b9b;
- border-color: #a84854
+   color: #ff9b9b;
+   border-color: #a84854
 }
 
 .tv-removal-confirm .danger-button:focus {
- background: #8f2f3e;
- color: #fff;
- border-color: #fff
+   background: #8f2f3e;
+   color: #fff;
+   border-color: #fff
 }
 
 .tv-stream-mode {
- align-self: flex-start;
- padding: 5px 10px;
- border-radius: 8px;
- background: #163b35;
- color: #55dfc1;
- font-size: 17px;
- font-weight: 700
+   align-self: flex-start;
+   padding: 5px 10px;
+   border-radius: 8px;
+   background: #163b35;
+   color: #55dfc1;
+   font-size: 17px;
+   font-weight: 700
 }
 
 .tv-stream-mode.local {
- background: #1b3029;
- color: #b7ead8
+   background: #1b3029;
+   color: #b7ead8
 }
 
 .tv-library-grid {
- display: grid;
- grid-template-columns: repeat(5, 280px);
- padding: 10px 12px 40px;
- margin-bottom: -24px
+   display: grid;
+   grid-template-columns: repeat(5, 280px);
+   padding: 10px 12px 40px;
+   margin-bottom: -24px
 }
 
 .tv-library-grid .poster-card {
- margin: 0 20px 24px 0
+   margin: 0 20px 24px 0
 }
 
 .library-poster-card {
- position: relative
+   position: relative
 }
 
 .tv-card-progress {
- position: absolute;
- left: 14px;
- right: 14px;
- bottom: 10px;
- height: 5px;
- border-radius: 5px;
- background: #06100dcc;
- overflow: hidden
+   position: absolute;
+   left: 14px;
+   right: 14px;
+   bottom: 10px;
+   height: 5px;
+   border-radius: 5px;
+   background: #06100dcc;
+   overflow: hidden
 }
 
 .tv-card-progress b {
- display: block;
- height: 100%;
- border-radius: 5px;
- background: var(--teal)
+   display: block;
+   height: 100%;
+   border-radius: 5px;
+   background: var(--teal)
 }
 
 .season-pack-downloads {
- margin: 10px 0 30px;
- padding: 24px;
- border: 1px solid #3c655c;
- border-radius: 10px;
- background: #10231f
+   margin: 10px 0 30px;
+   padding: 24px;
+   border: 1px solid #3c655c;
+   border-radius: 10px;
+   background: #10231f
 }
 
 .season-pack-downloads h3 {
- margin: 0 0 6px;
- font-size: 27px
+   margin: 0 0 6px;
+   font-size: 27px
 }
 
 .season-pack-downloads>p,
 .episode-loading {
- color: var(--muted);
- font-size: 20px
+   color: var(--muted);
+   font-size: 20px
 }
 
 .season-pack-button {
- display: flex;
- width: 100%;
- justify-content: space-between;
- align-items: center;
- margin: 12px 0;
- text-align: left
+   display: flex;
+   width: 100%;
+   justify-content: space-between;
+   align-items: center;
+   margin: 12px 0;
+   text-align: left
 }
 
 .season-pack-button span {
- display: flex;
- max-width: 900px;
- flex-direction: column
+   display: flex;
+   max-width: 900px;
+   flex-direction: column
 }
 
 .season-pack-button span>*+* {
- margin-top: 5px
+   margin-top: 5px
 }
 
 .season-pack-button span:last-child {
- text-align: right
+   text-align: right
 }
 
 .season-pack-button small {
- color: var(--muted);
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis
+   color: var(--muted);
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
 }
 
 .episode-loading {
- padding: 24px;
- border: 2px dashed var(--line);
- border-radius: 10px
+   padding: 24px;
+   border: 2px dashed var(--line);
+   border-radius: 10px
 }
 
 .resume-file {
- display: block;
- max-width: 760px;
- margin-top: 12px;
- color: var(--muted);
- font-size: 18px;
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis
+   display: block;
+   max-width: 760px;
+   margin-top: 12px;
+   color: var(--muted);
+   font-size: 18px;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
 }
 
 .poster-card {
- position: relative
+   position: relative
 }
 
 .tv-state-badges {
- display: flex;
- flex-wrap: wrap;
- align-items: center;
- margin-right: -8px;
- margin-bottom: -8px
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   margin-right: -8px;
+   margin-bottom: -8px
 }
 
 .tv-state-badges>* {
- margin-right: 8px;
- margin-bottom: 8px
+   margin-right: 8px;
+   margin-bottom: 8px
 }
 
 .poster-card>.tv-state-badges {
- position: absolute;
- top: 12px;
- left: 12px;
- right: 12px;
- z-index: 4
+   position: absolute;
+   top: 12px;
+   left: 12px;
+   right: 12px;
+   z-index: 4
 }
 
 .tv-state-badge {
- display: flex;
- align-items: center;
- min-height: 28px;
- padding: 4px 9px;
- border-radius: 7px;
- background: #071014ed;
- color: #f4f7f8;
- font-size: 14px;
- line-height: 1
+   display: flex;
+   align-items: center;
+   min-height: 28px;
+   padding: 4px 9px;
+   border-radius: 7px;
+   background: #071014ed;
+   color: #f4f7f8;
+   font-size: 14px;
+   line-height: 1
 }
 
 .tv-state-badge>*+* {
- margin-left: 7px
+   margin-left: 7px
 }
 
 .tv-state-badge i {
- position: relative;
- width: 14px;
- height: 14px;
- border: 2px solid currentColor;
- border-radius: 50%
+   position: relative;
+   width: 14px;
+   height: 14px;
+   border: 2px solid currentColor;
+   border-radius: 50%
 }
 
 .tv-state-badge b {
- font-size: 14px
+   font-size: 14px
 }
 
 .tv-state-badge.download.downloaded {
- color: var(--teal)
+   color: var(--teal)
 }
 
 .tv-state-badge.download.downloaded i:after,
 .tv-state-badge.watch.watched i:after {
- content: "";
- position: absolute;
- left: 3px;
- top: 0;
- width: 4px;
- height: 8px;
- border-right: 2px solid currentColor;
- border-bottom: 2px solid currentColor;
- transform: rotate(42deg)
+   content: "";
+   position: absolute;
+   left: 3px;
+   top: 0;
+   width: 4px;
+   height: 8px;
+   border-right: 2px solid currentColor;
+   border-bottom: 2px solid currentColor;
+   transform: rotate(42deg)
 }
 
 .tv-state-badge.download.partial,
 .tv-state-badge.download.downloading,
 .tv-state-badge.download.queued {
- color: #f2bd59
+   color: #f2bd59
 }
 
 .tv-state-badge.download.partial i {
- background: linear-gradient(90deg, currentColor 50%, transparent 50%)
+   background: linear-gradient(90deg, currentColor 50%, transparent 50%)
 }
 
 .tv-state-badge.download.error {
- color: #ff9b9b
+   color: #ff9b9b
 }
 
 .tv-state-badge.watch {
- color: #c9d8ff
+   color: #c9d8ff
 }
 
 .season-tabs button {
- display: flex;
- align-items: center
+   display: flex;
+   align-items: center
 }
 
 .season-tabs button>*+* {
- margin-left: 10px
+   margin-left: 10px
 }
 
 .season-tabs button .tv-state-badge b {
- display: none
+   display: none
 }
 
 .season-tabs button .tv-state-badges {
- flex-wrap: nowrap
+   flex-wrap: nowrap
 }
 
 .detail-meta {
- color: var(--teal) !important;
- font-size: 19px !important;
- font-weight: 700;
- text-transform: uppercase;
- letter-spacing: .1em
+   color: var(--teal) !important;
+   font-size: 19px !important;
+   font-weight: 700;
+   text-transform: uppercase;
+   letter-spacing: .1em
 }
 
 .detail-message {
- width: 1280px;
- min-height: 30px;
- color: var(--muted);
- font-size: 20px
+   width: 1280px;
+   min-height: 30px;
+   color: var(--muted);
+   font-size: 20px
 }
 
 .episode-row>div {
- display: none
+   display: none
 }
 
 .episode-tile {
- display: flex;
- width: 100%;
- align-items: center;
- justify-content: space-between;
- text-align: left
+   display: flex;
+   width: 100%;
+   align-items: center;
+   justify-content: space-between;
+   text-align: left
 }
 
 .episode-tile>span {
- display: flex;
- flex-direction: column
+   display: flex;
+   flex-direction: column
 }
 
 .episode-tile>span>*+* {
- margin-top: 7px
+   margin-top: 7px
 }
 
 .episode-tile small {
- color: var(--muted)
+   color: var(--muted)
 }
 
 .episode-tile .tv-state-badges {
- justify-content: flex-end
+   justify-content: flex-end
 }
 
 .episode-row.expanded {
- padding-bottom: 25px
+   padding-bottom: 25px
 }
 
 .source-action-label {
- color: var(--teal);
- font-size: 19px
+   color: var(--teal);
+   font-size: 19px
 }
 
 /* Torrent telemetry updates in place: every row keeps the same geometry and focus node. */
 .tv-download-list {
- overflow-anchor: none
+   overflow-anchor: none
 }
 
 .tv-download-list .tv-download-row {
- min-height: 410px;
- contain: layout;
- overflow: visible
+   min-height: 410px;
+   contain: layout;
+   overflow: visible
 }
 
 .tv-download-row>div:first-child {
- min-height: 350px;
- justify-content: flex-start
+   min-height: 350px;
+   justify-content: flex-start
 }
 
 .tv-download-row>div:first-child>strong,
 .tv-download-row .tv-release-name,
 .tv-download-telemetry {
- display: block;
- max-width: 900px;
- min-height: 27px;
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis;
- font-variant-numeric: tabular-nums
+   display: block;
+   max-width: 900px;
+   min-height: 27px;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   font-variant-numeric: tabular-nums
 }
 
 .tv-download-row>div:first-child>small:not(.tv-download-telemetry) {
- display: block;
- max-width: 900px;
- min-height: 27px;
- height: auto;
- white-space: normal;
- overflow: visible;
- overflow-wrap: break-word;
- overflow-wrap: anywhere;
- line-height: 1.35
+   display: block;
+   max-width: 900px;
+   min-height: 27px;
+   height: auto;
+   white-space: normal;
+   overflow: visible;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere;
+   line-height: 1.35
 }
 
 .tv-download-row .tv-release-name {
- min-height: 29px;
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis
+   min-height: 29px;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
 }
 
 .tv-download-error {
- height: 25px;
- color: transparent
+   height: 25px;
+   color: transparent
 }
 
 .tv-download-error.visible {
- color: #ff9b9b
+   color: #ff9b9b
 }
 
 .tv-download-row>div:last-child {
- width: 415px;
- justify-content: flex-end;
- align-items: center
+   width: 415px;
+   justify-content: flex-end;
+   align-items: center
 }
 
 .tv-download-row>div:last-child button {
- min-width: 110px;
- white-space: nowrap
+   min-width: 110px;
+   white-space: nowrap
 }
 
 /* Keep the actionable TV label below long filenames without adding another focus stop. */
 .source-button {
- display: flex;
- min-width: 0;
- flex-direction: column;
- align-items: stretch
+   display: flex;
+   min-width: 0;
+   flex-direction: column;
+   align-items: stretch
 }
 
 .source-button>.source-copy {
- display: flex;
- min-width: 0;
- flex-direction: column
+   display: flex;
+   min-width: 0;
+   flex-direction: column
 }
 
 .source-button>.source-copy>*+* {
- margin-top: 7px
+   margin-top: 7px
 }
 
 .source-button .source-filename {
- white-space: normal;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   white-space: normal;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 .source-button>.source-action {
- display: flex;
- align-items: center;
- margin-top: 12px;
- padding-top: 12px;
- border-top: 1px solid var(--line);
- text-align: left
+   display: flex;
+   align-items: center;
+   margin-top: 12px;
+   padding-top: 12px;
+   border-top: 1px solid var(--line);
+   text-align: left
 }
 
 .source-button>.source-action>*+* {
- margin-left: 12px
+   margin-left: 12px
 }
 
 .source-button>.source-action small {
- margin-left: auto
+   margin-left: auto
 }
 
 .season-pack-grid {
- display: grid;
- grid-auto-flow: column;
- grid-auto-columns: minmax(456px, 1fr);
- overflow-x: auto;
- padding: 8px 8px 18px;
- margin-right: -16px
+   display: grid;
+   grid-auto-flow: column;
+   grid-auto-columns: minmax(456px, 1fr);
+   overflow-x: auto;
+   padding: 8px 8px 18px;
+   margin-right: -16px
 }
 
 .season-pack-button {
- display: flex;
- min-width: 0;
- min-height: 190px;
- flex-direction: column;
- align-items: stretch;
- justify-content: space-between;
- margin: 0;
- padding: 20px;
- text-align: left
+   display: flex;
+   min-width: 0;
+   min-height: 190px;
+   flex-direction: column;
+   align-items: stretch;
+   justify-content: space-between;
+   margin: 0;
+   padding: 20px;
+   text-align: left
 }
 
 .season-pack-button>*+* {
- margin-top: 16px
+   margin-top: 16px
 }
 
 .season-pack-button>.season-pack-copy,
 .season-pack-button>.season-pack-action {
- display: flex;
- min-width: 0;
- max-width: none;
- flex-direction: column;
- align-items: flex-start;
- text-align: left
+   display: flex;
+   min-width: 0;
+   max-width: none;
+   flex-direction: column;
+   align-items: flex-start;
+   text-align: left
 }
 
 .season-pack-button>.season-pack-copy>*+*,
 .season-pack-button>.season-pack-action>*+* {
- margin-top: 7px
+   margin-top: 7px
 }
 
 .season-pack-button .source-filename {
- display: block;
- white-space: normal;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   display: block;
+   white-space: normal;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 .season-pack-button>.season-pack-action {
- padding-top: 13px;
- border-top: 1px solid var(--line)
+   padding-top: 13px;
+   border-top: 1px solid var(--line)
 }
 
 .season-pack-button>.season-pack-action>.tv-state-badges {
- justify-content: flex-start
+   justify-content: flex-start
 }
 
 .season-pack-button>.season-pack-action>b {
- color: var(--teal);
- font-size: 19px
+   color: var(--teal);
+   font-size: 19px
 }
 
 .season-pack-button:disabled {
- opacity: 1;
- color: var(--text);
- border-color: #548177;
- background: #173129
+   opacity: 1;
+   color: var(--text);
+   border-color: #548177;
+   background: #173129
 }
 
 /* First-run discovery and manual setup share one predictable D-pad graph. */
 .setup {
- width: 1220px;
- margin: 90px auto
+   width: 1220px;
+   margin: 90px auto
 }
 
 .setup>h1 {
- margin-bottom: 12px
+   margin-bottom: 12px
 }
 
 .setup>p {
- font-size: 23px;
- color: var(--muted)
+   font-size: 23px;
+   color: var(--muted)
 }
 
 .setup-mode-actions {
- display: flex;
- margin: 28px 0 18px
+   display: flex;
+   margin: 28px 0 18px
 }
 
 .setup-mode-actions>*+* {
- margin-left: 18px
+   margin-left: 18px
 }
 
 .setup-mode-actions button {
- min-width: 220px
+   min-width: 220px
 }
 
 .setup-results {
- display: grid;
- grid-template-columns: repeat(2, minmax(0, 1fr));
- max-height: 420px;
- margin: 24px -14px 0 0;
- overflow-y: auto;
- padding: 7px
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+   max-height: 420px;
+   margin: 24px -14px 0 0;
+   overflow-y: auto;
+   padding: 7px
 }
 
 .setup-results>* {
- margin-right: 14px;
- margin-bottom: 14px
+   margin-right: 14px;
+   margin-bottom: 14px
 }
 
 .setup-results>*:nth-last-child(1) {
- margin-bottom: 0
+   margin-bottom: 0
 }
 
 .setup-results>*:nth-last-child(2):nth-child(odd) {
- margin-bottom: 0
+   margin-bottom: 0
 }
 
 .setup-results button {
- display: flex;
- min-width: 0;
- flex-direction: column;
- text-align: left
+   display: flex;
+   min-width: 0;
+   flex-direction: column;
+   text-align: left
 }
 
 .setup-results button>*+* {
- margin-top: 7px
+   margin-top: 7px
 }
 
 .setup-results strong {
- font-size: 25px
+   font-size: 25px
 }
 
 .setup-results span,
 .setup-results small {
- color: var(--muted);
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis
+   color: var(--muted);
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
 }
 
 .setup-manual {
- margin-top: 24px;
- padding-top: 20px;
- border-top: 1px solid var(--line)
+   margin-top: 24px;
+   padding-top: 20px;
+   border-top: 1px solid var(--line)
 }
 
 .setup-manual h2 {
- font-size: 28px
+   font-size: 28px
 }
 
 .setup-status {
- min-height: 34px
+   min-height: 34px
 }
 
 .setup-controls {
- margin: 18px 0
+   margin: 18px 0
 }
 
 .setup-controls input {
- font-size: 22px
+   font-size: 22px
 }
 
 /* A pack header only discloses controls; transfer actions live on the row below. */
 .season-pack-grid {
- display: grid;
- grid-auto-flow: column;
- grid-auto-columns: minmax(456px, 1fr);
- align-items: start;
- overflow-x: auto;
- padding: 8px 8px 18px
+   display: grid;
+   grid-auto-flow: column;
+   grid-auto-columns: minmax(456px, 1fr);
+   align-items: start;
+   overflow-x: auto;
+   padding: 8px 8px 18px
 }
 
 .season-pack-grid>* {
- margin-right: 16px
+   margin-right: 16px
 }
 
 .season-pack-card {
- min-width: 0;
- border: 1px solid var(--line);
- border-radius: 10px;
- background: #121d22;
- overflow: hidden
+   min-width: 0;
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   background: #121d22;
+   overflow: hidden
 }
 
 .season-pack-card.expanded {
- border-color: #548177;
- background: #102720
+   border-color: #548177;
+   background: #102720
 }
 
 .season-pack-card .season-pack-button {
- width: 100%;
- margin: 0;
- border: 0;
- border-radius: 0;
- background: transparent
+   width: 100%;
+   margin: 0;
+   border: 0;
+   border-radius: 0;
+   background: transparent
 }
 
 .season-pack-card .season-pack-button:focus {
- border-color: #fff
+   border-color: #fff
 }
 
 .season-pack-controls {
- display: flex;
- flex-wrap: wrap;
- padding: 15px 8px 8px 20px;
- border-top: 1px solid var(--line)
+   display: flex;
+   flex-wrap: wrap;
+   padding: 15px 8px 8px 20px;
+   border-top: 1px solid var(--line)
 }
 
 .season-pack-controls>* {
- margin-right: 12px;
- margin-bottom: 12px
+   margin-right: 12px;
+   margin-bottom: 12px
 }
 
 .season-pack-controls>progress {
- margin-right: 0
+   margin-right: 0
 }
 
 .season-pack-controls progress {
- flex: 1 0 100%;
- height: 9px;
- accent-color: var(--teal)
+   flex: 1 0 100%;
+   height: 9px;
+   accent-color: var(--teal)
 }
 
 .season-pack-controls button {
- min-width: 170px
+   min-width: 170px
 }
 
 .tv-season-pack-confirm {
- position: fixed;
- z-index: 120;
- top: 160px;
- right: auto;
- bottom: auto;
- left: 50%;
- width: 1000px;
- max-width: 1000px;
- margin: 0;
- transform: translateX(-50%);
- box-shadow: 0 28px 90px #000d
+   position: fixed;
+   z-index: 120;
+   top: 160px;
+   right: auto;
+   bottom: auto;
+   left: 50%;
+   width: 1000px;
+   max-width: 1000px;
+   margin: 0;
+   transform: translateX(-50%);
+   box-shadow: 0 28px 90px #000d
 }
 
 /* Promotion slot: a focusable button on the home route. OK opens the
    creative's click URL; the address prints on the tile as the fallback
    for boxes without a browser. */
 .tv-promo {
- position: fixed;
- right: 36px;
- bottom: 30px;
- z-index: 15;
- width: 520px;
- padding: 22px 26px;
- border: 1px solid var(--line);
- border-radius: 12px;
- background: #0c1216f2;
- box-shadow: 0 18px 60px #000a;
- color: inherit;
- font: inherit;
- text-align: left;
- cursor: pointer
+   position: fixed;
+   right: 36px;
+   bottom: 30px;
+   z-index: 15;
+   width: 520px;
+   padding: 22px 26px;
+   border: 1px solid var(--line);
+   border-radius: 12px;
+   background: #0c1216f2;
+   box-shadow: 0 18px 60px #000a;
+   color: inherit;
+   font: inherit;
+   text-align: left;
+   cursor: pointer
 }
 
 .tv-promo small {
- display: block;
- margin: 0 0 8px;
- color: #728089;
- font-size: 14px;
- font-weight: 700;
- letter-spacing: .14em;
- text-transform: uppercase
+   display: block;
+   margin: 0 0 8px;
+   color: #728089;
+   font-size: 14px;
+   font-weight: 700;
+   letter-spacing: .14em;
+   text-transform: uppercase
 }
 
 .tv-promo img {
- display: block;
- width: 100%;
- max-height: 170px;
- margin: 10px 0;
- object-fit: cover;
- border-radius: 8px
+   display: block;
+   width: 100%;
+   max-height: 170px;
+   margin: 10px 0;
+   object-fit: cover;
+   border-radius: 8px
 }
 
 .tv-promo img:first-child {
- margin-top: 0
+   margin-top: 0
 }
 
 .tv-promo strong {
- display: block;
- font-size: 22px;
- line-height: 1.3
+   display: block;
+   font-size: 22px;
+   line-height: 1.3
 }
 
 .tv-promo p {
- margin: 7px 0 0;
- color: var(--muted);
- font-size: 18px;
- line-height: 1.4;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   margin: 7px 0 0;
+   color: var(--muted);
+   font-size: 18px;
+   line-height: 1.4;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 
 .tv-promo code {
- display: block;
- margin: 10px 0 0;
- color: #728089;
- font-size: 15px;
- line-height: 1.4;
- word-break: break-all
+   display: block;
+   margin: 10px 0 0;
+   color: #728089;
+   font-size: 15px;
+   line-height: 1.4;
+   word-break: break-all
 }
 
 /* Projects page: ordered portal links as one D-pad stop each, with fully
    visible wrapped addresses; activation hands the URL to the browser. */
 .tv-projects {
- max-width: 1400px
+   max-width: 1400px
 }
 
 .tv-project {
- display: block;
- width: 100%;
- margin: 24px 0 0;
- padding: 20px 24px;
- border: 1px solid var(--line);
- border-radius: 12px;
- background: #ffffff06;
- color: inherit;
- font: inherit;
- text-align: left;
- cursor: pointer
+   display: block;
+   width: 100%;
+   margin: 24px 0 0;
+   padding: 20px 24px;
+   border: 1px solid var(--line);
+   border-radius: 12px;
+   background: #ffffff06;
+   color: inherit;
+   font: inherit;
+   text-align: left;
+   cursor: pointer
 }
 
 .tv-project strong {
- font-size: 25px
+   font-size: 25px
 }
 
 .tv-project p {
- margin: 6px 0 0;
- color: var(--muted)
+   margin: 6px 0 0;
+   color: var(--muted)
 }
 
 .tv-project code {
- display: block;
- margin: 10px 0 0;
- padding: 12px 16px;
- border-radius: 8px;
- background: #080d10;
- color: #9fdcd0;
- font-size: 19px;
- line-height: 1.45;
- white-space: normal;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   display: block;
+   margin: 10px 0 0;
+   padding: 12px 16px;
+   border-radius: 8px;
+   background: #080d10;
+   color: #9fdcd0;
+   font-size: 19px;
+   line-height: 1.45;
+   white-space: normal;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 /* Server update controls: the appended rows 16/17 and the interruption
    confirmation. The notice keeps the server-only warning, the manual-TV
    note, and the releases URL visible for available and manual-only states. */
 .tv-update-panel {
- margin: 30px 0 4px
+   margin: 30px 0 4px
 }
 
 .tv-update-panel>p {
- margin: 0 0 14px
+   margin: 0 0 14px
 }
 
 .tv-update-notice {
- margin: 0 0 18px;
- padding: 20px 22px;
- border: 1px solid #3c655c;
- border-radius: 10px;
- background: #10231f
+   margin: 0 0 18px;
+   padding: 20px 22px;
+   border: 1px solid #3c655c;
+   border-radius: 10px;
+   background: #10231f
 }
 
 .tv-update-notice strong {
- display: block;
- font-size: 23px;
- color: #b7ead8
+   display: block;
+   font-size: 23px;
+   color: #b7ead8
 }
 
 .tv-update-notice p {
- margin: 8px 0 0;
- font-size: 19px
+   margin: 8px 0 0;
+   font-size: 19px
 }
 
 .tv-update-notice a {
- display: block;
- margin-top: 10px;
- color: var(--teal);
- font-size: 18px;
- white-space: normal;
- overflow-wrap: break-word;
- overflow-wrap: anywhere
+   display: block;
+   margin-top: 10px;
+   color: var(--teal);
+   font-size: 18px;
+   white-space: normal;
+   overflow-wrap: break-word;
+   overflow-wrap: anywhere
 }
 
 .tv-update-confirm {
- position: fixed;
- z-index: 120;
- top: 200px;
- left: 50%;
- width: 980px;
- max-width: 980px;
- margin: 0;
- transform: translateX(-50%);
- box-shadow: 0 28px 90px #000d
+   position: fixed;
+   z-index: 120;
+   top: 200px;
+   left: 50%;
+   width: 980px;
+   max-width: 980px;
+   margin: 0;
+   transform: translateX(-50%);
+   box-shadow: 0 28px 90px #000d
 }
 
 .tv-update-confirm h2 {
- font-size: 31px
+   font-size: 31px
 }
 
 .tv-update-confirm>div {
- display: flex;
- align-items: stretch;
- margin-top: 24px
+   display: flex;
+   align-items: stretch;
+   margin-top: 24px
 }
 
 .tv-update-confirm>div>*+* {
- margin-left: 16px
+   margin-left: 16px
 }
 
 .tv-update-confirm button {
- min-width: 280px
+   min-width: 280px
 }
 
 .tv-update-confirm .danger-button {
- color: #ff9b9b;
- border-color: #a84854
+   color: #ff9b9b;
+   border-color: #a84854
 }
 
 .tv-update-confirm .danger-button:focus {
- background: #8f2f3e;
- color: #fff;
- border-color: #fff
+   background: #8f2f3e;
+   color: #fff;
+   border-color: #fff
 }
 
 
 .tracker-names {
- color: #89b4fa;
+   color: #89b4fa;
 }
 
-.tv-safe-fields>.tv-tracker-controls,
-.tv-safe-fields>button.primary {
- grid-column: 1 / -1;
+.tv-safe-fields > .tv-tracker-controls,
+.tv-safe-fields > button.primary {
+   grid-column: 1 / -1;
 }
 
 .tv-tracker-controls {
- margin: 24px 0;
- padding: 20px 0;
- border-top: 1px solid var(--line);
- border-bottom: 1px solid var(--line);
+   margin: 24px 0;
+   padding: 20px 0;
+   border-top: 1px solid var(--line);
+   border-bottom: 1px solid var(--line);
 }
 
 .tv-tracker-controls h3 {
- font-size: 26px;
- margin-bottom: 8px;
+   font-size: 26px;
+   margin-bottom: 8px;
 }
 
 .tv-tracker-toggle {
- display: inline-block;
- min-width: 220px;
- margin-right: 16px !important;
+   display: inline-block;
+   min-width: 220px;
+   margin-right: 16px !important;
 }
 
 .tv-tracker-toggle.active {
- background: rgba(117, 217, 196, 0.15);
- border-color: #75d9c4;
+   background: rgba(117, 217, 196, 0.15);
+   border-color: #75d9c4;
 }
 
 .tv-tracker-readiness {
- display: flex;
- flex-wrap: wrap;
- margin: 16px -12px 16px 0;
+   display: flex;
+   flex-wrap: wrap;
+   margin: 16px -12px 16px 0;
 }
 
 .tv-tracker-chip {
- display: inline-block;
- margin: 0 12px 12px 0;
- padding: 6px 14px;
- border-radius: 999px;
- font-size: 18px;
- background: rgba(255, 255, 255, 0.08);
- color: #f4f7f8;
+   display: inline-block;
+   margin: 0 12px 12px 0;
+   padding: 6px 14px;
+   border-radius: 999px;
+   font-size: 18px;
+   background: rgba(255, 255, 255, 0.08);
+   color: #f4f7f8;
 }
 
 .tv-tracker-chip.ready {
- background: rgba(117, 217, 196, 0.2);
- color: #75d9c4;
+   background: rgba(117, 217, 196, 0.2);
+   color: #75d9c4;
 }
 
 .tv-tracker-chip.setup {
- background: rgba(249, 226, 175, 0.2);
- color: #f9e2af;
+   background: rgba(249, 226, 175, 0.2);
+   color: #f9e2af;
 }
 
 .tv-tracker-chip.disabled {
- background: rgba(255, 255, 255, 0.04);
- color: var(--muted);
+   background: rgba(255, 255, 255, 0.04);
+   color: var(--muted);
 }
 
 .tv-tracker-zero-note {
- font-size: 18px;
- color: var(--muted);
- margin-left: 8px;
- align-self: center;
+   font-size: 18px;
+   color: var(--muted);
+   margin-left: 8px;
+   align-self: center;
 }
 
 .tv-prepare-confirm {
- position: fixed;
- top: 50%;
- left: 50%;
- transform: translate(-50%, -50%);
- z-index: 1000;
- margin: 0;
- width: 900px;
- max-width: 90vw;
- background: #0d1318;
- border: 2px solid var(--line);
- box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85);
+   position: fixed;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   z-index: 1000;
+   margin: 0;
+   width: 900px;
+   max-width: 90vw;
+   background: #0d1318;
+   border: 2px solid var(--line);
+   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85);
 }
 
 .tv-prepare-confirm .release-name {
- display: block;
- font-size: 24px;
- color: #f4f7f8;
- margin: 12px 0;
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis;
+   display: block;
+   font-size: 24px;
+   color: #f4f7f8;
+   margin: 12px 0;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
 }
 
 .tv-prepare-confirm .supporting {
- font-size: 20px;
- color: var(--muted);
- margin: 12px 0 24px;
+   font-size: 20px;
+   color: var(--muted);
+   margin: 12px 0 24px;
 }
 
 @supports not (display: grid) {
- .tv-app {
-  display: flex;
- }
-
- .tv-sidebar {
-  flex: 0 0 104px;
-  width: 104px;
- }
-
- .tv-app.menu-open .tv-sidebar {
-  flex-basis: 350px;
-  width: 350px;
- }
-
- .tv-app>main {
-  flex: 1 1 0;
-  min-width: 0;
- }
-
- .poster-rail {
-  display: flex;
- }
-
- .poster-rail>* {
-  flex: 0 0 280px;
- }
-
- .tv-library-grid {
-  display: flex;
-  flex-wrap: wrap;
- }
-
- .tv-library-grid>* {
-  flex: 0 0 280px;
- }
-
- .season-pack-grid {
-  display: flex;
-  align-items: flex-start;
- }
-
- .season-pack-grid>* {
-  flex: 0 0 456px;
- }
-
- .setup-results {
-  display: flex;
-  flex-wrap: wrap;
- }
-
- .setup-results>* {
-  flex: 0 0 calc(50% - 14px);
-  min-width: 0;
-  box-sizing: border-box;
- }
-
- .tv-list article {
-  display: flex;
-  align-items: center;
- }
-
- .tv-list article> :first-child {
-  flex: 1 1 0;
-  min-width: 0;
- }
-
- .job-log-expanded dl {
-  display: flex;
-  flex-wrap: wrap;
- }
-
- .job-log-expanded dt {
-  flex: 0 0 calc(148px - 8px);
- }
-
- .job-log-expanded dd {
-  flex: 1 1 calc(100% - 148px);
-  min-width: 0;
- }
+  .tv-app { display: flex; }
+  .tv-sidebar { flex: 0 0 104px; width: 104px; }
+  .tv-app.menu-open .tv-sidebar { flex-basis: 350px; width: 350px; }
+  .tv-app > main { flex: 1 1 0; min-width: 0; }
+  .poster-rail { display: flex; }
+  .poster-rail > * { flex: 0 0 280px; }
+  .tv-library-grid { display: flex; flex-wrap: wrap; }
+  .tv-library-grid > * { flex: 0 0 280px; }
+  .season-pack-grid { display: flex; align-items: flex-start; }
+  .season-pack-grid > * { flex: 0 0 456px; }
+  .setup-results { display: flex; flex-wrap: wrap; }
+  .setup-results > * { flex: 0 0 calc(50% - 14px); min-width: 0; box-sizing: border-box; }
+  .tv-list article { display: flex; align-items: center; }
+  .tv-list article > :first-child { flex: 1 1 0; min-width: 0; }
+  .job-log-expanded dl { display: flex; flex-wrap: wrap; }
+  .job-log-expanded dt { flex: 0 0 calc(148px - 8px); }
+  .job-log-expanded dd { flex: 1 1 calc(100% - 148px); min-width: 0; }
 }

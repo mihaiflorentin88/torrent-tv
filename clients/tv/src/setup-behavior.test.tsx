@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render } from 'preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { API, CatalogFacets, HouseholdState, PortalState, UpdateStatus } from '@torrent-tv/shared';
+import type { API, CatalogDetail, CatalogFacets, CatalogTitle, HouseholdState, PortalState, UpdateStatus } from '@torrent-tv/shared';
 import type { TVPlatformHooks } from './platform';
 // Static import cannot work here: main.tsx bootstraps and asserts the presence
 // of document.getElementById('app') during module evaluation. The #app container
@@ -388,5 +388,138 @@ describe('Setup and link handoff behavioral regressions', () => {
 
     closeBtn?.click();
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not display season download success message when season prepare fails or is canceled', async () => {
+    const titleItem: CatalogTitle = {
+      id: 'series-1',
+      title: 'Sample Series',
+      kind: 'series',
+      categories: [],
+      resolutions: ['1080p'],
+      sourceCount: 1,
+      bestSeeders: 10,
+      largestSizeBytes: 1000,
+      trackers: [{ id: 'piratebay', name: 'The Pirate Bay' }],
+    };
+
+    const mockDetail: CatalogDetail = {
+      title: titleItem,
+      seasons: [
+        {
+          number: 1,
+          title: 'Season 1',
+          episodeCount: 0,
+          episodes: [],
+          packSources: [
+            {
+              release: {
+                id: 'rel-pack-1',
+                trackerId: 'piratebay',
+                trackerName: 'The Pirate Bay',
+                providerId: '101',
+                categoryId: '201',
+                browseClass: 'video',
+                name: 'Sample.Series.S01.1080p',
+                category: 'Video',
+                sizeBytes: 10_000_000_000,
+                seeders: 20,
+                leechers: 2,
+                freeleech: true,
+              },
+              parsed: {
+                title: 'Sample Series',
+                sortTitle: 'sample series',
+                kind: 'series',
+                seasonStart: 1,
+                seasonEnd: 1,
+                resolution: '1080p',
+              },
+            },
+          ],
+        },
+      ],
+      sources: [],
+    };
+
+    const mockApi = {
+      titles: async () => ({ items: [titleItem], nextCursor: null }),
+      title: async () => mockDetail,
+      ensureMetadata: async () => ({ queued: 0 }),
+      streamURL: (p: string) => p,
+      call: async () => ({}),
+    } as unknown as API;
+
+    // Case 1: Failed prepare (onManageSeasonPack resolves false)
+    let manageOutcome = false;
+    const onManageSeasonPack = vi.fn(async () => manageOutcome);
+
+    render(
+      <Catalog
+        api={mockApi}
+        status="Online"
+        titles={[titleItem]}
+        facets={{} as CatalogFacets}
+        household={{ favorites: [], continueWatching: [], recent: [], watched: [] }}
+        downloads={[]}
+        jobs={[]}
+        restoreFocus={null}
+        portal={null}
+        updateStatus={null}
+        onUpdateStatus={() => { }}
+        onFocus={() => { }}
+        onRetry={() => { }}
+        onChangeServer={() => { }}
+        onForgetServer={() => { }}
+        onPlay={() => { }}
+        onPlayDownload={() => { }}
+        onManageDownload={async () => { }}
+        onManageSeasonPack={onManageSeasonPack}
+        onRefreshDownloads={async () => { }}
+        onFavorite={() => { }}
+      />,
+      container
+    );
+
+    await new Promise(r => setTimeout(r, 20));
+
+    // Open detail
+    const heroBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="hero-series-1"]');
+    heroBtn?.click();
+    await new Promise(r => setTimeout(r, 40));
+
+    // Expand season pack card
+    const packBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="season-pack-rel-pack-1"]');
+    expect(packBtn).not.toBeNull();
+    packBtn?.click();
+    await new Promise(r => setTimeout(r, 20));
+
+    // Click download season button with manageOutcome = false (failed prepare)
+    const downloadBtn = container.querySelector<HTMLButtonElement>('[data-focus-key="season-pack-rel-pack-1-download"]');
+    expect(downloadBtn).not.toBeNull();
+    downloadBtn?.click();
+    await new Promise(r => setTimeout(r, 40));
+
+    expect(onManageSeasonPack).toHaveBeenCalledTimes(1);
+    const detailMsg = container.querySelector('.detail-message');
+    expect(detailMsg?.textContent || '').not.toContain('Season 1 is downloading');
+
+    // Case 2: Canceled via Back (manageOutcome = false)
+    onManageSeasonPack.mockClear();
+    manageOutcome = false;
+    downloadBtn?.click();
+    await new Promise(r => setTimeout(r, 40));
+
+    expect(onManageSeasonPack).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.detail-message')?.textContent || '').not.toContain('Season 1 is downloading');
+
+    // Case 3: Successful prepare (manageOutcome = true)
+    onManageSeasonPack.mockClear();
+    manageOutcome = true;
+    downloadBtn?.click();
+    await new Promise(r => setTimeout(r, 40));
+
+    expect(onManageSeasonPack).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.detail-message')?.textContent).toContain('Season 1 is downloading. Episode tiles will update here.');
   });
 });
