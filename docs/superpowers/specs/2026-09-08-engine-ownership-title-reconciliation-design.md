@@ -1,7 +1,7 @@
 # Engine ownership and canonical title reconciliation
 
 Date: 2026-09-08
-Status: Engine and matching designs approved in chat; written specification awaiting user review.
+Status: Written specification approved by the user on 2026-09-08; implementation planning authorized.
 
 ## Goal and scope
 
@@ -133,7 +133,12 @@ Reuse existing coverage. Keep behavioral regressions for uncertain changed contr
 
 ### Engines and clients
 
-- A controlled Native magnet resolves metadata, selects files, and serves bytes without qBittorrent's version gate.
+- Pirate Bay magnets download through the built-in Native engine: exercise the real tracker acquisition adapter, metadata resolution, file selection, and persisted `native:` ownership without qBittorrent or its version gate.
+- FileList `.torrent` acquisitions also download through Native, exercising the real tracker acquisition adapter rather than substituting an engine-only add call.
+- For each tracker separately, stream controlled legal media through the application HTTP playback path while the selected file is incomplete. Record incomplete progress when playback begins, verify delivered media bytes, and continue playback as additional pieces arrive. A completed-file read or successful metadata resolution alone does not pass this requirement.
+- Both Native acquisition and progressive-streaming checks run without a reachable qBittorrent daemon; no silent fallback is allowed. Local tracker-response fixtures must be reported as fixtures, not as proof of live tracker availability.
+- qBittorrent is strictly secondary: a Native-only installation starts, acquires, and streams with no qBittorrent configured, installed, or reachable; nothing in startup, admission, playback, or diagnostics may require or wait on qBittorrent when Native is the default.
+- Web, desktop, and shared TV clients (Tizen, Android TV, webOS) remain fully compatible: no save-format breaks, byte-identical desktop/HTTP settings parity, and corrected engine feedback on every surface.
 - Existing completed and incomplete `qb:` downloads remain usable with Native selected; requesting another episode from a managed season pack retains its route.
 - qBittorrent 4.3.9 legacy operations remain supported, while new magnets through that engine retain the compatibility error.
 - qBittorrent downtime isolates its incomplete media without breaking Native or valid completed-local-file playback.
