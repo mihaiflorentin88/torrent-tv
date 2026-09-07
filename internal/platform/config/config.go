@@ -27,9 +27,13 @@ type Settings struct {
 	TrustedCIDRs               []string `json:"trustedCidrs"`
 	DatabasePath               string   `json:"databasePath"`
 	DownloadRoot               string   `json:"downloadRoot"`
+	FileListEnabled            bool     `json:"fileListEnabled"`
 	FileListURL                string   `json:"fileListUrl"`
 	FileListUsername           string   `json:"fileListUsername"`
 	FileListPasskey            string   `json:"fileListPasskey,omitempty"`
+	PirateBayEnabled           bool     `json:"pirateBayEnabled"`
+	PirateBayWebsiteURL        string   `json:"pirateBayWebsiteUrl"`
+	PirateBayAPIURL            string   `json:"pirateBayApiUrl"`
 	QBittorrentURL             string   `json:"qbittorrentUrl"`
 	QBittorrentUsername        string   `json:"qbittorrentUsername"`
 	QBittorrentPassword        string   `json:"qbittorrentPassword,omitempty"`
@@ -72,7 +76,9 @@ func Defaults() Settings {
 	return Settings{
 		InstanceName:  "Torrent TV",
 		ListenAddress: ":8097", TrustedCIDRs: []string{"127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}, DatabasePath: "data/filelist.db",
-		DownloadRoot: "data/downloads", FileListURL: "https://filelist.io", QBittorrentURL: "http://127.0.0.1:8080", DownloadEngine: "native", TorrentPeerPort: 42069, TorrentSessionDir: "data/torrent-session",
+		DownloadRoot: "data/downloads", FileListEnabled: true, FileListURL: "https://filelist.io",
+		PirateBayEnabled: false, PirateBayWebsiteURL: "https://thepiratebay.org", PirateBayAPIURL: "https://apibay.org",
+		QBittorrentURL: "http://127.0.0.1:8080", DownloadEngine: "native", TorrentPeerPort: 42069, TorrentSessionDir: "data/torrent-session",
 		InitialBufferBytes: 128 << 20, ReadAheadBytes: 256 << 20, PieceWaitTimeoutSeconds: 600, StreamStartBytes: 2 << 20, CatalogMaxAgeHours: 24,
 		AllocationGB: 15, ReserveGB: 8, EvictionRules: []string{"oldest-completed"}, ProtectIncomplete: true, ProtectLeased: true, PreferredSubtitleLanguage: "ro", FallbackSubtitleLanguage: "en", PreferredAudioLanguage: "en",
 		MetadataLanguage: "ro-RO", MetadataFallbackLanguage: "en-US", ArtworkCachePath: "data/artwork", ArtworkCacheMaxBytes: 512 << 20,
@@ -140,6 +146,15 @@ func LoadAt(path string) (*Store, error) {
 		}
 		if _, ok := present["protectLeased"]; !ok {
 			base.ProtectLeased = true
+		}
+		if _, ok := present["fileListEnabled"]; !ok {
+			base.FileListEnabled = true
+		}
+		if _, ok := present["pirateBayWebsiteUrl"]; !ok || base.PirateBayWebsiteURL == "" {
+			base.PirateBayWebsiteURL = "https://thepiratebay.org"
+		}
+		if _, ok := present["pirateBayApiUrl"]; !ok || base.PirateBayAPIURL == "" {
+			base.PirateBayAPIURL = "https://apibay.org"
 		}
 		if base.MetadataLanguage == "" {
 			base.MetadataLanguage = "ro-RO"
@@ -350,6 +365,16 @@ func (s *Store) validate(v Settings) error {
 	}
 	if !strings.EqualFold(strings.TrimSpace(strings.TrimRight(v.SubDLURL, "/")), "https://api.subdl.com") {
 		return fmt.Errorf("SubDL API URL must use https://api.subdl.com")
+	}
+	for label, raw := range map[string]string{
+		"Pirate Bay website URL": v.PirateBayWebsiteURL,
+		"Pirate Bay API URL":     v.PirateBayAPIURL,
+	} {
+		trimmed := strings.TrimSpace(raw)
+		parsed, err := url.Parse(trimmed)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil {
+			return fmt.Errorf("%s must be an HTTP or HTTPS URL with a host and no credentials", label)
+		}
 	}
 	if v.MaxConcurrentJobs < 1 || v.MaxConcurrentJobs > 20 {
 		return fmt.Errorf("maxConcurrentJobs must be between 1 and 20")

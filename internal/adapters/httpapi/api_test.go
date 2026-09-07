@@ -505,6 +505,57 @@ func TestSettingsSchemaDescribesEvictionFieldsForBrowserOnly(t *testing.T) {
 	}
 }
 
+func TestSettingsSchemaTrackerFields(t *testing.T) {
+	handler := newStubHandler(t, nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/settings/schema", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/settings/schema status = %d", rec.Code)
+	}
+	var page struct {
+		Items []SchemaField `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]SchemaField{}
+	for _, item := range page.Items {
+		fields[item.Key] = item
+	}
+
+	for _, key := range []string{"fileListEnabled", "pirateBayEnabled"} {
+		field, ok := fields[key]
+		if !ok {
+			t.Fatalf("schema missing %s", key)
+		}
+		if !field.TVVisible {
+			t.Errorf("%s must be TVVisible", key)
+		}
+		if field.Sensitive {
+			t.Errorf("%s must not be sensitive", key)
+		}
+		if field.RestartRequired {
+			t.Errorf("%s must not be restart-required", key)
+		}
+	}
+
+	for _, key := range []string{"pirateBayWebsiteUrl", "pirateBayApiUrl"} {
+		field, ok := fields[key]
+		if !ok {
+			t.Fatalf("schema missing %s", key)
+		}
+		if field.TVVisible {
+			t.Errorf("%s must not be TVVisible", key)
+		}
+		if field.Sensitive {
+			t.Errorf("%s must not be sensitive", key)
+		}
+		if field.RestartRequired {
+			t.Errorf("%s must not be restart-required", key)
+		}
+	}
+}
+
 func TestPutSettingsRejectsUnwritableNativeSessionDir(t *testing.T) {
 	handler := newStubHandler(t, nil)
 	base := getSettingsBody(t, handler)

@@ -439,3 +439,70 @@ func TestPortalAPIKeyPreservationAndRedaction(t *testing.T) {
 		t.Fatalf("key missing from persisted settings: %s", data)
 	}
 }
+
+func TestTrackerDefaultsAndURLValidation(t *testing.T) {
+	d := Defaults()
+	if !d.FileListEnabled {
+		t.Fatal("FileListEnabled default must be true")
+	}
+	if d.PirateBayEnabled {
+		t.Fatal("PirateBayEnabled default must be false")
+	}
+	if d.PirateBayWebsiteURL != "https://thepiratebay.org" {
+		t.Fatalf("PirateBayWebsiteURL default = %q, want https://thepiratebay.org", d.PirateBayWebsiteURL)
+	}
+	if d.PirateBayAPIURL != "https://apibay.org" {
+		t.Fatalf("PirateBayAPIURL default = %q, want https://apibay.org", d.PirateBayAPIURL)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	s, err := LoadAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test that false booleans are not omitted in JSON
+	v := s.Get()
+	v.FileListEnabled = false
+	v.PirateBayEnabled = false
+	data, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"fileListEnabled":false`) {
+		t.Fatalf("fileListEnabled:false was omitted: %s", data)
+	}
+	if !strings.Contains(string(data), `"pirateBayEnabled":false`) {
+		t.Fatalf("pirateBayEnabled:false was omitted: %s", data)
+	}
+
+	// URL validation test cases
+	invalidURLs := []struct {
+		name string
+		url  string
+	}{
+		{"empty", ""},
+		{"no scheme", "thepiratebay.org"},
+		{"ftp scheme", "ftp://thepiratebay.org"},
+		{"no host", "https://"},
+		{"userinfo", "https://user:pass@thepiratebay.org"},
+	}
+
+	for _, tc := range invalidURLs {
+		t.Run("website_"+tc.name, func(t *testing.T) {
+			bad := s.Get()
+			bad.PirateBayWebsiteURL = tc.url
+			if err := s.Validate(bad); err == nil {
+				t.Fatalf("expected validation error for PirateBayWebsiteURL=%q", tc.url)
+			}
+		})
+		t.Run("api_"+tc.name, func(t *testing.T) {
+			bad := s.Get()
+			bad.PirateBayAPIURL = tc.url
+			if err := s.Validate(bad); err == nil {
+				t.Fatalf("expected validation error for PirateBayAPIURL=%q", tc.url)
+			}
+		})
+	}
+}

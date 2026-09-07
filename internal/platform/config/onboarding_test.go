@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,5 +207,108 @@ func TestPromptRequiredAbortsAfterThreeInvalidAnswers(t *testing.T) {
 	}
 	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
 		t.Fatalf("settings file was written despite the abort: %v", statErr)
+	}
+}
+
+func TestMissingRequiredGatesFileListCredentialsOnTrackerEnabled(t *testing.T) {
+	cases := []struct {
+		enabled         bool
+		user, pass      string
+		wantCredentials bool
+	}{
+		{false, "", "", false},
+		{true, "", "", true},
+		{true, "user", "pass", false},
+	}
+	for _, tc := range cases {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "settings.json")
+		payload := fmt.Sprintf(`{"downloadRoot":%q,"fileListEnabled":%t,"fileListUsername":%q,"fileListPasskey":%q}`,
+			filepath.Join(dir, "downloads"), tc.enabled, tc.user, tc.pass)
+		if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		store, err := LoadAt(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		missing := store.MissingRequired()
+		hasCredentials := false
+		for _, key := range missing {
+			if key == "fileListUsername" || key == "fileListPasskey" {
+				hasCredentials = true
+			}
+		}
+		if hasCredentials != tc.wantCredentials {
+			t.Fatalf("enabled=%t user=%q pass=%q: MissingRequired=%v, wantCredentials=%t", tc.enabled, tc.user, tc.pass, missing, tc.wantCredentials)
+		}
+		for _, key := range missing {
+			if key == "downloadRoot" {
+				t.Fatalf("enabled=%t: downloadRoot must stay required", tc.enabled)
+			}
+		}
+	}
+}
+
+func TestPirateBayOnlyStartupSurvivesSaveReload(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(path, []byte(fmt.Sprintf(`{"downloadRoot":%q}`, filepath.Join(dir, "downloads"))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := LoadAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := store.Get()
+	next.FileListEnabled = false
+	next.PirateBayEnabled = true
+	next.FileListUsername = ""
+	next.FileListPasskey = ""
+	if err := store.Save(next); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := LoadAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := reloaded.Get()
+	if got.FileListEnabled || !got.PirateBayEnabled {
+		t.Fatalf("tracker toggles did not survive reload: fileListEnabled=%t pirateBayEnabled=%t", got.FileListEnabled, got.PirateBayEnabled)
+	}
+	for _, key := range reloaded.MissingRequired() {
+		if key == "fileListUsername" || key == "fileListPasskey" {
+			t.Fatalf("Pirate Bay-only startup reported %q as missing", key)
+		}
+	}
+
+	next = reloaded.Get()
+	next.FileListEnabled = true
+	if err := reloaded.Save(next); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err = LoadAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(reloaded.MissingRequired(), ",")
+	if !strings.Contains(joined, "fileListUsername") || !strings.Contains(joined, "fileListPasskey") {
+		t.Fatalf("re-enabled FileList without credentials must report them, got %q", joined)
+	}
+}
+
+func TestPromptRequiredSkipsFileListCredentialsWhenDisabled(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(path, []byte(fmt.Sprintf(`{"downloadRoot":%q,"fileListEnabled":false}`, filepath.Join(dir, "downloads"))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := LoadAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := Console{In: failingReader{}, Out: &bytes.Buffer{}}
+	if err := PromptRequired(store, c, true); err != nil {
+		t.Fatalf("PromptRequired with FileList disabled: %v", err)
 	}
 }

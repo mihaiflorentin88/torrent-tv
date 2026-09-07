@@ -36,6 +36,9 @@ func (s *Store) MissingRequired() []string {
 	defer s.mu.RUnlock()
 	var missing []string
 	for _, key := range requiredKeys {
+		if (key == "fileListUsername" || key == "fileListPasskey") && !s.value.FileListEnabled {
+			continue
+		}
 		if strings.TrimSpace(requiredValue(s.value, key)) == "" || !(s.fileProvided[key] || s.envManaged[key]) {
 			missing = append(missing, key)
 		}
@@ -52,6 +55,15 @@ func PromptRequired(s *Store, c Console, tty bool) error {
 		return nil
 	}
 	missing := s.MissingRequired()
+	filtered := missing[:0]
+	enabled := s.Get().FileListEnabled
+	for _, key := range missing {
+		if (key == "fileListUsername" || key == "fileListPasskey") && !enabled {
+			continue
+		}
+		filtered = append(filtered, key)
+	}
+	missing = filtered
 	if len(missing) == 0 {
 		return nil
 	}

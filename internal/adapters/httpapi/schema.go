@@ -49,9 +49,13 @@ func RedactedSettings(v config.Settings, path string) SettingsView {
 func SettingsSchema(s *config.Store) []SchemaField {
 	fields := []SchemaField{
 		{Key: "instanceName", Label: "Server name", Help: "Friendly name shown when a television discovers this server on the local network."},
+		{Key: "fileListEnabled", Label: "FileList enabled", Help: "Enable or disable search and discovery from the FileList private tracker.", TVVisible: true},
 		{Key: "fileListUrl", Label: "FileList URL", Help: "Address of the private tracker API. The default works unless FileList changes domain.", TVVisible: false},
 		{Key: "fileListUsername", Label: "FileList username", Help: "Account name used with your passkey for API requests.", Obtain: "Sign in at https://filelist.io and use the username shown on your profile.", Sensitive: true},
 		{Key: "fileListPasskey", Label: "FileList passkey", Help: "Private API credential used to search and download torrent metadata. Treat it like a password.", Obtain: "Sign in at https://filelist.io, open your profile page, and copy the passkey shown there — never your login password.", Sensitive: true},
+		{Key: "pirateBayEnabled", Label: "The Pirate Bay enabled", Help: "Enable or disable search and discovery from The Pirate Bay public tracker.", TVVisible: true},
+		{Key: "pirateBayWebsiteUrl", Label: "The Pirate Bay website URL", Help: "Address of The Pirate Bay website, used for provider links to torrent details.", Obtain: "Use https://thepiratebay.org or a working mirror.", TVVisible: false},
+		{Key: "pirateBayApiUrl", Label: "The Pirate Bay API URL", Help: "Address of the Pirate Bay JSON API used for search and discovery. Advanced setting.", Obtain: "Use https://apibay.org or a working mirror.", TVVisible: false},
 		{Key: "tmdbApiKey", Label: "TMDB API key or token", Help: "Adds posters, backdrops, descriptions, years and ratings.", Obtain: "Create a free account at https://www.themoviedb.org/signup, then request a key at https://www.themoviedb.org/settings/api. The v3 key or the v4 Read Access Token both work.", Sensitive: true},
 		{Key: "qbittorrentUrl", Label: "qBittorrent URL", Help: "Address of qBittorrent Web UI used to add and manage this app's downloads. Only used by the optional qBittorrent engine.", Obtain: "Install qBittorrent from https://www.qbittorrent.org and enable its Web UI under Tools → Options → Web UI."},
 		{Key: "qbittorrentUsername", Label: "qBittorrent username", Help: "Username configured in qBittorrent Web UI authentication.", Obtain: "Set it in qBittorrent under Tools → Options → Web UI → Authentication.", Sensitive: true},
