@@ -1,5 +1,5 @@
 openapi: 3.1.0
-info: { title: Torrent TV API, version: 0.2.4 }
+info: { title: Torrent TV API, version: 0.2.5 }
 servers: [{ url: /api/v1 }]
 paths:
   /system/info:
@@ -28,7 +28,31 @@ paths:
             "200":
               {
                 description: Redacted settings,
-                content: { application/json: { schema: { type: object } } },
+                content:
+                  {
+                    application/json:
+                      {
+                        schema:
+                          {
+                            type: object,
+                            properties:
+                              {
+                                downloadEngine:
+                                  {
+                                    type: string,
+                                    enum: [native, qbittorrent],
+                                    description: Saved acquisition engine; applied on restart,
+                                  },
+                                engineRunning:
+                                  {
+                                    type: string,
+                                    enum: [native, qbittorrent, ""],
+                                    description: Acquisition default this process started with; empty when none is running,
+                                  },
+                              },
+                          },
+                      },
+                  },
               },
           },
       }
@@ -73,7 +97,29 @@ paths:
         ]
       responses:
         {
-          "200": { description: Test result },
+          "200":
+            {
+              description: Test result,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        {
+                          type: object,
+                          properties:
+                            {
+                              engine:
+                                {
+                                  type: string,
+                                  enum: [native, qbittorrent],
+                                  description: Acquisition engine the test exercised; present for the torrent-engine dependency only,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
           "502": { $ref: "#/components/responses/Problem" },
           "503": { $ref: "#/components/responses/Problem" },
         }

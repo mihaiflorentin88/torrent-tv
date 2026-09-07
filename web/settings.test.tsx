@@ -15,7 +15,7 @@ const settingsValue: Record<string, unknown> = {
  fileListUrl: 'https://filelist.io', fileListUsername: 'user', fileListPasskey: '', fileListPasskeyConfigured: true,
  tmdbApiKey: '', tmdbApiKeyConfigured: true, metadataLanguage: 'en', metadataFallbackLanguage: 'en',
  qbittorrentUrl: 'http://localhost:8080', qbittorrentUsername: 'admin', qbittorrentPassword: '', qbittorrentPasswordConfigured: true,
- downloadEngine: 'native', torrentPeerPort: 42069, torrentSessionDir: 'data/torrent-session',
+ downloadEngine: 'native', engineRunning: 'native', torrentPeerPort: 42069, torrentSessionDir: 'data/torrent-session',
  downloadRoot: '/data', allocationGb: 100, reserveGb: 5, evictionRules: ['oldest-completed'],
  protectIncomplete: true, protectLeased: false, protectFavorites: true, protectNeverWatched: false,
  artworkCachePath: 'data/artwork', artworkCacheMaxBytes: 1073741824,
@@ -569,6 +569,26 @@ describe('download engine toggle', () => {
   expect(put.body.torrentPeerPort).toBe(42069);
   expect(put.body.torrentSessionDir).toBe('data/torrent-session');
  });
+ it('warns on a running/saved engine mismatch and strips engineRunning from the PUT', async () => {
+  storedSettings = { ...settingsValue, downloadEngine: 'native', engineRunning: 'qbittorrent' };
+  await storageTab();
+  expect(panel().textContent).toContain('Running now: qBittorrent');
+  expect(panel().textContent).toContain('new downloads after restart');
+  setFieldInput('Download root', '/data/media');
+  const form = document.querySelector('form.settings')!;
+  await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) });
+  await settle();
+  const put = putCalls.at(-1)!;
+  expect(put.body.downloadEngine).toBe('native');
+  expect(put.body).not.toHaveProperty('engineRunning');
+ });
+
+ it('keeps the ownership note without a running notice when the engine agrees', async () => {
+  await storageTab();
+  expect(panel().textContent).toContain('Existing downloads keep the engine that owns them');
+  expect(panel().textContent).not.toContain('Running now');
+ });
+
 });
 
 it('renders obtain links as clickable anchors in field help', async () => {

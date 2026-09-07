@@ -716,6 +716,19 @@ const TEST_NAMES: Record<string, string> = {
   piratebay: 'Pirate Bay',
 };
 
+// Display label for engine values ('native' | 'qbittorrent') in saved-vs-running feedback.
+const engineName = (v: unknown) => (v === 'native' ? 'Native' : 'qBittorrent');
+// The TV never edits the engine selection, so the feedback is read-only: the
+// ownership explanation always renders, and the running notice appears only
+// when this process started with a different engine than the saved one. Old
+// servers without engineRunning render the static copy only.
+const engineFeedback = (value: Record<string, unknown>) => {
+  const running = typeof value.engineRunning === 'string' ? value.engineRunning : '';
+  const saved = String(value.downloadEngine ?? '');
+  if (running === '' || running === saved) return '';
+  return ` Running now: ${engineName(running)} — the saved selection (${engineName(saved)}) applies to new downloads after restart.`;
+};
+
 export function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, onUpdateStatus, confirmOpen, onConfirmOpen, onConfirmClose }: { api: API; onChangeServer: () => void; onForgetServer: () => void; updateStatus: UpdateStatus | null; onUpdateStatus: (status: UpdateStatus) => void; confirmOpen: boolean; onConfirmOpen: () => void; onConfirmClose: () => void }) {
   const [value, setValue] = useState<Record<string, unknown> | null>(null); const [managed, setManaged] = useState<Set<string>>(new Set()); const [message, setMessage] = useState('Loading settings…');
   const [trackers, setTrackers] = useState<TrackerStatus[] | null>(null);
@@ -743,7 +756,7 @@ export function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, 
   async function save() {
     if (!value) return;
     const out = { ...value };
-    Object.keys(out).filter(key => key.endsWith('Configured') || key === 'settingsPath').forEach(key => delete out[key]);
+    Object.keys(out).filter(key => key.endsWith('Configured') || key === 'settingsPath' || key === 'engineRunning').forEach(key => delete out[key]);
     try {
       await api.call('/settings', { method: 'PUT', body: JSON.stringify(out) });
       setMessage('Settings saved. Restart the server to apply worker-limit changes.');
@@ -787,6 +800,7 @@ export function TVSettings({ api, onChangeServer, onForgetServer, updateStatus, 
       <label>The Pirate Bay website URL{managed.has('pirateBayWebsiteUrl') && <small>Environment managed</small>}<input disabled={managed.has('pirateBayWebsiteUrl')} data-focus-region="content" data-focus-row="9" data-focus-col="0" data-focus-key="setting-piratebay-website" value={String(value.pirateBayWebsiteUrl || '')} onInput={event => setValue({ ...value, pirateBayWebsiteUrl: event.currentTarget.value })} /></label>
       <label>The Pirate Bay API URL (advanced){managed.has('pirateBayApiUrl') && <small>Environment managed</small>}<input disabled={managed.has('pirateBayApiUrl')} data-focus-region="content" data-focus-row="10" data-focus-col="0" data-focus-key="setting-piratebay-api" value={String(value.pirateBayApiUrl || '')} onInput={event => setValue({ ...value, pirateBayApiUrl: event.currentTarget.value })} /></label>
     </div>
+    <p class="tv-muted">Selection controls new acquisitions. Existing downloads keep the engine that owns them.{engineFeedback(value)}</p>
     <button class="primary" data-focus-region="content" data-focus-row={SETTINGS_SAVE_ROW} data-focus-col="0" data-focus-key="settings-save" onClick={() => void save()}>Save preferences</button>
   </div>}<div class="tv-test-buttons">{['filelist', 'qbittorrent', 'storage', 'tmdb', 'subdl', 'piratebay'].map((name, index) => <button data-focus-region="content" data-focus-row={SETTINGS_TEST_FIRST_ROW + index} data-focus-col="0" data-focus-key={`test-${name}`} onClick={() => void test(name)}>Test {TEST_NAMES[name] || name}</button>)}</div><button data-focus-region="content" data-focus-row={SETTINGS_CHANGE_SERVER_ROW} data-focus-col="0" data-focus-key="change-server" onClick={onChangeServer}>Change server address</button><button data-focus-region="content" data-focus-row={SETTINGS_FORGET_SERVER_ROW} data-focus-col="0" data-focus-key="forget-server" onClick={onForgetServer}>Forget this server</button>
     {updateStatus && <div class="tv-update-panel"><p>Server version {updateStatus.currentVersion}{updateStatus.applying ? ' · installing an update' : ''}</p>{updateNoticeVisible(updateStatus) && <div class="tv-update-notice"><strong>{updateStatus.available ? `Version ${updateStatus.latest} is available.` : 'This server updates only by hand.'}</strong><p>Updates install on the server machine and interrupt playback on every connected player; this TV installs nothing itself.</p><a href={updateStatus.releasesUrl} onClick={event => void openReleaseLink(event, updateStatus.releasesUrl)}>{updateStatus.releasesUrl}</a></div>}</div>}

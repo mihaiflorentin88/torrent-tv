@@ -5,9 +5,9 @@ The normative contract is [OpenAPI](../api/openapi.yaml); the future event contr
 ## Vertical-slice routes
 
 - `GET /system/info`: product name, user-configurable `instanceName`, version, setup state, and capabilities. Tizen discovery accepts only a valid Torrent TV response.
-- `GET|PUT /settings`: redacted current settings and atomic file-backed updates; `GET /settings/schema` supplies field help and credential-acquisition guidance without exposing secrets.
+- `GET|PUT /settings`: redacted current settings and atomic file-backed updates; responses carry `engineRunning` (the acquisition default this process started with) alongside the saved `downloadEngine`, which applies on restart, and PUT bodies must not echo `engineRunning` back. `GET /settings/schema` supplies field help and credential-acquisition guidance without exposing secrets.
 - `GET /trackers`: ordered list of registered upstream trackers with `id`, `name`, `enabled`, `configured`, and `capabilities` (`imdbSearch`, `seasonFilter`, `episodeFilter`, `categories`).
-- `POST /dependencies/{filelist|qbittorrent|storage|tmdb|subtitles|subdl}/test`: independent diagnostics. `subdl` validates the configured API key against the account endpoint; errors include the provider's sanitized response but never credentials.
+- `POST /dependencies/{filelist|qbittorrent|storage|tmdb|subtitles|subdl}/test`: independent diagnostics; the torrent-engine (`qbittorrent`) result carries `engine`, naming the acquisition engine the test actually exercised. `subdl` validates the configured API key against the account endpoint; errors include the provider's sanitized response but never credentials.
 - `POST /diagnostics/client`: bounded, trusted-LAN client warning/error reports for TV failures; messages are written to the server log without accepting credentials or arbitrary log levels.
 - `GET /catalog/categories`, `/catalog/latest`, `/catalog/search?query=` retain the release-level compatibility contract.
 - `POST /catalog/search`: queues the explicit live FileList search only after the user submits a query. It responds `202` immediately with current cache matches and the persistent search job. FileList results are later upserted into the append-only cache, title-expansion jobs are queued, and `catalog.search.completed` tells both clients to refresh from SQLite.

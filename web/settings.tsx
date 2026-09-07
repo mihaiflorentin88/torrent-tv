@@ -81,7 +81,7 @@ const TAB_GROUPS: Record<string, Array<{ title: string; note?: string; fields: S
     { title: 'Metadata', fields: [['TMDB API key or token', 'tmdbApiKey', 'password'], ['Metadata language', 'metadataLanguage'], ['Metadata fallback language', 'metadataFallbackLanguage']] },
   ],
   storage: [
-    { title: 'Download engine', fields: [['Download engine', 'downloadEngine', 'engine-toggle']] },
+    { title: 'Download engine', note: 'Selection controls new acquisitions. Existing downloads keep the engine that owns them.', fields: [['Download engine', 'downloadEngine', 'engine-toggle']] },
     { title: 'Built-in torrent engine', fields: [['Torrent peer port', 'torrentPeerPort', 'number'], ['Torrent session directory', 'torrentSessionDir']], when: current => current.downloadEngine === 'native' },
     { title: 'qBittorrent', fields: [['qBittorrent URL', 'qbittorrentUrl'], ['qBittorrent username', 'qbittorrentUsername'], ['qBittorrent password', 'qbittorrentPassword', 'password']], when: current => current.downloadEngine === 'qbittorrent' },
     { title: 'Storage', fields: [['Download root', 'downloadRoot'], ['Allocation (GB)', 'allocationGb', 'number', '0.5'], ['Free-space reserve (GB)', 'reserveGb', 'number', '0.5'], ['Eviction rules (comma separated)', 'evictionRules'], ['Protect incomplete downloads', 'protectIncomplete', 'checkbox'], ['Protect actively streamed downloads', 'protectLeased', 'checkbox'], ['Protect favorites', 'protectFavorites', 'checkbox'], ['Protect never-watched downloads', 'protectNeverWatched', 'checkbox'], ['Artwork cache path', 'artworkCachePath'], ['Artwork cache maximum bytes', 'artworkCacheMaxBytes', 'number']] },
@@ -110,6 +110,8 @@ const isConfigTab = (id: string) => Boolean(TAB_GROUPS[id]);
 // canonical comma strings, so every dirty check and draft revert compares
 // against this form shape.
 const formValue = (key: string, value: unknown) => (key === 'trustedCidrs' || key === 'evictionRules') && Array.isArray(value) ? (value as string[]).join(', ') : value;
+// Display label for engine values ('native' | 'qbittorrent') in saved-vs-running feedback.
+const engineName = (v: unknown) => (v === 'native' ? 'Native' : 'qBittorrent');
 
 // Render plain help text with bare URLs as clickable links.
 const linkify = (text: string) =>
@@ -189,7 +191,7 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
     if (typeof merged.trustedCidrs === 'string') merged.trustedCidrs = (merged.trustedCidrs as string).split(',').map((x: string) => x.trim()).filter(Boolean);
     if (typeof merged.evictionRules === 'string') merged.evictionRules = (merged.evictionRules as string).split(',').map((x: string) => x.trim().toLowerCase()).filter(Boolean);
     const out = { ...merged };
-    Object.keys(out).filter(k => k.endsWith('Configured') || k === 'settingsPath').forEach(k => delete out[k]);
+    Object.keys(out).filter(k => k.endsWith('Configured') || k === 'settingsPath' || k === 'engineRunning').forEach(k => delete out[k]);
     try {
       if (saveTransport) await saveTransport(out);
       else await sharedApi().call('/settings', { method: 'PUT', body: JSON.stringify(out) });
@@ -229,7 +231,11 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
       // field groups render below it. Disabled when the environment owns it.
       const options: Array<[string, string]> = [['native', 'Native'], ['qbittorrent', 'qBittorrent']];
       const active = String(current[key] ?? 'native');
-      return <label class="engine-toggle"><span>{label}{info.restartRequired && <small> restart required</small>}{info.readOnly && <small> environment managed</small>}{info.help && <button type="button" class="help-button" aria-label={`Help for ${label}`} title={info.help} onClick={() => setHelp(info)}>?</button>}</span><span class="engine-toggle-options" role="group" aria-label={label}>{options.map(([engineValue, engineLabel]) => <button type="button" key={engineValue} disabled={info.readOnly} aria-pressed={active === engineValue} onClick={e => { e.preventDefault(); setCurrent({ ...current, [key]: engineValue }) }}>{engineLabel}</button>)}</span></label>;
+      // Saved-vs-running feedback reads the server's last GET values, never
+      // the local draft; old servers without engineRunning render unchanged.
+      const runningEngine = typeof value.engineRunning === 'string' ? value.engineRunning : '';
+      const savedEngine = String(value.downloadEngine ?? '');
+      return <label class="engine-toggle"><span>{label}{info.restartRequired && <small> restart required</small>}{info.readOnly && <small> environment managed</small>}{info.help && <button type="button" class="help-button" aria-label={`Help for ${label}`} title={info.help} onClick={() => setHelp(info)}>?</button>}</span><span class="engine-toggle-options" role="group" aria-label={label}>{options.map(([engineValue, engineLabel]) => <button type="button" key={engineValue} disabled={info.readOnly} aria-pressed={active === engineValue} onClick={e => { e.preventDefault(); setCurrent({ ...current, [key]: engineValue }) }}>{engineLabel}</button>)}</span>{runningEngine !== '' && runningEngine !== savedEngine && <span class="supporting">Running now: {engineName(runningEngine)}. The saved selection ({engineName(savedEngine)}) applies to new downloads after restart; existing downloads keep the engine that owns them.</span>}</label>;
     }
     if (type === 'checkbox') {
       // Protection flags render as switches: a real checkbox stays in the
