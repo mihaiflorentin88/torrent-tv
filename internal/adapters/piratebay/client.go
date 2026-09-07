@@ -279,8 +279,10 @@ func parseRow(m map[string]any) (domain.TorrentRelease, bool, error) {
 	nameStr := parseString(m["name"])
 	hashStr := parseString(m["info_hash"])
 
-	// Sentinel no-results row filtering
-	if (idStr == "0" || idStr == "") && (hashStr == "0000000000000000000000000000000000000000" || nameStr == "No results returned") {
+	// Sentinel no-results row filtering: apibay emits the exact synthetic record
+	// {"id":"0","name":"No results returned","info_hash":"0000000000000000000000000000000000000000"}
+	// when a query yields no items. Any other record missing an ID is an error.
+	if idStr == "0" && hashStr == "0000000000000000000000000000000000000000" && nameStr == "No results returned" {
 		return domain.TorrentRelease{}, false, nil
 	}
 
@@ -292,7 +294,7 @@ func parseRow(m map[string]any) (domain.TorrentRelease, bool, error) {
 		return domain.TorrentRelease{}, false, fmt.Errorf("release %s: %w", idStr, err)
 	}
 
-	size, err := parseUint(m["size"], "size")
+	size, err := requireUint(m, "size")
 	if err != nil {
 		return domain.TorrentRelease{}, false, fmt.Errorf("release %s: %w", idStr, err)
 	}
@@ -381,6 +383,17 @@ func parseUint(v any, fieldName string) (uint64, error) {
 		return 0, fmt.Errorf("%s invalid unsigned integer %q: %w", fieldName, s, err)
 	}
 	return n, nil
+}
+
+func requireUint(m map[string]any, fieldName string) (uint64, error) {
+	v, ok := m[fieldName]
+	if !ok || v == nil {
+		return 0, fmt.Errorf("%s is required", fieldName)
+	}
+	if s, isStr := v.(string); isStr && strings.TrimSpace(s) == "" {
+		return 0, fmt.Errorf("%s is required", fieldName)
+	}
+	return parseUint(v, fieldName)
 }
 
 func parseAdded(v any) (*time.Time, error) {

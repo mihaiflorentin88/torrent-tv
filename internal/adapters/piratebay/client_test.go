@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -132,15 +133,40 @@ func TestSentinelRowMixedWithRealRowKeepsOnlyRealRow(t *testing.T) {
 	}
 }
 
+func TestEmptyIDWithZeroHashAndRealNameErrorsMissingID(t *testing.T) {
+	// A real-named row with missing ID and zero hash must not be silently swallowed as a sentinel
+	row := `[{"id":"","name":"Real.Movie.2024.1080p","info_hash":"0000000000000000000000000000000000000000","seeders":"1","leechers":"1","size":"100","num_files":"1","category":"201","added":"1652877231","imdb":""}]`
+	c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(row))
+	})
+	if _, err := c.Search(context.Background(), "x"); err == nil {
+		t.Fatal("row with real name and missing ID must error via missing-ID, not be silently dropped as sentinel")
+	} else if !strings.Contains(err.Error(), "missing release ID") {
+		t.Fatalf("expected missing release ID error, got %v", err)
+	}
+}
+
 func TestMalformedSizeIsAdapterError(t *testing.T) {
-	for _, bad := range []string{`"size":"abc"`, `"size":"40.5"`, `"size":"-1"`} {
-		row := strings.Replace(searchRows, `"size":"4096"`, bad, 1)
-		c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
-			w.Write([]byte(row))
+	cases := []struct {
+		name string
+		row  string
+	}{
+		{"letters", strings.Replace(searchRows, `"size":"4096"`, `"size":"abc"`, 1)},
+		{"fractional", strings.Replace(searchRows, `"size":"4096"`, `"size":"40.5"`, 1)},
+		{"negative", strings.Replace(searchRows, `"size":"4096"`, `"size":"-1"`, 1)},
+		{"explicit null", strings.Replace(searchRows, `"size":"4096"`, `"size":null`, 1)},
+		{"missing", strings.Replace(searchRows, `"size":"4096",`, ``, 1)},
+		{"empty string", strings.Replace(searchRows, `"size":"4096"`, `"size":""`, 1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Write([]byte(tc.row))
+			})
+			if _, err := c.Search(context.Background(), "x"); err == nil {
+				t.Fatalf("malformed size (%s) must be an adapter error, not a fabricated zero-size release", tc.name)
+			}
 		})
-		if _, err := c.Search(context.Background(), "x"); err == nil {
-			t.Fatalf("malformed size %s must be an adapter error, not a fabricated release", bad)
-		}
 	}
 }
 
@@ -157,26 +183,39 @@ func TestMalformedInfoHashIsAdapterError(t *testing.T) {
 }
 
 func TestSettingsCallbackSwitchRoutesToNewAPIServer(t *testing.T) {
-	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	var firstHits, secondHits atomic.Int64
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		firstHits.Add(1)
+		if q := r.URL.Query().Get("q"); q != "query-a" {
+			t.Errorf("first server received unexpected query %q (cached URL bug)", q)
+		}
 		w.Write([]byte(searchRows))
 	}))
 	defer first.Close()
-	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		secondHits.Add(1)
+		if q := r.URL.Query().Get("q"); q != "query-b" {
+			t.Errorf("second server received unexpected query %q", q)
+		}
 		w.Write([]byte(searchRows))
 	}))
 	defer second.Close()
 
 	api := first.URL
 	c := New(func() (string, string) { return "https://thepiratebay.org", api })
-	if _, err := c.Search(context.Background(), "a"); err != nil {
+	if _, err := c.Search(context.Background(), "query-a"); err != nil {
 		t.Fatal(err)
 	}
 	api = second.URL
-	if _, err := c.Search(context.Background(), "b"); err != nil {
+	if _, err := c.Search(context.Background(), "query-b"); err != nil {
 		t.Fatal(err)
 	}
-	// Both servers must have served exactly one request; if the client had
-	// cached the base URL the second request would never reach `second`.
+	if got := firstHits.Load(); got != 1 {
+		t.Fatalf("first server expected 1 request, got %d", got)
+	}
+	if got := secondHits.Load(); got != 1 {
+		t.Fatalf("second server expected 1 request, got %d", got)
+	}
 }
 
 func TestNoAuthorizationHeaderSentToPirateBay(t *testing.T) {
