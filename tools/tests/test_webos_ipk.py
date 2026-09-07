@@ -17,6 +17,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import webos_ipk
 
+ROOT_VERSION = (Path(__file__).resolve().parents[2] / "VERSION").read_text().strip()
+
 
 def png(width: int, height: int) -> bytes:
     def chunk(kind: bytes, data: bytes) -> bytes:
@@ -52,7 +54,7 @@ def make_ar(members: list[tuple[str, bytes]]) -> bytes:
 
 VALID_APPINFO = {
     "id": "com.torrenttv.app",
-    "version": "0.6.0",
+    "version": ROOT_VERSION,
     "vendor": "torrent-tv",
     "type": "web",
     "main": "index.html",
@@ -66,7 +68,7 @@ VALID_APPINFO = {
 
 VALID_CONTROL = (
     "Package: com.torrenttv.app\n"
-    "Version: 0.6.0\n"
+    f"Version: {ROOT_VERSION}\n"
     "Architecture: all\n"
     "Maintainer: torrent-tv\n"
     "Description: Torrent TV\n"
@@ -129,10 +131,10 @@ class WebosIpkTests(unittest.TestCase):
     def test_valid_fixture_passes_validation(self):
         with tempfile.TemporaryDirectory() as td:
             ipk_path = self.write_ipk_file(self.make_ipk(), Path(td))
-            report = webos_ipk.validate_archive(ipk_path, target_version="0.6.0")
+            report = webos_ipk.validate_archive(ipk_path, target_version=ROOT_VERSION)
             self.assertIn("Compatible webOS package structure", report)
             self.assertIn("id=com.torrenttv.app", report)
-            self.assertIn("version=0.6.0", report)
+            self.assertIn(f"version={ROOT_VERSION}", report)
             self.assertIn("architecture=all", report)
 
     def test_rejects_missing_or_wrong_extension(self):
@@ -197,7 +199,7 @@ class WebosIpkTests(unittest.TestCase):
 
             # Missing package field
             bad1 = self.write_ipk_file(
-                self.make_ipk(control_bytes=b"Version: 0.6.0\nArchitecture: all\n"),
+                self.make_ipk(control_bytes=f"Version: {ROOT_VERSION}\nArchitecture: all\n".encode()),
                 root, name="c1.ipk"
             )
             with self.assertRaisesRegex(webos_ipk.WebosIpkError, "missing required 'Package' field"):
@@ -207,7 +209,7 @@ class WebosIpkTests(unittest.TestCase):
             for prefix in ("com.palm.app", "com.webos.app", "com.lge.app"):
                 bad_prefix = self.write_ipk_file(
                     self.make_ipk(
-                        control_bytes=f"Package: {prefix}\nVersion: 0.6.0\nArchitecture: all\n".encode(),
+                        control_bytes=f"Package: {prefix}\nVersion: {ROOT_VERSION}\nArchitecture: all\n".encode(),
                         pkg_id=prefix,
                     ),
                     root, name=f"{prefix}.ipk"
@@ -217,7 +219,7 @@ class WebosIpkTests(unittest.TestCase):
 
             # Architecture not "all"
             bad_arch = self.write_ipk_file(
-                self.make_ipk(control_bytes=b"Package: com.torrenttv.app\nVersion: 0.6.0\nArchitecture: arm\n"),
+                self.make_ipk(control_bytes=f"Package: com.torrenttv.app\nVersion: {ROOT_VERSION}\nArchitecture: arm\n".encode()),
                 root, name="c2.ipk"
             )
             with self.assertRaisesRegex(webos_ipk.WebosIpkError, "control Architecture must be 'all'"):
@@ -321,7 +323,7 @@ class WebosIpkTests(unittest.TestCase):
                     self.make_ipk(extra_data={"usr/palm/applications/com.torrenttv.app/bgImage.png": png(*dims)}),
                     root, name=f"bg_{dims[0]}.ipk"
                 )
-                report = webos_ipk.validate_archive(ipk, target_version="0.6.0")
+                report = webos_ipk.validate_archive(ipk, target_version=ROOT_VERSION)
                 self.assertIn("Compatible webOS package structure", report)
 
     def test_rejects_missing_runtime_scripts(self):
