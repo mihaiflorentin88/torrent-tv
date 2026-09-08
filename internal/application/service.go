@@ -1641,12 +1641,16 @@ func (s *Service) prepareExistingTorrentFile(ctx context.Context, release domain
 	if err != nil {
 		return domain.Download{}, err
 	}
+	unavailableOwner := ""
 	for _, managed := range downloads {
 		if managed.ReleaseID != release.ID {
 			continue
 		}
 		engine, hash, ok := s.owner(managed.EngineID)
 		if !ok {
+			if unavailableOwner == "" {
+				unavailableOwner = managed.EngineID
+			}
 			continue
 		}
 		files, filesErr := engine.Files(ctx, hash)
@@ -1701,6 +1705,9 @@ func (s *Service) prepareExistingTorrentFile(ctx context.Context, release domain
 		}
 		s.enrichDownload(ctx, &download, release, titleID)
 		return s.prepareManagedDownload(ctx, download)
+	}
+	if unavailableOwner != "" {
+		return domain.Download{}, s.engineUnavailableErr(unavailableOwner)
 	}
 	return domain.Download{}, sql.ErrNoRows
 }
@@ -1798,6 +1805,7 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 
 	var engine TorrentEngine
 	engineID, hash, enginePrefix := "", "", ""
+	unavailableOwner := ""
 	if managed, listErr := s.repo.ListDownloads(ctx); listErr == nil {
 		for _, download := range managed {
 			if download.ReleaseID == releaseID {
@@ -1805,10 +1813,16 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 					engine, engineID, hash, enginePrefix = owned, download.EngineID, existingHash, strings.TrimSuffix(download.EngineID, existingHash)
 					break
 				}
+				if unavailableOwner == "" {
+					unavailableOwner = download.EngineID
+				}
 			}
 		}
 	}
 	settings := s.settings.Get()
+	if hash == "" && unavailableOwner != "" {
+		return nil, s.engineUnavailableErr(unavailableOwner)
+	}
 	if hash == "" {
 		_, err = s.trackers.RequireEligible(release.TrackerID)
 		if err != nil {

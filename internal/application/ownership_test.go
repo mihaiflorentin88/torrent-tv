@@ -277,3 +277,76 @@ func TestAdmissionRefusesWhenEvictionReSurveyTurnsAnOwnerUncertain(t *testing.T)
 		t.Fatalf("exactly one eviction must precede the refusal, got %v", removed)
 	}
 }
+
+func TestPrepareSeasonRefusesManagedOwnerUnavailable(t *testing.T) {
+	repo, settings := retryHarness(t)
+	ctx := context.Background()
+
+	stored, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{{
+		ID: "filelist:silo", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "silo",
+		Name: "Show.S01.1080p.WEB-DL", Category: "Series", FileCount: 4,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().UTC()
+	if err := repo.SaveDownload(ctx, domain.Download{
+		ID: "ep1", ReleaseID: stored[0].ID, EngineID: "qb:h1", FileIndex: 0,
+		FilePath: "Show.S01E01.mkv", State: "pausedUP", Progress: 1,
+		AbsolutePath: filepath.Join(settings.Get().DownloadRoot, "Show.S01E01.mkv"),
+		SizeBytes:    100, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Only the native engine constructs; the pack belongs to the absent qb owner.
+	native := newMultiEngine(nil, nil)
+	service := NewService(testRegistry(openCatalog{}), engineSetFor(t, "native:", map[string]TorrentEngine{"native:": native}), repo, settings)
+	t.Cleanup(func() { _ = service.Close(context.Background()) })
+
+	downloads, err := service.PrepareSeason(ctx, stored[0].ID, 1)
+	if !errors.Is(err, domain.ErrEngineUnavailable) {
+		t.Fatalf("season expansion must refuse with ErrEngineUnavailable, got %v", err)
+	}
+	if len(downloads) != 0 {
+		t.Fatalf("no downloads may materialize from an unavailable owner, got %d", len(downloads))
+	}
+	if adds := native.snapshot().adds; len(adds) != 0 {
+		t.Fatalf("default engine must not re-acquire a managed pack: adds=%v", adds)
+	}
+}
+
+func TestSiblingMaterializationRefusesManagedOwnerUnavailable(t *testing.T) {
+	repo, settings := retryHarness(t)
+	ctx := context.Background()
+
+	stored, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{{
+		ID: "filelist:silo", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "silo",
+		Name: "Show.S01.1080p.WEB-DL", Category: "Series", FileCount: 4,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := repo.SaveDownload(ctx, domain.Download{
+		ID: "ep1", ReleaseID: stored[0].ID, EngineID: "qb:h1", FileIndex: 0,
+		FilePath: "Show.S01E01.mkv", State: "pausedUP", Progress: 1,
+		AbsolutePath: filepath.Join(settings.Get().DownloadRoot, "Show.S01E01.mkv"),
+		SizeBytes:    100, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	native := newMultiEngine(nil, nil)
+	service := NewService(testRegistry(openCatalog{}), engineSetFor(t, "native:", map[string]TorrentEngine{"native:": native}), repo, settings)
+	t.Cleanup(func() { _ = service.Close(context.Background()) })
+
+	_, err = service.prepareExistingTorrentFile(ctx, stored[0], 1)
+	if !errors.Is(err, domain.ErrEngineUnavailable) {
+		t.Fatalf("sibling materialization must refuse with ErrEngineUnavailable, got %v", err)
+	}
+	if adds := native.snapshot().adds; len(adds) != 0 {
+		t.Fatalf("default engine must not re-acquire a managed pack: adds=%v", adds)
+	}
+}
