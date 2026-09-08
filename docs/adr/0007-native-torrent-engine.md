@@ -22,6 +22,20 @@ explicit piece-priority ranges set through the public per-piece setter
 (`Piece.SetPriority`), with the per-file baseline reasserting behind
 piece-level overrides (priorities Raise); reader-based steering is inert in
 the pinned version because reader readahead zeroes while not reading.
+The engine runs two isolated underlying torrent clients behind one facade: a
+private client (NoDHT, DisablePEX) for private-flagged metainfo and a public
+client (DHT + PEX on) for everything else. Admission classifies by the info
+dictionary's `private` bit — new Adds, magnet resolves, and saved-session
+restore alike; the pinned library enforces nothing itself, so this
+classification is the whole privacy boundary. Magnets resolve only when the
+acquisition source explicitly authorizes public discovery (`MagnetDiscovery` on
+the engine port; Pirate Bay is the only authorized source today); a magnet
+without authorization is denied before any network activity, and unexpected
+private metadata on an authorized public resolve is rejected, not adopted. A
+separate `torrentPublicPeerPort` (default 0, OS-assigned) listens for the
+public client; both clients share one session store, one piece-completion
+database, and the infohash-keyed media layout, with a per-hash owner map
+keeping every infohash on exactly one client.
 
 ## Evidence
 
