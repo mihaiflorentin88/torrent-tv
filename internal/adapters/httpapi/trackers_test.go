@@ -68,11 +68,11 @@ func (downloadStatusEngine) Files(context.Context, string) ([]domain.TorrentFile
 // magnetStubEngine resolves magnets through the test-provided function.
 type magnetStubEngine struct {
 	application.TorrentEngine
-	resolve func(context.Context, string, string) ([]byte, error)
+	resolve func(context.Context, string, string, domain.MagnetDiscovery) ([]byte, error)
 }
 
-func (e *magnetStubEngine) ResolveMagnet(ctx context.Context, uri, root string) ([]byte, error) {
-	return e.resolve(ctx, uri, root)
+func (e *magnetStubEngine) ResolveMagnet(ctx context.Context, uri, root string, discovery domain.MagnetDiscovery) ([]byte, error) {
+	return e.resolve(ctx, uri, root, discovery)
 }
 
 // blockingFilesEngine adds one torrent and then blocks in Files until the
@@ -264,9 +264,12 @@ func TestTrackerUnconfiguredPrepareReturnsConfigurationGuidance(t *testing.T) {
 func TestMagnetUnsupportedPrepareReturnsUpgradeGuidance(t *testing.T) {
 	piratebay := &stubTracker{
 		id: "piratebay", name: "The Pirate Bay", enabled: true, configured: true,
-		acquisition: domain.TorrentAcquisition{Magnet: "magnet:?xt=urn:btih:0123456789012345678901234567890123456789"},
+		acquisition: domain.TorrentAcquisition{
+			Magnet:          "magnet:?xt=urn:btih:0123456789012345678901234567890123456789",
+			MagnetDiscovery: domain.MagnetDiscoveryPublic,
+		},
 	}
-	engine := &magnetStubEngine{resolve: func(context.Context, string, string) ([]byte, error) {
+	engine := &magnetStubEngine{resolve: func(context.Context, string, string, domain.MagnetDiscovery) ([]byte, error) {
 		return nil, fmt.Errorf("%w: daemon reports %q", domain.ErrMagnetUnsupported, "v4.3.9")
 	}}
 	f := newTrackerFixture(t, engine, filelistRegistration(piratebay))
@@ -288,9 +291,12 @@ func TestMagnetUnsupportedPrepareReturnsUpgradeGuidance(t *testing.T) {
 func TestDownloadMetadataDeadlineReturnsGatewayTimeout(t *testing.T) {
 	piratebay := &stubTracker{
 		id: "piratebay", name: "The Pirate Bay", enabled: true, configured: true,
-		acquisition: domain.TorrentAcquisition{Magnet: "magnet:?xt=urn:btih:0123456789012345678901234567890123456789"},
+		acquisition: domain.TorrentAcquisition{
+			Magnet:          "magnet:?xt=urn:btih:0123456789012345678901234567890123456789",
+			MagnetDiscovery: domain.MagnetDiscoveryPublic,
+		},
 	}
-	engine := &magnetStubEngine{resolve: func(ctx context.Context, _, _ string) ([]byte, error) {
+	engine := &magnetStubEngine{resolve: func(ctx context.Context, _, _ string, _ domain.MagnetDiscovery) ([]byte, error) {
 		return nil, context.DeadlineExceeded
 	}}
 	f := newTrackerFixture(t, engine, filelistRegistration(piratebay))

@@ -25,7 +25,7 @@ import (
 // Fixed bencode fixture: the same info dictionary the existing client tests
 // use, so the info hash is a known constant.
 const (
-	magnetTestInfoDict = "d6:lengthi5e4:name9:video.mp412:piece lengthi4e6:pieces20:aaaaaaaaaaaaaaaaaaaaee"
+	magnetTestInfoDict = "d6:lengthi5e4:name9:video.mp412:piece lengthi4e6:pieces20:aaaaaaaaaaaaaaaaaaaae"
 	magnetTestHash     = "52e0ec3afc6723a6be6a2dad955dc4027babc55c"
 )
 
@@ -38,7 +38,7 @@ func magnetTestURI() string {
 func magnetMismatchMetainfo(t *testing.T) ([]byte, string) {
 	t.Helper()
 	raw := []byte("d8:announce13:https://test/4:info" +
-		"d6:lengthi5e4:name10:video2.mp412:piece lengthi4e6:pieces20:aaaaaaaaaaaaaaaaaaaaee" + "e")
+		"d6:lengthi5e4:name10:video2.mp412:piece lengthi4e6:pieces20:aaaaaaaaaaaaaaaaaaaae" + "e")
 	h, err := infoHash(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -452,7 +452,7 @@ func TestResolveMagnetRejectsUnsupportedBeforeAdd(t *testing.T) {
 		t.Run(version, func(t *testing.T) {
 			s := newResolveServer(t, version)
 			c := s.newClient()
-			_, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir())
+			_, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir(), domain.MagnetDiscoveryPublic)
 			if !errors.Is(err, domain.ErrMagnetUnsupported) {
 				t.Fatalf("ResolveMagnet on %s: err = %v, want domain.ErrMagnetUnsupported", version, err)
 			}
@@ -468,12 +468,51 @@ func TestResolveMagnetRejectsUnsupportedBeforeAdd(t *testing.T) {
 	}
 }
 
+// A resolve without explicit public-source authorization is denied before
+// any daemon interaction.
+func TestResolveMagnetDeniesUnsetDiscovery(t *testing.T) {
+	s := newResolveServer(t, "v4.5.0")
+	s.setReady(true)
+	c := s.newClient()
+	_, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir(), 0)
+	if !errors.Is(err, domain.ErrMagnetDiscoveryDenied) {
+		t.Fatalf("err = %v, want domain.ErrMagnetDiscoveryDenied", err)
+	}
+	if got := s.addCountValue(); got != 0 {
+		t.Fatalf("denied resolve issued %d add requests, want 0", got)
+	}
+}
+
+// Authorized public discovery that resolves a private-flagged metainfo must
+// fail and leave no resolver residue behind.
+func TestResolveMagnetRejectsPrivateMetadata(t *testing.T) {
+	raw := []byte("d8:announce13:https://test/4:info" +
+		"d6:lengthi5e4:name9:video.mp412:piece lengthi4e6:pieces20:aaaaaaaaaaaaaaaaaaaa7:privatei1ee" + "e")
+	hash, err := infoHash(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newResolveServer(t, "v4.5.0")
+	s.setReady(true)
+	s.exportHook = func(string, int) (int, []byte) {
+		return http.StatusOK, raw
+	}
+	uri := "magnet:?xt=urn:btih:" + hash + "&dn=video.mp4&tr=" + url.QueryEscape("https://tracker.example/announce")
+	downloadRoot := t.TempDir()
+	c := s.newClient()
+	_, err = c.ResolveMagnet(context.Background(), uri, downloadRoot, domain.MagnetDiscoveryPublic)
+	if !errors.Is(err, domain.ErrPrivateMagnet) {
+		t.Fatalf("err = %v, want domain.ErrPrivateMagnet", err)
+	}
+	assertResolverCleanup(t, s, hash, downloadRoot)
+}
+
 func TestResolveMagnetResolvesAndExports(t *testing.T) {
 	s := newResolveServer(t, "v4.5.0")
 	s.setReady(true)
 	downloadRoot := t.TempDir()
 	c := s.newClient()
-	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot)
+	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot, domain.MagnetDiscoveryPublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +555,7 @@ func TestResolveMagnetUsesFiveXStopNaming(t *testing.T) {
 	s := newResolveServer(t, "v5.0.0")
 	s.setReady(true)
 	c := s.newClient()
-	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir())
+	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir(), domain.MagnetDiscoveryPublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -540,7 +579,7 @@ func TestResolveMagnetRetriesMetadata409(t *testing.T) {
 		return http.StatusOK, magnetTestMetainfo
 	}
 	c := s.newClient()
-	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir())
+	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir(), domain.MagnetDiscoveryPublic)
 	if err != nil {
 		t.Fatalf("409 then success should resolve: %v", err)
 	}
@@ -556,7 +595,7 @@ func TestResolveMagnetDeadlineCancelsAndCleansUp(t *testing.T) {
 	c := s.newClient()
 	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
 	defer cancel()
-	_, err := c.ResolveMagnet(ctx, magnetTestURI(), downloadRoot)
+	_, err := c.ResolveMagnet(ctx, magnetTestURI(), downloadRoot, domain.MagnetDiscoveryPublic)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
 	}
@@ -574,7 +613,7 @@ func TestResolveMagnetRejectsMalformedExport(t *testing.T) {
 	}
 	downloadRoot := t.TempDir()
 	c := s.newClient()
-	_, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot)
+	_, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot, domain.MagnetDiscoveryPublic)
 	if err == nil {
 		t.Fatal("malformed export must fail")
 	}
@@ -590,7 +629,7 @@ func TestResolveMagnetRejectsHashMismatch(t *testing.T) {
 	}
 	downloadRoot := t.TempDir()
 	c := s.newClient()
-	_, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot)
+	_, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot, domain.MagnetDiscoveryPublic)
 	if err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Fatalf("err = %v, want a hash mismatch error", err)
 	}
@@ -612,7 +651,7 @@ func TestResolveMagnetPreflightExportsExistingWithoutMutation(t *testing.T) {
 	}
 	s.mu.Unlock()
 	c := s.newClient()
-	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir())
+	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), t.TempDir(), domain.MagnetDiscoveryPublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -659,7 +698,7 @@ func TestResolveMagnetForeignTorrentAfterDuplicateResponse(t *testing.T) {
 	}
 	downloadRoot := t.TempDir()
 	c := s.newClient()
-	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot)
+	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot, domain.MagnetDiscoveryPublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -708,7 +747,7 @@ func TestResolveMagnetOwnedTorrentAfterAmbiguousAdd(t *testing.T) {
 	}
 	downloadRoot := t.TempDir()
 	c := s.newClient()
-	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot)
+	raw, err := c.ResolveMagnet(context.Background(), magnetTestURI(), downloadRoot, domain.MagnetDiscoveryPublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -732,7 +771,7 @@ func TestResolveMagnetSharesHashGateWithAdd(t *testing.T) {
 	}
 	resolveDone := make(chan result, 1)
 	go func() {
-		raw, err := c.ResolveMagnet(ctx, magnetTestURI(), t.TempDir())
+		raw, err := c.ResolveMagnet(ctx, magnetTestURI(), t.TempDir(), domain.MagnetDiscoveryPublic)
 		resolveDone <- result{raw, err}
 	}()
 	time.Sleep(60 * time.Millisecond)

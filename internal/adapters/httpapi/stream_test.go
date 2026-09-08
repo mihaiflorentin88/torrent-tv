@@ -59,7 +59,7 @@ func (e *streamEngine) Remove(context.Context, string, bool) error {
 	return nil
 }
 
-func (e *streamEngine) ResolveMagnet(context.Context, string, string) ([]byte, error) {
+func (e *streamEngine) ResolveMagnet(context.Context, string, string, domain.MagnetDiscovery) ([]byte, error) {
 	return nil, errors.New("not supported")
 }
 

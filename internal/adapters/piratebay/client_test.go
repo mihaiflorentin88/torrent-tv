@@ -103,6 +103,9 @@ func TestAcquireBuildsMagnetFromNumberValuedDetail(t *testing.T) {
 			t.Fatalf("announce %d: got %q want %q", i, trs[i], want)
 		}
 	}
+	if acq.MagnetDiscovery != domain.MagnetDiscoveryPublic {
+		t.Fatalf("piratebay acquisition must authorize public discovery, got %d", acq.MagnetDiscovery)
+	}
 }
 
 func TestSentinelNoResultsRowIsFiltered(t *testing.T) {

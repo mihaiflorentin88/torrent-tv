@@ -41,7 +41,7 @@ type TorrentEngine interface {
 	Pause(context.Context, string) error
 	Resume(context.Context, string) error
 	Remove(context.Context, string, bool) error
-	ResolveMagnet(ctx context.Context, uri string, downloadRoot string) ([]byte, error)
+	ResolveMagnet(ctx context.Context, uri string, downloadRoot string, discovery domain.MagnetDiscovery) ([]byte, error)
 }
 
 const (

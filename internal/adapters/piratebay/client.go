@@ -204,7 +204,7 @@ func (c *Client) Acquire(ctx context.Context, providerID string) (domain.Torrent
 	}
 	uri := "magnet:?" + q.Encode()
 
-	acq := domain.TorrentAcquisition{Magnet: uri}
+	acq := domain.TorrentAcquisition{Magnet: uri, MagnetDiscovery: domain.MagnetDiscoveryPublic}
 	if err := acq.Validate(); err != nil {
 		return domain.TorrentAcquisition{}, err
 	}

@@ -433,7 +433,7 @@ func (e *strictEngine) Pause(context.Context, string) error {
 	return errors.New("no engine")
 }
 
-func (e *strictEngine) ResolveMagnet(context.Context, string, string) ([]byte, error) {
+func (e *strictEngine) ResolveMagnet(context.Context, string, string, domain.MagnetDiscovery) ([]byte, error) {
 	e.t.Error("engine must not be used")
 	return nil, errors.New("no engine")
 }

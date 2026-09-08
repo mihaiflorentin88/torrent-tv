@@ -9,6 +9,7 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
 // hashGate coordinates concurrent operations on a single info hash so
@@ -54,7 +55,7 @@ func (c *Client) releaseHashGate(ih metainfo.Hash, gate *hashGate) {
 // root argument is accepted for port parity and ignored, mirroring Add's
 // save-path convention. Bounded waiting is governed strictly by ctx: the
 // engine's fixed five-second waitInfo helper is not used here.
-func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string) ([]byte, error) {
+func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, _ domain.MagnetDiscovery) ([]byte, error) {
 	// Validate before the pinned library call: AddTorrentOpt panics on a
 	// zero v1 infohash, so hashless and v2-only magnets must be rejected
 	// here, not in the library.

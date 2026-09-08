@@ -45,7 +45,7 @@ func (s *stubEngine) PrepareRange(context.Context, string, int, int64, int64) er
 func (s *stubEngine) Pause(context.Context, string) error        { s.calls++; return nil }
 func (s *stubEngine) Resume(context.Context, string) error       { s.calls++; return nil }
 func (s *stubEngine) Remove(context.Context, string, bool) error { s.calls++; return nil }
-func (s *stubEngine) ResolveMagnet(context.Context, string, string) ([]byte, error) {
+func (s *stubEngine) ResolveMagnet(context.Context, string, string, domain.MagnetDiscovery) ([]byte, error) {
 	s.calls++
 	return nil, nil
 }

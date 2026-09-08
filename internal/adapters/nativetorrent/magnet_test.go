@@ -15,6 +15,7 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
 // startMetadataSeeder starts a bare library client on loopback that serves
@@ -79,7 +80,7 @@ func TestResolveMagnetFetchesMetadataOverLoopback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	// No DownloadAll/PrepareFiles involved: resolution is metadata-only.
-	raw, err := c.ResolveMagnet(ctx, magnetFor(ih, addr), t.TempDir())
+	raw, err := c.ResolveMagnet(ctx, magnetFor(ih, addr), t.TempDir(), domain.MagnetDiscoveryPublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +170,7 @@ func TestResolveMagnetCancellationLeavesNoTorrent(t *testing.T) {
 	type result struct{ err error }
 	res := make(chan result, 1)
 	go func() {
-		_, err := c.ResolveMagnet(ctx, magnetFor(ih, ln.Addr().String()), t.TempDir())
+		_, err := c.ResolveMagnet(ctx, magnetFor(ih, ln.Addr().String()), t.TempDir(), domain.MagnetDiscoveryPublic)
 		res <- result{err: err}
 	}()
 	// Let the resolve enter its bounded wait behind the silent peer.
@@ -228,7 +229,7 @@ func TestResolveMagnetPreservesExistingSessionTorrent(t *testing.T) {
 	// A same-hash magnet with an unusable peer: the existing torrent must be
 	// found before any spec merge, so the peer is never dialed and nothing
 	// about the session torrent changes.
-	got, err := c.ResolveMagnet(t.Context(), magnetFor(ih, "127.0.0.1:1"), t.TempDir())
+	got, err := c.ResolveMagnet(t.Context(), magnetFor(ih, "127.0.0.1:1"), t.TempDir(), domain.MagnetDiscoveryPublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +283,7 @@ func filePriorities(t *torrent.Torrent) []torrent.PiecePriority {
 
 func TestResolveMagnetRejectsMissingV1Hash(t *testing.T) {
 	c := newTestClient(t)
-	_, err := c.ResolveMagnet(t.Context(), "magnet:?dn=missing-hash", t.TempDir())
+	_, err := c.ResolveMagnet(t.Context(), "magnet:?dn=missing-hash", t.TempDir(), domain.MagnetDiscoveryPublic)
 	if err == nil {
 		t.Fatal("accepted a magnet without a v1 info hash")
 	}
@@ -294,7 +295,7 @@ func TestResolveMagnetRejectsV2OnlyMagnet(t *testing.T) {
 	// v1 hash: the library's AddTorrentOpt panics on the zero v1 hash, so
 	// the resolver must reject it first.
 	uri := "magnet:?xt=urn:btmh:1220" + strings.Repeat("0", 64)
-	if _, err := c.ResolveMagnet(t.Context(), uri, t.TempDir()); err == nil {
+	if _, err := c.ResolveMagnet(t.Context(), uri, t.TempDir(), domain.MagnetDiscoveryPublic); err == nil {
 		t.Fatal("accepted a v2-only magnet")
 	}
 }

@@ -1,6 +1,7 @@
 package qbittorrent
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base32"
@@ -17,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anacrolix/torrent/metainfo"
 	"github.com/mihaiflorentin88/torrent-tv/internal/domain"
 )
 
@@ -291,7 +293,11 @@ func (c *Client) exportPreexisting(ctx context.Context, hash string) ([]byte, er
 // domain.ErrMagnetUnsupported before initiating any add request. Preexisting
 // torrents are exported without mutation or deletion. Resolver-owned torrents
 // are cleaned up completely upon completion, error, or cancellation.
-func (c *Client) ResolveMagnet(ctx context.Context, uri string, downloadRoot string) (meta []byte, finalErr error) {
+func (c *Client) ResolveMagnet(ctx context.Context, uri string, downloadRoot string, discovery domain.MagnetDiscovery) (meta []byte, finalErr error) {
+	if discovery != domain.MagnetDiscoveryPublic {
+		return nil, domain.ErrMagnetDiscoveryDenied
+	}
+
 	hash, err := magnetInfoHash(uri)
 	if err != nil {
 		return nil, fmt.Errorf("parse magnet info hash: %w", err)
@@ -429,9 +435,19 @@ func (c *Client) ResolveMagnet(ctx context.Context, uri string, downloadRoot str
 			if expErr != nil {
 				return nil, expErr
 			}
+			mi, err := metainfo.Load(bytes.NewReader(metaBytes))
+			if err != nil {
+				return nil, fmt.Errorf("decode resolved metainfo: %w", err)
+			}
+			info, err := mi.UnmarshalInfo()
+			if err != nil {
+				return nil, fmt.Errorf("decode resolved metainfo info: %w", err)
+			}
+			if info.Private != nil && *info.Private {
+				return nil, domain.ErrPrivateMagnet
+			}
 			return metaBytes, nil
 		}
-
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()

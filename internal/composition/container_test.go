@@ -137,7 +137,7 @@ func (stubEngine) PrepareRange(context.Context, string, int, int64, int64) error
 func (stubEngine) Pause(context.Context, string) error        { return errors.New("stub") }
 func (stubEngine) Resume(context.Context, string) error       { return errors.New("stub") }
 func (stubEngine) Remove(context.Context, string, bool) error { return errors.New("stub") }
-func (stubEngine) ResolveMagnet(context.Context, string, string) ([]byte, error) {
+func (stubEngine) ResolveMagnet(context.Context, string, string, domain.MagnetDiscovery) ([]byte, error) {
 	return nil, errors.New("stub")
 }
 
