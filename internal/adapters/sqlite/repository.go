@@ -141,7 +141,12 @@ CREATE INDEX IF NOT EXISTS job_logs_created ON job_logs(created_at);`)
 	if err := r.migrateTrackers(ctx); err != nil {
 		return err
 	}
-	return r.backfillCatalog(ctx)
+	if err := r.backfillCatalog(ctx); err != nil {
+		return err
+	}
+	// Startup repair: re-project every title family from raw evidence; the
+	// pass is idempotent and writes nothing when projections already match.
+	return r.ReconcileAllCatalogProjections(ctx)
 }
 
 func filelistCategory(name string) (id string, browseClass string, excluded bool) {
@@ -307,7 +312,7 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(tracker_id,provider_id) DO UPDATE SET
 tracker_name=excluded.tracker_name,category_id=excluded.category_id,browse_class=excluded.browse_class,
 discovery_excluded=excluded.discovery_excluded,name=excluded.name,category=excluded.category,
-size_bytes=excluded.size_bytes,imdb_id=excluded.imdb_id,seeders=excluded.seeders,leechers=excluded.leechers,
+size_bytes=excluded.size_bytes,imdb_id=CASE WHEN excluded.imdb_id='' THEN releases.imdb_id ELSE excluded.imdb_id END,seeders=excluded.seeders,leechers=excluded.leechers,
 times_completed=excluded.times_completed,freeleech=excluded.freeleech,double_up=excluded.double_up,
 internal=excluded.internal,moderated=excluded.moderated,small_description=excluded.small_description,
 uploaded_at=excluded.uploaded_at,file_count=excluded.file_count,comments=excluded.comments,
@@ -322,6 +327,10 @@ audio=excluded.audio,hdr=excluded.hdr,edition=excluded.edition,release_group=exc
 
 	out := make([]domain.TorrentRelease, 0, len(items))
 	now := time.Now().Unix()
+	// Families touched by this batch: both the incoming parsed families and the
+	// prior (pre-update) families of those release ids, so a rename or imdb
+	// change reconciles the identity the release is leaving behind too.
+	families := make(map[familyKey]struct{}, len(items))
 
 	for _, x := range items {
 		candidateID := x.TrackerID + ":" + url.PathEscape(x.ProviderID)
@@ -348,16 +357,29 @@ audio=excluded.audio,hdr=excluded.hdr,edition=excluded.edition,release_group=exc
 		stored := x
 		stored.ID = storedID
 
+		// Capture the prior family BEFORE the projection upsert overwrites it.
+		var priorKind, priorSort string
+		if err := tx.QueryRowContext(ctx, `SELECT media_kind,sort_title FROM catalog_releases WHERE release_id=?`, stored.ID).Scan(&priorKind, &priorSort); err == nil {
+			families[familyKey{Kind: domain.MediaKind(priorKind), SortTitle: priorSort}] = struct{}{}
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+
 		parsed := domain.ParseRelease(stored)
+		families[familyKey{Kind: parsed.Kind, SortTitle: parsed.SortTitle}] = struct{}{}
 		if _, err = tx.ExecContext(ctx, catQ,
 			stored.ID, domain.CatalogTitleID(stored, parsed), parsed.Title, parsed.SortTitle, parsed.Kind, parsed.Year, parsed.SeasonStart, parsed.SeasonEnd,
 			parsed.EpisodeStart, parsed.EpisodeEnd, parsed.EpisodeTitle, parsed.Resolution, parsed.Quality, parsed.VideoCodec, parsed.Audio, parsed.HDR, parsed.Edition, parsed.ReleaseGroup); err != nil {
 			return nil, err
 		}
-
 		out = append(out, stored)
 	}
 
+	// Re-project every touched family from raw evidence inside this transaction,
+	// before commit, so dependents follow clean merges atomically.
+	if err := reconcileFamiliesTx(ctx, tx, families); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -375,7 +397,7 @@ func (r *Repository) ListCatalogSources(ctx context.Context, eligible []string) 
 
 const catalogSourceSelect = `SELECT r.id,r.name,r.category,r.size_bytes,r.imdb_id,r.seeders,r.leechers,r.times_completed,r.freeleech,r.double_up,r.internal,r.moderated,r.small_description,r.uploaded_at,r.file_count,r.comments,
 r.tracker_id,r.tracker_name,r.provider_id,r.category_id,r.browse_class,r.discovery_excluded,
-c.title,c.sort_title,c.media_kind,c.year,c.season_start,c.season_end,c.episode_start,c.episode_end,c.episode_title,c.resolution,c.source,c.video_codec,c.audio,c.hdr,c.edition,c.release_group
+c.title,c.sort_title,c.media_kind,c.year,c.season_start,c.season_end,c.episode_start,c.episode_end,c.episode_title,c.resolution,c.source,c.video_codec,c.audio,c.hdr,c.edition,c.release_group,c.title_id
 FROM releases r JOIN catalog_releases c ON c.release_id=r.id`
 
 func scanCatalogSources(rows *sql.Rows) ([]domain.CatalogSource, error) {
@@ -391,7 +413,7 @@ func scanCatalogSources(rows *sql.Rows) ([]domain.CatalogSource, error) {
 			&x.Release.TrackerID, &x.Release.TrackerName, &x.Release.ProviderID, &x.Release.CategoryID, &x.Release.BrowseClass, &discExcl,
 			&x.Parsed.Title, &x.Parsed.SortTitle, &x.Parsed.Kind, &x.Parsed.Year, &x.Parsed.SeasonStart,
 			&x.Parsed.SeasonEnd, &x.Parsed.EpisodeStart, &x.Parsed.EpisodeEnd, &x.Parsed.EpisodeTitle, &x.Parsed.Resolution, &x.Parsed.Quality,
-			&x.Parsed.VideoCodec, &x.Parsed.Audio, &x.Parsed.HDR, &x.Parsed.Edition, &x.Parsed.ReleaseGroup); err != nil {
+			&x.Parsed.VideoCodec, &x.Parsed.Audio, &x.Parsed.HDR, &x.Parsed.Edition, &x.Parsed.ReleaseGroup, &x.TitleID); err != nil {
 			return nil, err
 		}
 		if uploaded.Valid {

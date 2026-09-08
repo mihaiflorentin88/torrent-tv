@@ -37,12 +37,15 @@ type ParsedRelease struct {
 }
 
 type CatalogSource struct {
-	Release       TorrentRelease `json:"release"`
-	Parsed        ParsedRelease  `json:"parsed"`
-	FileIndex     *int           `json:"fileIndex,omitempty"`
-	FilePath      string         `json:"filePath,omitempty"`
-	FileSizeBytes int64          `json:"fileSizeBytes,omitempty"`
-	LibraryState  MediaState     `json:"libraryState"`
+	Release TorrentRelease `json:"release"`
+	Parsed  ParsedRelease  `json:"parsed"`
+	// TitleID is the canonical projection this release belongs to. Internal
+	// projection field; consumers decide whether to expose it.
+	TitleID       string     `json:"titleId,omitempty"`
+	FileIndex     *int       `json:"fileIndex,omitempty"`
+	FilePath      string     `json:"filePath,omitempty"`
+	FileSizeBytes int64      `json:"fileSizeBytes,omitempty"`
+	LibraryState  MediaState `json:"libraryState"`
 }
 
 type MediaState struct {

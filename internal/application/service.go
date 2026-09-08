@@ -175,6 +175,11 @@ func (s *Service) runMetadataRequest(request metadataRequest) {
 		return
 	}
 	job, _ := s.repo.GetJob(context.Background(), "metadata:"+request.TitleID)
+	if job.ID == "" {
+		// Retargeted or restarted work can arrive under a key whose job row
+		// lives under the previous id; rebuild the identity from the request.
+		job = domain.Job{ID: "metadata:" + request.TitleID, Kind: "metadata", DedupeKey: "metadata:" + request.TitleID}
+	}
 	job.State = "running"
 	job.Progress = .1
 	job.Error = ""
@@ -189,6 +194,31 @@ func (s *Service) runMetadataRequest(request metadataRequest) {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 30*time.Second)
 	settings := s.settings.Get()
 	metadata, err := s.metadata.Lookup(ctx, request.IMDbID, request.Kind, settings.MetadataLanguage, settings.MetadataFallbackLanguage)
+	// Re-resolve before applying results: a concurrent reconciliation can
+	// merge this title mid-lookup and retarget (or coalesce away) the
+	// queued/running job's row while preserving the historical id. The
+	// surviving row names the canonical title this result must land on.
+	requestedTitleID := request.TitleID
+	fresh, freshErr := s.repo.GetJob(context.Background(), "metadata:"+requestedTitleID)
+	if freshErr != nil {
+		// The row was coalesced into a surviving duplicate (or deleted);
+		// that job owns the work. Drop the result instead of resurrecting
+		// a stale row under a dead id.
+		cancel()
+		s.pendingMu.Lock()
+		delete(s.pendingMetadata, requestedTitleID)
+		s.pendingMu.Unlock()
+		s.releaseJob()
+		return
+	}
+	if fresh.DedupeKey != "" {
+		if retargeted := strings.TrimPrefix(fresh.DedupeKey, "metadata:"); retargeted != "" && retargeted != request.TitleID {
+			request.TitleID = retargeted
+		}
+		// Adopt the stored row's id (not the new key) so job logs and events
+		// stay attached to the persisted row; only the dedupe key moved.
+		job.ID, job.DedupeKey = fresh.ID, fresh.DedupeKey
+	}
 	now := time.Now().UTC()
 	metadata.TitleID = request.TitleID
 	if err != nil {
@@ -213,7 +243,10 @@ func (s *Service) runMetadataRequest(request metadataRequest) {
 	s.publish("metadata.updated", payload)
 	cancel()
 	s.pendingMu.Lock()
-	delete(s.pendingMetadata, request.TitleID)
+	delete(s.pendingMetadata, requestedTitleID)
+	if request.TitleID != requestedTitleID {
+		delete(s.pendingMetadata, request.TitleID)
+	}
 	s.pendingMu.Unlock()
 	s.releaseJob()
 }
@@ -1143,9 +1176,26 @@ func (s *Service) titleRefreshWorker() {
 	}
 }
 
+// titleRefreshKeyID extracts the title id from a catalog-title-refresh job or
+// sync key. Title ids are base64url (no colon), so the id follows the last
+// colon: either "catalog-title-refresh:<tid>" or
+// "catalog-title-refresh:<tracker>:<tid>".
+func titleRefreshKeyID(key string) string {
+	if i := strings.LastIndex(key, ":"); i >= 0 {
+		return key[i+1:]
+	}
+	return key
+}
+
 func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 	key := "catalog-title-refresh:" + request.TitleID
 	job, _ := s.repo.GetJob(context.Background(), key)
+	if job.ID == "" {
+		// Reconciliation retargets dedupe keys while preserving the historical
+		// id, so a restarted or merged title can arrive under a key whose job
+		// row still lives under the previous id.
+		job = domain.Job{ID: key, Kind: "catalog-title-refresh", Label: "Refresh all versions of " + request.Query, DedupeKey: key}
+	}
 	job.State = "running"
 	job.Progress = .05
 	job.Error = ""
@@ -1233,6 +1283,30 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 			}
 
 			stored, upsertErr := s.upsertTrackerReleases(ctx, trackerID, tracker.Name(), items)
+			// The upsert above can reconcile the family and retarget this
+			// running job's dedupe key transactionally (historical id kept).
+			// Re-resolve before applying results so completion writes land on
+			// the surviving row and sync state records the canonical key.
+			fresh, freshErr := s.repo.GetJob(ctx, refreshKey)
+			if freshErr != nil {
+				// The child row was coalesced into a sibling tracker's
+				// surviving duplicate by reconciliation; that job owns the
+				// work. Skip child persistence and events instead of
+				// resurrecting a stale row; the catalog upsert itself stands.
+				// A failed upsert still surfaces as a named failure so the
+				// tracker error is not masked by the coalescing.
+				if upsertErr != nil {
+					results[idx] = refreshResult{id: trackerID, err: upsertErr}
+				} else {
+					results[idx] = refreshResult{id: trackerID, count: len(stored)}
+				}
+				return
+			}
+			// Adopt the stored row's id (not the new key) so job logs and
+			// events stay attached to the persisted row; only the dedupe key
+			// moved.
+			childJob.ID, childJob.DedupeKey = fresh.ID, fresh.DedupeKey
+			refreshKey = fresh.DedupeKey
 			if upsertErr != nil {
 				s.failOrWait(&childJob, upsertErr, "title-refresh")
 				_ = s.repo.SaveJob(ctx, childJob)
@@ -1260,7 +1334,7 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 			_ = s.repo.SaveJob(ctx, childJob)
 			s.publish("job.updated", childJob)
 			_ = s.repo.RecordSync(ctx, refreshKey, len(stored), nil)
-			s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": request.TitleID, "tracker": trackerID, "items": len(stored), "job": childJob})
+			s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": titleRefreshKeyID(refreshKey), "tracker": trackerID, "items": len(stored), "job": childJob})
 			results[idx] = refreshResult{id: trackerID, count: len(stored)}
 		}(i, id, tr)
 	}
@@ -1278,6 +1352,22 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 		}
 	}
 
+	// Re-resolve the projected title before applying results: the tracker
+	// upserts inside this refresh may have merged the family and retargeted
+	// (or coalesced away) this job's row while preserving the historical id.
+	fresh, freshErr := s.repo.GetJob(context.Background(), key)
+	if freshErr != nil {
+		// The row was coalesced into a surviving duplicate by reconciliation
+		// (or deleted); that job owns the work. Drop the result instead of
+		// resurrecting a stale completed row and publishing a stale event.
+		return
+	}
+	if fresh.DedupeKey != "" {
+		// Adopt the stored row's id (not the new key) so job logs and events
+		// stay attached to the persisted row; only the dedupe key moved.
+		job.ID, job.DedupeKey = fresh.ID, fresh.DedupeKey
+	}
+	appliedTitleID := titleRefreshKeyID(job.DedupeKey)
 	job.UpdatedAt = time.Now().UTC()
 	if len(namedFailures) > 0 && successful == 0 && len(eligible) > 0 {
 		job.State = "failed"
@@ -1294,7 +1384,7 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 			job.Error = ""
 		}
 		job.Label = fmt.Sprintf("Refreshed %s · %d releases", request.Query, total)
-		_ = s.EnsureMetadata(context.Background(), []string{request.TitleID})
+		_ = s.EnsureMetadata(context.Background(), []string{appliedTitleID})
 	}
 	_ = s.repo.SaveJob(context.Background(), job)
 	if job.State == "completed" {
@@ -1303,7 +1393,7 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 		s.jobLog(job, "error", "complete", "Title refresh failed", map[string]any{"error": job.Error})
 	}
 	s.publish("job.updated", job)
-	s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": request.TitleID, "items": total, "job": job})
+	s.publish("catalog.updated", map[string]any{"mode": "title", "titleId": appliedTitleID, "items": total, "job": job})
 }
 
 func (s *Service) TestEngine(ctx context.Context) (string, error) {
