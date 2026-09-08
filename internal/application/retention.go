@@ -433,15 +433,27 @@ func (s *Service) finishRetentionJob(job domain.Job, evicted int, freedBytes int
 // uses.
 func (s *Service) evictionEvent(ctx context.Context, route retentionRoute, reason string) map[string]any {
 	titles, releases := []string{}, []string{}
-	seen := map[string]bool{}
+	unique := make([]domain.Download, 0, len(route.rows))
+	seenRelease := map[string]bool{}
 	for _, row := range route.rows {
-		if seen[row.ReleaseID] {
+		if seenRelease[row.ReleaseID] {
 			continue
 		}
-		seen[row.ReleaseID] = true
+		seenRelease[row.ReleaseID] = true
+		unique = append(unique, row)
+	}
+	releaseIDs := make([]string, 0, len(unique))
+	for _, row := range unique {
+		releaseIDs = append(releaseIDs, row.ReleaseID)
+	}
+	projected, err := s.repo.CatalogTitleIDsForReleases(ctx, releaseIDs)
+	if err != nil {
+		projected = map[string]string{}
+	}
+	for _, row := range unique {
 		named := row
-		if release, err := s.repo.GetRelease(ctx, row.ReleaseID); err == nil {
-			s.enrichDownload(ctx, &named, release)
+		if release, releaseErr := s.repo.GetRelease(ctx, row.ReleaseID); releaseErr == nil {
+			s.enrichDownload(ctx, &named, release, projected[row.ReleaseID])
 		}
 		if named.DisplayTitle != "" {
 			titles = append(titles, named.DisplayTitle)

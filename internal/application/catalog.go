@@ -75,7 +75,7 @@ func (s *Service) CatalogDetail(ctx context.Context, id string) (domain.CatalogD
 		if titleIDs[dl.ReleaseID] == id && !seenReleases[dl.ReleaseID] {
 			seenReleases[dl.ReleaseID] = true
 			if rel, relErr := s.repo.GetRelease(ctx, dl.ReleaseID); relErr == nil {
-				extraSources = append(extraSources, domain.CatalogSource{Release: rel, Parsed: domain.ParseRelease(rel)})
+				extraSources = append(extraSources, domain.CatalogSource{Release: rel, Parsed: domain.ParseRelease(rel), TitleID: titleIDs[dl.ReleaseID]})
 			}
 		}
 	}
@@ -492,7 +492,7 @@ func mergeTransferState(current, next string) string {
 func sourcesForTitle(sources []domain.CatalogSource, titleID string) []domain.CatalogSource {
 	out := make([]domain.CatalogSource, 0)
 	for _, source := range sources {
-		if domain.CatalogTitleID(source.Release, source.Parsed) == titleID {
+		if source.TitleID == titleID {
 			out = append(out, source)
 		}
 	}
@@ -689,7 +689,7 @@ func groupCatalog(items []domain.CatalogSource, includeSources bool) []domain.Ca
 	trackers := map[string]map[string]domain.TrackerRef{}
 	order := []string{}
 	for _, x := range items {
-		id := domain.CatalogTitleID(x.Release, x.Parsed)
+		id := x.TitleID
 		title := groups[id]
 		if title == nil {
 			title = &domain.CatalogTitle{ID: id, Title: x.Parsed.Title, Kind: x.Parsed.Kind, Year: x.Parsed.Year, IMDbID: x.Release.IMDbID, Categories: []string{}, Resolutions: []string{}, Sources: []domain.CatalogSource{}}

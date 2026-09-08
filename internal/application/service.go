@@ -1316,9 +1316,17 @@ func (s *Service) runTitleRefresh(request titleRefreshRequest) {
 				return
 			}
 
+			releaseIDs := make([]string, 0, len(stored))
 			for _, release := range stored {
-				parsed := domain.ParseRelease(release)
-				if release.FileCount > 1 && (domain.CatalogTitleID(release, parsed) == request.TitleID) {
+				releaseIDs = append(releaseIDs, release.ID)
+			}
+			projected, projErr := s.repo.CatalogTitleIDsForReleases(ctx, releaseIDs)
+			if projErr != nil {
+				s.jobLog(childJob, "warn", "torrent-manifest", "Could not resolve projected titles for manifest warmup", map[string]any{"error": projErr.Error()})
+				projected = map[string]string{}
+			}
+			for _, release := range stored {
+				if release.FileCount > 1 && projected[release.ID] == titleRefreshKeyID(refreshKey) {
 					if _, manifestErr := s.torrentManifest(ctx, release); manifestErr != nil {
 						s.jobLog(childJob, "warn", "torrent-manifest", "Could not inspect a multi-file torrent", map[string]any{"releaseId": release.ID, "release": release.Name, "error": manifestErr.Error()})
 						if errors.Is(manifestErr, context.DeadlineExceeded) || errors.Is(manifestErr, context.Canceled) {
@@ -1497,7 +1505,11 @@ func (s *Service) Prepare(ctx context.Context, releaseID string, fileIndex int) 
 		return domain.Download{}, err
 	}
 	if existing, existingErr := s.repo.FindDownload(ctx, releaseID, fileIndex); existingErr == nil {
-		s.enrichDownload(ctx, &existing, release)
+		titleID, titleErr := s.projectedTitleID(ctx, release.ID)
+		if titleErr != nil {
+			return domain.Download{}, titleErr
+		}
+		s.enrichDownload(ctx, &existing, release, titleID)
 		return s.prepareManagedDownload(ctx, existing)
 	} else if !errors.Is(existingErr, sql.ErrNoRows) {
 		return domain.Download{}, existingErr
@@ -1616,7 +1628,11 @@ func (s *Service) Prepare(ctx context.Context, releaseID string, fileIndex int) 
 	if err = s.repo.SaveDownload(ctx, d); err != nil {
 		return domain.Download{}, err
 	}
-	s.enrichDownload(ctx, &d, release)
+	titleID, titleErr := s.projectedTitleID(ctx, release.ID)
+	if titleErr != nil {
+		return domain.Download{}, titleErr
+	}
+	s.enrichDownload(ctx, &d, release, titleID)
 	return d, nil
 }
 
@@ -1679,7 +1695,11 @@ func (s *Service) prepareExistingTorrentFile(ctx context.Context, release domain
 		if saveErr := s.repo.SaveDownload(ctx, download); saveErr != nil {
 			return domain.Download{}, saveErr
 		}
-		s.enrichDownload(ctx, &download, release)
+		titleID, titleErr := s.projectedTitleID(ctx, release.ID)
+		if titleErr != nil {
+			return domain.Download{}, titleErr
+		}
+		s.enrichDownload(ctx, &download, release, titleID)
 		return s.prepareManagedDownload(ctx, download)
 	}
 	return domain.Download{}, sql.ErrNoRows
@@ -1698,7 +1718,11 @@ func (s *Service) NextEpisode(ctx context.Context, sourceID string) (*domain.Dow
 	if parsed.Kind != domain.MediaSeries {
 		return nil, nil
 	}
-	detail, err := s.CatalogDetail(ctx, domain.CatalogTitleID(release, parsed))
+	projected, err := s.repo.CatalogTitleIDsForReleases(ctx, []string{release.ID})
+	if err != nil {
+		return nil, err
+	}
+	detail, err := s.CatalogDetail(ctx, projected[release.ID])
 	if err != nil {
 		return nil, err
 	}
@@ -1886,6 +1910,10 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 	manifest := domain.TorrentManifest{ReleaseID: releaseID, Files: files, FetchedAt: time.Now().UTC()}
 	_ = s.repo.SaveTorrentManifest(ctx, manifest)
 	now := time.Now().UTC()
+	titleID, titleErr := s.projectedTitleID(ctx, releaseID)
+	if titleErr != nil {
+		return nil, titleErr
+	}
 	out := make([]domain.Download, 0, len(selected))
 	for i := range selected {
 		file := &selected[i]
@@ -1914,7 +1942,7 @@ func (s *Service) PrepareSeason(ctx context.Context, releaseID string, season in
 		if saveErr := s.repo.SaveDownload(ctx, download); saveErr != nil {
 			return nil, saveErr
 		}
-		s.enrichDownload(ctx, &download, release)
+		s.enrichDownload(ctx, &download, release, titleID)
 		out = append(out, download)
 	}
 	return out, nil
@@ -2017,9 +2045,19 @@ func (s *Service) Downloads(ctx context.Context) ([]domain.Download, error) {
 		return nil, err
 	}
 	items = dedupeManagedDownloads(items)
+	releaseIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.ReleaseID != "" {
+			releaseIDs = append(releaseIDs, item.ReleaseID)
+		}
+	}
+	projected, projErr := s.repo.CatalogTitleIDsForReleases(ctx, releaseIDs)
+	if projErr != nil {
+		return nil, projErr
+	}
 	for i := range items {
 		if release, releaseErr := s.repo.GetRelease(ctx, items[i].ReleaseID); releaseErr == nil {
-			s.enrichDownload(ctx, &items[i], release)
+			s.enrichDownload(ctx, &items[i], release, projected[items[i].ReleaseID])
 		}
 		engine, hash, ok := s.owner(items[i].EngineID)
 		var st domain.DownloadStatus
@@ -2102,10 +2140,10 @@ func applyDownloadStatus(download *domain.Download, status domain.DownloadStatus
 	}
 }
 
-func (s *Service) enrichDownload(ctx context.Context, download *domain.Download, release domain.TorrentRelease) {
+func (s *Service) enrichDownload(ctx context.Context, download *domain.Download, release domain.TorrentRelease, titleID string) {
 	baseParsed := domain.ParseRelease(release)
 	download.Parsed = baseParsed
-	download.TitleID = domain.CatalogTitleID(release, baseParsed)
+	download.TitleID = titleID
 	download.DisplayTitle = baseParsed.Title
 	if baseParsed.Kind == domain.MediaSeries && download.FilePath != "" {
 		base := domain.CatalogSource{Release: release, Parsed: baseParsed}
@@ -2326,13 +2364,34 @@ func (s *Service) SetWatched(ctx context.Context, sourceID string, watched bool)
 	return p, nil
 }
 
+// SetFavorite resolves the CURRENT projected canonical title for the release
+// at write time, so a favorite never lands on a group the reconciliation has
+// retired. Only a release with no persisted projection (not upserted yet)
+// falls back to computing the id from its own release evidence.
 func (s *Service) SetFavorite(ctx context.Context, releaseID string, favorite bool) error {
-	release, err := s.repo.GetRelease(ctx, releaseID)
+	projected, err := s.repo.CatalogTitleIDsForReleases(ctx, []string{releaseID})
 	if err != nil {
 		return err
 	}
-	parsed := domain.ParseRelease(release)
-	return s.repo.SetFavorite(ctx, householdProfile, domain.CatalogTitleID(release, parsed), favorite)
+	titleID := projected[releaseID]
+	if titleID == "" {
+		release, err := s.repo.GetRelease(ctx, releaseID)
+		if err != nil {
+			return err
+		}
+		titleID = domain.CatalogTitleID(release, domain.ParseRelease(release))
+	}
+	return s.repo.SetFavorite(ctx, householdProfile, titleID, favorite)
+}
+
+// projectedTitleID resolves one release's canonical title id from the
+// persisted catalog projection.
+func (s *Service) projectedTitleID(ctx context.Context, releaseID string) (string, error) {
+	ids, err := s.repo.CatalogTitleIDsForReleases(ctx, []string{releaseID})
+	if err != nil {
+		return "", err
+	}
+	return ids[releaseID], nil
 }
 
 // managedTitleIDs resolves the canonical title ID for every managed download
@@ -2417,12 +2476,12 @@ func (s *Service) HouseholdState(ctx context.Context) (domain.HouseholdState, er
 	catalogSources, _ := s.repo.ListCatalogSourcesByTitleIDs(ctx, titleIDs, s.eligibleTrackerIDs())
 	titleSources := map[string][]domain.CatalogSource{}
 	for _, source := range catalogSources {
-		titleSources[domain.CatalogTitleID(source.Release, source.Parsed)] = append(titleSources[domain.CatalogTitleID(source.Release, source.Parsed)], source)
+		titleSources[source.TitleID] = append(titleSources[source.TitleID], source)
 	}
 	for _, relID := range releaseIDs {
 		if tid := releaseTitle[relID]; tid != "" && len(titleSources[tid]) == 0 {
 			if rel, relErr := s.repo.GetRelease(ctx, relID); relErr == nil {
-				titleSources[tid] = append(titleSources[tid], domain.CatalogSource{Release: rel, Parsed: domain.ParseRelease(rel)})
+				titleSources[tid] = append(titleSources[tid], domain.CatalogSource{Release: rel, Parsed: domain.ParseRelease(rel), TitleID: tid})
 			}
 		}
 	}
@@ -2452,7 +2511,7 @@ func (s *Service) HouseholdState(ctx context.Context) (domain.HouseholdState, er
 				latestByTitle[titleID] = p
 			}
 		}
-		item, ok := s.householdItem(ctx, p, false, titleSources[releaseTitle[p.ReleaseID]])
+		item, ok := s.householdItem(ctx, p, false, titleSources[releaseTitle[p.ReleaseID]], releaseTitle[p.ReleaseID])
 		if !ok {
 			continue
 		}
@@ -2498,7 +2557,7 @@ func (s *Service) HouseholdState(ctx context.Context) (domain.HouseholdState, er
 		if !hasPlayback {
 			p = domain.PlaybackState{ProfileID: householdProfile, ReleaseID: sources[0].Release.ID, FileIndex: -1}
 		}
-		item, ok := s.householdItem(ctx, p, true, sources)
+		item, ok := s.householdItem(ctx, p, true, sources, f.TitleID)
 		if ok {
 			state.Favorites = append(state.Favorites, item)
 		}
@@ -2522,13 +2581,13 @@ func betterHouseholdDownload(candidate, current domain.Download) bool {
 	return candidate.UpdatedAt.After(current.UpdatedAt)
 }
 
-func (s *Service) householdItem(ctx context.Context, p domain.PlaybackState, favorite bool, sources []domain.CatalogSource) (domain.HouseholdItem, bool) {
+func (s *Service) householdItem(ctx context.Context, p domain.PlaybackState, favorite bool, sources []domain.CatalogSource, titleID string) (domain.HouseholdItem, bool) {
 	release, err := s.repo.GetRelease(ctx, p.ReleaseID)
 	if err != nil {
 		return domain.HouseholdItem{}, false
 	}
 	parsed := domain.ParseRelease(release)
-	item := domain.HouseholdItem{Release: release, PlaybackState: p, Favorite: favorite, TitleID: domain.CatalogTitleID(release, parsed), SeasonNumber: parsed.SeasonStart, EpisodeNumber: parsed.EpisodeStart}
+	item := domain.HouseholdItem{Release: release, PlaybackState: p, Favorite: favorite, TitleID: titleID, SeasonNumber: parsed.SeasonStart, EpisodeNumber: parsed.EpisodeStart}
 	if parsed.Kind == domain.MediaSeries && p.FilePath != "" {
 		base := domain.CatalogSource{Release: release, Parsed: parsed}
 		file := domain.TorrentFile{Index: p.FileIndex, Path: p.FilePath, Playable: true}
