@@ -1,16 +1,19 @@
-# The native torrent engine is the default; qBittorrent is an optional engine
+# The native torrent engine is the default acquisition engine; qBittorrent coexists by owner
 
 ---
-status: accepted
+status: revised — the one-active-engine rule was superseded by owner-based routing (2026-09-08); the native-default and range-elevation decisions stand
 ---
 
 The server embeds a BitTorrent engine (anacrolix/torrent v1.61.0, pinned, MPL-2.0,
 pure Go) implementing the same TorrentEngine port the qBittorrent adapter
-implements. Settings select one active engine per deployment (`downloadEngine`:
-`native` default, `qbittorrent` restores the sidecar stack); a download is
-forever tied to its creating engine through its Engine route (`native:<hash>` /
-`qb:<hash>`), and downloads belonging to the inactive engine surface as
-unavailable. The native engine writes pieces in place under
+implements. Both engines register under owner prefixes and every download routes
+to the engine that created it through its Engine route (`native:<hash>` /
+`qb:<hash>`); there is no fallback to another engine. Settings no longer pick one
+active engine: the saved `downloadEngine` (`native` default, `qbittorrent`) selects
+the acquisition engine applied at startup, responses carry `engineRunning` (the
+acquisition engine this process started with) alongside the saved value so
+running-vs-saved drift is visible, and a download whose owning engine failed to
+construct surfaces as unavailable. The native engine writes pieces in place under
 `<DownloadRoot>/<infohash>/`, seeds until eviction, keeps its session (metainfo,
 file selection, piece-completion bolt db) under `data/torrent-session`, and
 elevates exactly the byte window a seek or probe needs (`PrepareRange`), which
@@ -31,8 +34,10 @@ the pinned version because reader readahead zeroes while not reading.
 
 ## Considered options
 
-- **Both engines live simultaneously** — rejected: retention and allocation
-  accounting across two engines buys nothing for a single household.
+- **Both engines live simultaneously** — rejected at acceptance time; reversed by
+  owner-based routing (2026-09-08): each download routes to its creating engine,
+  so retention and allocation accounting run per-owner and coexistence costs
+  nothing per household. New acquisitions still default to the native engine.
 - **rain (cenkalti)** — rejected: no file selection.
 - **cgo libtorrent bindings** — rejected: stale, and cgo breaks the
   six-platform matrix (windows/linux/darwin x amd64/arm64).
@@ -46,7 +51,9 @@ the pinned version because reader readahead zeroes while not reading.
   is the stability boundary.
 - Per-tracker seeder counts are unavailable from anacrolix v1.61.0's public
   API; native-mode downloads report tracker stats as zero.
-- Retention skips foreign-engine routes: the active engine cannot delete another engine's data; the operator re-switches engines to evict (documented consequence of one-active-engine).
+- Originally retention skipped foreign-engine routes because only one engine was
+  active; owner-based routing removed that: eviction resolves each route's owning
+  engine and removes through it.
 - Native error surfacing in v1.61.0 is limited to disk-write failures
   (`SetOnWriteChunkError` → canonical error state); tracker and peer failures
   surface only as stalled progress (the WaitRange timeout at playback) — the

@@ -8,7 +8,7 @@
 | FFmpeg and ffprobe (optional) | macOS: `brew install ffmpeg` · Debian/Ubuntu/Raspberry Pi OS: `sudo apt install ffmpeg` · Fedora: `sudo dnf install ffmpeg` · Windows: `winget install Gyan.FFmpeg` or [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) | Embedded subtitle probing/extraction and browser audio fallback. Detected automatically on PATH at first start. |
 | TMDB API key (optional) | [themoviedb.org → Settings → API](https://www.themoviedb.org/settings/api) (free account) | Artwork and metadata. |
 | SubDL API key (optional) | [subdl.com API panel](https://subdl.com/panel/api) (free account) | Extra subtitles. |
-| qBittorrent (optional) | [qbittorrent.org](https://www.qbittorrent.org) | Only if you switch the download engine from the built-in one to qBittorrent in Settings. |
+| qBittorrent (optional) | [qbittorrent.org](https://www.qbittorrent.org) | Only if you switch the acquisition engine from the built-in one to qBittorrent in Settings. |
 
 The server listens on `8097` (web) and `42069` (torrent peers). Both are configurable in Settings.
 
@@ -188,7 +188,7 @@ The command cross-compiles the headless server, stages binary and service files,
 
 ## qBittorrent engine (optional)
 
-The built-in engine is the default and needs nothing external. To use qBittorrent instead: install it from [qbittorrent.org](https://www.qbittorrent.org), enable its Web UI with authentication (Tools → Options → Web UI), then switch **Download engine** in Settings → Storage and fill in the URL and credentials.
+The built-in engine is the default and needs nothing external. To acquire new downloads with qBittorrent: install it from [qbittorrent.org](https://www.qbittorrent.org), enable its Web UI with authentication (Tools → Options → Web UI), then switch **Download engine** in Settings → Storage and fill in the URL and credentials. The change applies when the server restarts; downloads created by the other engine keep playing and remain manageable on their own engine.
 
 ## Configuration and troubleshooting
 

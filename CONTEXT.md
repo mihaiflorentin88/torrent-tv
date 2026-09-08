@@ -49,7 +49,7 @@ A configured tracker with `enabled=false`. Disabling a tracker excludes it from 
 A persistent pointer to where a torrent lives in the download engine, stable across restarts.
 
 **Download engine**:
-The torrent client the server drives for Managed downloads: the embedded native engine or an external qBittorrent. One engine is active per deployment; a download belongs to the engine that created it, through its Engine route.
+The torrent client the server drives for Managed downloads: the embedded native engine or an external qBittorrent. Both engines coexist; a download belongs to the engine that created it, through its Engine route, and every operation resolves that owner. The saved `downloadEngine` setting picks the acquisition engine for new downloads and applies at startup; `engineRunning` reports what the running process actually started with.
 _Avoid_: torrent client (unqualified), backend
 
 **Prepare**:

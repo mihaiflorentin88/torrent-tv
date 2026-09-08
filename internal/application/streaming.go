@@ -90,8 +90,9 @@ func (strategy progressiveTorrentStrategy) waitReadablePath(ctx context.Context,
 		if openErr == nil {
 			return path, nil
 		}
-		// Completion can move the content between chunks. Refresh qBittorrent's
-		// content path before retrying instead of holding onto a stale temp path.
+		// Completion can move the content between chunks. Refresh the owning
+		// engine's content path before retrying instead of holding onto a
+		// stale temp path.
 		if refreshed, statusErr := engine.Status(ctx, hash); statusErr == nil {
 			if candidate, pathErr := safeQBContentPath(strategy.service.settings.Get().DownloadRoot, refreshed, d.FilePath); pathErr == nil {
 				path = candidate

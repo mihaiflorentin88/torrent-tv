@@ -22,7 +22,7 @@ Trackers can be enabled or disabled independently in settings. Disabling a track
 
 Title-expansion jobs download each unseen season-pack `.torrent`, parse bounded bencoded metainfo without adding it to qBittorrent, validate paths, and store the playable file manifest in SQLite. Detail navigation only reads those cached manifests. Episode parsing creates virtual sources carrying `fileIndex`, path, and file size so preparation selects the requested episode rather than the whole pack.
 
-Preparing a whole season enables every playable episode file in the chosen pack, retains one qBittorrent torrent, and persists one managed `downloads` row per episode. Reconciliation derives each row's byte count and progress from that selected qBittorrent file instead of the torrent-wide total. The clients can therefore list and play individual episodes while pause, resume, and deletion deliberately apply to all sibling rows sharing the engine hash.
+Preparing a whole season enables every playable episode file in the chosen pack, retains one engine torrent, and persists one managed `downloads` row per episode. Reconciliation derives each row's byte count and progress from that selected file instead of the torrent-wide total. The clients can therefore list and play individual episodes while pause, resume, and deletion deliberately apply to all sibling rows sharing the engine hash.
 
 ## Runtime configuration
 
@@ -36,13 +36,13 @@ Listener, database-path, maximum-concurrent-job, and title-refresh-timeout chang
 
 Adding a source creates a durable `downloads` row containing a stable source ID, release ID, `tracker_id`, `tracker_name`, engine route (`native:<info-hash>` or `qb:<info-hash>`), selected file index/path, global file offset, absolute contained path, size, piece size, state, progress, lease, errors, and timestamps.
 
-The UI lists and manages these rows rather than enumerating all engine content. This prevents the application from adopting or deleting unrelated torrents. On restart, status is reconciled from the engine using the persisted engine route. One download engine is active per deployment; engine changes require restart.
+The UI lists and manages these rows rather than enumerating all engine content. This prevents the application from adopting or deleting unrelated torrents. On restart, status is reconciled from the engine that owns the persisted route. Both engines coexist: the saved `downloadEngine` selects the acquisition engine for new downloads and applies at startup, while `engineRunning` reports the acquisition engine this process started with; existing downloads stay on their owning engine across switches.
 
 Metadata acquisition handles both `.torrent` files and magnet URIs. The embedded native engine resolves magnets using tracker-based peer discovery without DHT. The external qBittorrent adapter supports magnet resolution (`ResolveMagnet`) only when the daemon is version 4.5.0 or newer; older versions reject new magnets with `ErrMagnetUnsupported` (409 Conflict) and instruct the user to upgrade qBittorrent or switch to the native engine.
 
 Retention, eviction, and engine routing remain unchanged and provider-neutral: eviction policies operate on managed download storage age and lease state, regardless of which tracker provided the release.
 
-Preparation first resolves an existing managed row by release and explicit file index. It can also materialize a requested sibling episode directly from the file list of an already-managed qBittorrent torrent. Legacy requests without an index prefer a completed row, then the newest row for that release. Only a true managed-torrent cache miss downloads torrent metadata from FileList, so rate limiting cannot block playback of an already-downloaded source or the next episode in an active pack. Reused incomplete rows are resumed and have their streaming/file priorities reasserted. Canonical favorites likewise prefer an exact managed source when their previous playback source is unavailable.
+Preparation first resolves an existing managed row by release and explicit file index. It can also materialize a requested sibling episode directly from the file list of an already-managed torrent. Legacy requests without an index prefer a completed row, then the newest row for that release. Only a true managed-torrent cache miss downloads torrent metadata from FileList, so rate limiting cannot block playback of an already-downloaded source or the next episode in an active pack. Reused incomplete rows are resumed and have their streaming/file priorities reasserted. Canonical favorites likewise prefer an exact managed source when their previous playback source is unavailable.
 
 ## Progressive playback
 
