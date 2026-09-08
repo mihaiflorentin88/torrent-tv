@@ -258,16 +258,39 @@ func startDhtSeeder(t *testing.T, mi metainfo.MetaInfo, root string, node *contr
 		t.Fatal("seeder client never started a DHT server")
 	}
 	tcpAddr := cl.ListenAddrs()[0].(*net.TCPAddr)
-	ann, err := srv.Announce(mi.HashInfoBytes(), tcpAddr.Port, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ann.Close()
-	go func() {
-		for range ann.Peers() {
+	ih := mi.HashInfoBytes()
+	announceDeadline := time.Now().Add(30 * time.Second)
+	for node.announceCount(ih) == 0 {
+		if time.Now().After(announceDeadline) {
+			queries, _ := node.snapshot()
+			t.Fatalf("controlled node never recorded announce_peer for %s; recorded queries: %+v", ih.HexString(), queries)
 		}
-	}()
-	node.waitForAnnounce(t, mi.HashInfoBytes(), 15*time.Second)
+		// The announce traversal is async and, under load, its announce_peer
+		// step can be dropped or fail to reach the controlled node before the
+		// traversal finishes. Drain each announce to completion (its Peers
+		// channel closes when traversal and peer announcing are done), then
+		// re-issue until the node actually records the announce_peer.
+		ann, err := srv.Announce(ih, tcpAddr.Port, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan struct{})
+		go func() {
+			for range ann.Peers() {
+			}
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			ann.Close()
+			<-done
+		}
+		ann.Close()
+		if node.announceCount(ih) == 0 {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 }
 
 // --- raw-TCP BitTorrent peer harness --------------------------------------
