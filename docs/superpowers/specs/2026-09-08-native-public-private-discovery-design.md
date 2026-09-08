@@ -1,7 +1,7 @@
 # Native public and private torrent discovery
 
 Date: 2026-09-08
-Status: All three design sections approved in chat; written specification awaiting user review.
+Status: Written specification approved by the user on 2026-09-08; implementation planning authorized.
 
 ## Goal and scope
 
@@ -128,7 +128,7 @@ Use a known-live legally distributable torrent to exercise real public discovery
 
 After local checks pass, build for the Pi, retain its previous binary, install the local fix build, and restart `torrent-tv`. Preserve the settings, session, media, and household database. Roll back the binary if startup or existing-download access regresses; do not roll back by deleting household state.
 
-Inspect the existing downloads at `http://192.168.50.2:8097/library/downloads`. Do not delete, re-create, or switch ownership of the stalled downloads. Record metadata availability, peers, received bytes, and progressive serving separately. Check existing private and qBittorrent-owned media remain accessible.
+Inspect the existing downloads at `/library/downloads` on the user-authorized Pi base URL. Keep connection details in session environment variables, not committed files. Do not delete, re-create, or switch ownership of the stalled downloads. Record metadata availability, peers, received bytes, and progressive serving separately. Check existing private and qBittorrent-owned media remain accessible.
 
 A successful DHT handshake alone is not acceptance. If the specific stalled swarms still yield no usable peers, continue investigating that path and report the limitation rather than declare the user's failure resolved. Distinguish a proven engine capability from an unproven live-swarm diagnosis.
 
@@ -140,4 +140,4 @@ Update the existing Native engine documentation and relevant configuration/chang
 
 ## Review gate
 
-The user has approved architecture/privacy, lifecycle/failure handling, and verification/rollout sections in chat. This written specification still requires user review. Implementation planning begins only after that review, using the writing-plans workflow. No implementation is authorized by merely writing this file.
+The user approved all three design sections and then reviewed and approved this written specification. Proceed with the writing-plans workflow and its execution choice. The deployment authorization remains limited to the local Pi rollout described above.
