@@ -139,6 +139,9 @@ func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, discov
 	return exportMetainfo(t, ih)
 }
 
+// rejectPrivateMetainfo guards only the transient-resolve path; it must never
+// be applied to the preexisting-torrent export path where managed torrents
+// (even private ones) are exported as-is.
 func rejectPrivateMetainfo(t *torrent.Torrent) error {
 	mi := t.Metainfo()
 	info, err := mi.UnmarshalInfo()

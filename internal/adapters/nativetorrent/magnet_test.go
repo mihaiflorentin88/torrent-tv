@@ -200,6 +200,8 @@ func TestResolveMagnetCancellationLeavesNoTorrent(t *testing.T) {
 
 func TestResolveMagnetPreservesExistingSessionTorrent(t *testing.T) {
 	root := seedContent(t)
+	// The private fixture (info.Private = true) is intentional: preexisting
+	// managed torrents must be preserved and exported regardless of classification.
 	mi, raw := buildTestMetainfo(t, root)
 	ih := mi.HashInfoBytes()
 	c := newTestClient(t)
