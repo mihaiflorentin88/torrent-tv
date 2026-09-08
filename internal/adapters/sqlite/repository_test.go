@@ -400,3 +400,45 @@ func TestTorrentManifestMetainfoCapAndPersistence(t *testing.T) {
 		t.Fatal("expected error for metainfo >= 16 MiB, got nil")
 	}
 }
+
+func TestSaveJobAdoptsRetargetedRowByID(t *testing.T) {
+	r, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	original := domain.Job{ID: "metadata:old", Kind: "metadata", State: "queued", Label: "Fetch metadata", DedupeKey: "metadata:old", UpdatedAt: now}
+	if err = r.SaveJob(ctx, original); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.AppendJobLog(ctx, domain.JobLog{JobID: original.ID, Level: "info", Message: "history marker", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	// moveExtinctGroupDependents: id preserved, dedupe key retargeted to the
+	// surviving canonical identity.
+	if _, err = r.db.ExecContext(ctx, `UPDATE jobs SET dedupe_key='metadata:new' WHERE id='metadata:old'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Identity "metadata:old" resurrects under its original dedupe key: the
+	// husk row must be adopted in place, keeping its job_logs history.
+	resurrected := domain.Job{ID: "metadata:old", Kind: "metadata", State: "queued", Label: "Fetch metadata", DedupeKey: "metadata:old", UpdatedAt: now.Add(time.Minute)}
+	if err = r.SaveJob(ctx, resurrected); err != nil {
+		t.Fatal(err)
+	}
+	adopted, err := r.GetJob(ctx, "metadata:old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted.DedupeKey != "metadata:old" || adopted.State != "queued" {
+		t.Fatalf("resurrected identity must adopt the husk row: %#v", adopted)
+	}
+	logs, err := r.ListJobLogs(ctx, "metadata:old", 0, 10)
+	if err != nil || len(logs.Items) != 1 || logs.Items[0].Message != "history marker" {
+		t.Fatalf("job_logs history must survive adoption: %#v %v", logs, err)
+	}
+}

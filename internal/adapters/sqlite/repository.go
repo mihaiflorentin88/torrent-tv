@@ -825,6 +825,8 @@ func (r *Repository) SaveJob(ctx context.Context, job domain.Job) error {
 	}
 	_, err := r.db.ExecContext(ctx, `INSERT INTO jobs(id,tracker_id,kind,state,payload,dedupe_key,attempt,progress,error,retryable,next_attempt_at,created_at,updated_at)
 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET tracker_id=excluded.tracker_id,state=excluded.state,payload=excluded.payload,attempt=excluded.attempt,
+progress=excluded.progress,error=excluded.error,retryable=excluded.retryable,next_attempt_at=excluded.next_attempt_at,updated_at=excluded.updated_at
+ON CONFLICT(id) DO UPDATE SET tracker_id=excluded.tracker_id,dedupe_key=excluded.dedupe_key,state=excluded.state,payload=excluded.payload,attempt=excluded.attempt,
 progress=excluded.progress,error=excluded.error,retryable=excluded.retryable,next_attempt_at=excluded.next_attempt_at,updated_at=excluded.updated_at`, job.ID, job.TrackerID, job.Kind, job.State, job.Label, job.DedupeKey,
 		job.Attempt, job.Progress, job.Error, job.Retryable, next, job.CreatedAt.Unix(), job.UpdatedAt.Unix())
 	return err

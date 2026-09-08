@@ -20,7 +20,7 @@ Hourly latest sync and weekly/manual rebuild only upsert: old observations are n
 
 Trackers can be enabled or disabled independently in settings. Disabling a tracker excludes its releases from discovery searches, title expansion, and new preparation. However, existing managed downloads and their playback remain fully preserved and playable even across server restarts without contacting any upstream tracker (downloads-kept guarantee).
 
-Title-expansion jobs download each unseen season-pack `.torrent`, parse bounded bencoded metainfo without adding it to qBittorrent, validate paths, and store the playable file manifest in SQLite. Detail navigation only reads those cached manifests. Episode parsing creates virtual sources carrying `fileIndex`, path, and file size so preparation selects the requested episode rather than the whole pack.
+Title-expansion jobs download each unseen season-pack `.torrent`, parse bounded bencoded metainfo without adding it to the engine, validate paths, and store the playable file manifest in SQLite. Detail navigation only reads those cached manifests. Episode parsing creates virtual sources carrying `fileIndex`, path, and file size so preparation selects the requested episode rather than the whole pack.
 
 Preparing a whole season enables every playable episode file in the chosen pack, retains one engine torrent, and persists one managed `downloads` row per episode. Reconciliation derives each row's byte count and progress from that selected file instead of the torrent-wide total. The clients can therefore list and play individual episodes while pause, resume, and deletion deliberately apply to all sibling rows sharing the engine hash.
 
@@ -46,7 +46,7 @@ Preparation first resolves an existing managed row by release and explicit file 
 
 ## Progressive playback
 
-Playback selects one of two server-side strategies and does not wait for torrent completion. Completed media is read from its persisted final path without qBittorrent or FileList; incomplete media is resumed when paused and read from qBittorrent's effective temporary path until completion moves it to the final content path.
+Playback selects one of two server-side strategies and does not wait for torrent completion. Completed media is read from its persisted final path without the engine or FileList; incomplete media is resumed when paused and read from the owning engine's effective temporary path until completion moves it to the final content path.
 
 1. Download the `.torrent` metadata and calculate its canonical SHA-1 info hash.
 2. Add it to qB with sequential download and first/last-piece priority enabled.

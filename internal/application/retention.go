@@ -202,8 +202,9 @@ func (s *Service) retentionSurvey(ctx context.Context) (retentionPlan, error) {
 		engine, hash, _ := s.owner(engineID)
 		status, statusErr := engine.Status(ctx, hash)
 		if statusErr != nil {
-			if !slices.Contains(plan.uncertainOwners, engineID) {
-				plan.uncertainOwners = append(plan.uncertainOwners, engineID)
+			prefix := routePrefix(engineID)
+			if !slices.Contains(plan.uncertainOwners, prefix) {
+				plan.uncertainOwners = append(plan.uncertainOwners, prefix)
 			}
 			continue
 		}
