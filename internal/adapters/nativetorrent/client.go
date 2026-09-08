@@ -43,9 +43,11 @@ type Config struct {
 }
 
 type Client struct {
-	cl      *torrent.Client
-	dataDir string
-	cfg     Config
+	privateClient *torrent.Client
+	publicClient  *torrent.Client
+	owners        map[metainfo.Hash]*torrent.Client
+	dataDir       string
+	cfg           Config
 	// stop closes to end the speed sampler's loop.
 	stop chan struct{}
 
@@ -93,21 +95,12 @@ func (c *Client) armWriteChunkErrorLocked(hash string, t *torrent.Torrent) {
 	t.SetOnWriteChunkError(hook)
 }
 
-// New constructs the engine and reloads every persisted torrent from the
-// session store.
-func New(cfg Config) (*Client, error) {
-	if cfg.DataDir == "" || cfg.SessionDir == "" {
-		return nil, errors.New("native engine requires dataDir and sessionDir")
-	}
-	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
-		return nil, fmt.Errorf("native engine data dir: %w", err)
-	}
-	if err := os.MkdirAll(cfg.SessionDir, 0o755); err != nil {
-		return nil, fmt.Errorf("native engine session dir: %w", err)
-	}
-	pc, err := storage.NewBoltPieceCompletion(cfg.SessionDir)
-	if err != nil {
-		return nil, fmt.Errorf("native engine piece completion db: %w", err)
+// newClientConfig builds a fresh torrent client configuration for either the
+// private or public client.
+func newClientConfig(cfg Config, public bool, capture *announceCapture, pcs ...storage.PieceCompletion) *torrent.ClientConfig {
+	var pc storage.PieceCompletion
+	if len(pcs) > 0 {
+		pc = pcs[0]
 	}
 	impl := storage.NewFileOpts(storage.NewFileClientOpts{
 		ClientBaseDir: cfg.DataDir,
@@ -125,22 +118,65 @@ func New(cfg Config) (*Client, error) {
 	tcfg := torrent.NewDefaultClientConfig()
 	tcfg.DataDir = cfg.DataDir
 	tcfg.DefaultStorage = impl
-	tcfg.NoDHT = true                   // FileList is a private tracker; torrents are private-flagged
 	tcfg.NoDefaultPortForwarding = true // household appliance; never poke the router
 	tcfg.Seed = true                    // seed until eviction
-	tcfg.ListenPort = cfg.PeerPort
 	// Private trackers allowlist client identities; presenting the household's
 	// established qBittorrent identity keeps announces acceptable.
 	tcfg.PeerID, tcfg.HTTPUserAgent = newTrackerIdentity()
+	if capture != nil {
+		tcfg.Slogger = slog.New(capture.Handler())
+	}
+	if public {
+		tcfg.ListenPort = cfg.PublicPeerPort
+	} else {
+		tcfg.NoDHT = true
+		tcfg.DisablePEX = true
+		tcfg.ListenPort = cfg.PeerPort
+	}
+	return tcfg
+}
+
+// New constructs the engine and reloads every persisted torrent from the
+// session store.
+func New(cfg Config) (*Client, error) {
+	return newWithTorrentClient(cfg, torrent.NewClient)
+}
+
+func newWithTorrentClient(cfg Config, factory func(*torrent.ClientConfig) (*torrent.Client, error)) (*Client, error) {
+	if cfg.DataDir == "" || cfg.SessionDir == "" {
+		return nil, errors.New("native engine requires dataDir and sessionDir")
+	}
+	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+		return nil, fmt.Errorf("native engine data dir: %w", err)
+	}
+	if err := os.MkdirAll(cfg.SessionDir, 0o755); err != nil {
+		return nil, fmt.Errorf("native engine session dir: %w", err)
+	}
+	pc, err := storage.NewBoltPieceCompletion(cfg.SessionDir)
+	if err != nil {
+		return nil, fmt.Errorf("native engine piece completion db: %w", err)
+	}
 	capture := newAnnounceCapture()
-	tcfg.Slogger = slog.New(capture.Handler())
-	cl, err := torrent.NewClient(tcfg)
+
+	privCfg := newClientConfig(cfg, false, capture, pc)
+	privClient, err := factory(privCfg)
 	if err != nil {
 		_ = pc.Close()
-		return nil, fmt.Errorf("native torrent client: %w", err)
+		return nil, fmt.Errorf("native private torrent client: %w", err)
 	}
+
+	pubCfg := newClientConfig(cfg, true, capture, pc)
+	pubClient, err := factory(pubCfg)
+	if err != nil {
+		_ = privClient.Close()
+		_ = pc.Close()
+		return nil, fmt.Errorf("native public torrent client: %w", err)
+	}
+
 	c := &Client{
-		cl:            cl,
+		privateClient: privClient,
+		publicClient:  pubClient,
+		owners:        make(map[metainfo.Hash]*torrent.Client),
 		dataDir:       cfg.DataDir,
 		announce:      capture,
 		cfg:           cfg,
@@ -156,7 +192,8 @@ func New(cfg Config) (*Client, error) {
 		hashGates:     make(map[metainfo.Hash]*hashGate),
 	}
 	if err := c.loadSession(); err != nil {
-		_ = cl.Close()
+		_ = privClient.Close()
+		_ = pubClient.Close()
 		_ = pc.Close()
 		return nil, fmt.Errorf("native engine session reload: %w", err)
 	}
@@ -166,7 +203,13 @@ func New(cfg Config) (*Client, error) {
 
 func (c *Client) Close() error {
 	c.stopSpeedLoop()
-	errs := c.cl.Close()
+	var errs []error
+	if c.privateClient != nil {
+		errs = append(errs, c.privateClient.Close()...)
+	}
+	if c.publicClient != nil {
+		errs = append(errs, c.publicClient.Close()...)
+	}
 	if c.session.pc != nil {
 		if err := c.session.pc.Close(); err != nil {
 			errs = append(errs, err)
@@ -187,19 +230,29 @@ func (c *Client) loadSession() error {
 		if err != nil {
 			return err
 		}
-		if c.torrent(hash) != nil {
-			continue
-		}
-		t, err := c.cl.AddTorrent(mi)
+		info, err := mi.UnmarshalInfo()
 		if err != nil {
 			return err
 		}
+		if c.torrent(hash) != nil {
+			continue
+		}
+		targetClient := c.publicClient
+		if info.Private != nil && *info.Private {
+			targetClient = c.privateClient
+		}
+		t, err := targetClient.AddTorrent(mi)
+		if err != nil {
+			return err
+		}
+		ih := mi.HashInfoBytes()
+		c.mu.Lock()
+		c.owners[ih] = targetClient
+		c.armWriteChunkErrorLocked(hash, t)
+		c.mu.Unlock()
 		if err := waitInfo(context.Background(), t); err != nil {
 			return err
 		}
-		c.mu.Lock()
-		c.armWriteChunkErrorLocked(hash, t)
-		c.mu.Unlock()
 		if len(entry.MediaIndices) > 0 {
 			if err := c.PrepareFiles(context.Background(), hash, entry.MediaIndices, entry.SubtitleIndices); err != nil {
 				return err
@@ -216,15 +269,37 @@ func (c *Client) loadSession() error {
 
 // torrent returns the live torrent for an infohash hex string, or nil.
 func (c *Client) torrent(hash string) *torrent.Torrent {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.torrentLocked(hash)
+}
+
+func (c *Client) torrentLocked(hash string) *torrent.Torrent {
 	var ih metainfo.Hash
 	// metainfo.NewHashFromHex panics on malformed hex in v1.61.0; the method
 	// form returns an error instead.
 	if err := ih.FromHexString(hash); err != nil {
 		return nil
 	}
-	for _, t := range c.cl.Torrents() {
-		if t.InfoHash() == ih {
+	if client, ok := c.owners[ih]; ok && client != nil {
+		if t, ok := client.Torrent(ih); ok {
 			return t
+		}
+		delete(c.owners, ih)
+	}
+	for _, cl := range []*torrent.Client{c.privateClient, c.publicClient} {
+		if cl == nil {
+			continue
+		}
+		if t, ok := cl.Torrent(ih); ok {
+			c.owners[ih] = cl
+			return t
+		}
+		for _, t := range cl.Torrents() {
+			if t.InfoHash() == ih {
+				c.owners[ih] = cl
+				return t
+			}
 		}
 	}
 	return nil
@@ -242,13 +317,17 @@ func (c *Client) Add(ctx context.Context, r io.Reader, _ string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("torrent metainfo: %w", err)
 	}
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		return "", fmt.Errorf("decode torrent metainfo info: %w", err)
+	}
 	ih := mi.HashInfoBytes()
 	hash := ih.HexString()
 	gate := c.acquireHashGate(ih)
 	defer c.releaseHashGate(ih, gate)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if t := c.torrent(hash); t != nil {
+	if t := c.torrentLocked(hash); t != nil {
 		return hash, nil
 	}
 	// The library's initial piece check must run: pieces with unknown
@@ -261,10 +340,15 @@ func (c *Client) Add(ctx context.Context, r io.Reader, _ string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("torrent spec: %w", err)
 	}
-	t, _, err := c.cl.AddTorrentSpec(spec)
+	targetClient := c.publicClient
+	if info.Private != nil && *info.Private {
+		targetClient = c.privateClient
+	}
+	t, _, err := targetClient.AddTorrentSpec(spec)
 	if err != nil {
 		return "", fmt.Errorf("add torrent: %w", err)
 	}
+	c.owners[ih] = targetClient
 	// FileList metainfo carries the info dictionary, so metadata is
 	// effectively immediate; wait briefly rather than assume.
 	if err := waitInfo(ctx, t); err != nil {
@@ -321,16 +405,41 @@ func (c *Client) Files(_ context.Context, hash string) ([]domain.TorrentFile, er
 	return out, nil
 }
 
-// Test reports a diagnostic for the settings test endpoint.
-func (c *Client) Test(_ context.Context) (string, error) {
-	n := len(c.cl.Torrents())
-	if addrs := c.cl.ListenAddrs(); len(addrs) > 0 {
-		if tcp, ok := addrs[0].(*net.TCPAddr); ok {
-			// The HTTP layer prefixes the settings-configured engine name.
-			return fmt.Sprintf("%d torrents, peer port %d", n, tcp.Port), nil
+func listenPort(cl *torrent.Client) int {
+	if cl == nil {
+		return 0
+	}
+	for _, addr := range cl.ListenAddrs() {
+		if tcp, ok := addr.(*net.TCPAddr); ok {
+			return tcp.Port
 		}
 	}
-	return fmt.Sprintf("%d torrents", n), nil
+	return 0
+}
+
+// Test reports a diagnostic for the settings test endpoint.
+func (c *Client) Test(_ context.Context) (string, error) {
+	privCount := 0
+	if c.privateClient != nil {
+		privCount = len(c.privateClient.Torrents())
+	}
+	pubCount := 0
+	if c.publicClient != nil {
+		pubCount = len(c.publicClient.Torrents())
+	}
+	privPort := listenPort(c.privateClient)
+	pubPort := listenPort(c.publicClient)
+
+	if privPort > 0 && pubPort > 0 {
+		if pubCount > 0 {
+			return fmt.Sprintf("%d torrents (%d public), peer port %d, public port %d", privCount, pubCount, privPort, pubPort), nil
+		}
+		return fmt.Sprintf("%d torrents, peer port %d, public port %d", privCount, privPort, pubPort), nil
+	}
+	if privPort > 0 {
+		return fmt.Sprintf("%d torrents, peer port %d", privCount, privPort), nil
+	}
+	return fmt.Sprintf("%d torrents", privCount), nil
 }
 
 // playable is shared-by-copy with the qBittorrent adapter's media-extension
@@ -622,6 +731,10 @@ func (c *Client) Remove(_ context.Context, hash string, deleteFiles bool) error 
 	delete(c.paused, hash)
 	delete(c.speeds, hash)
 	delete(c.uploadSpeeds, hash)
+	var ih metainfo.Hash
+	if err := ih.FromHexString(hash); err == nil {
+		delete(c.owners, ih)
+	}
 	c.mu.Unlock()
 	// Bookkeeping and data cleanup both run to completion even when the other
 	// fails; the first error wins, joined when both fail.

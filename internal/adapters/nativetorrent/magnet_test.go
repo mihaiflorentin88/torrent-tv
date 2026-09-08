@@ -265,8 +265,8 @@ func TestResolveMagnetPreservesExistingSessionTorrent(t *testing.T) {
 		wantEntry.Paused != gotEntry.Paused {
 		t.Errorf("session entry changed: want %+v, got %+v", wantEntry, gotEntry)
 	}
-	if n := len(c.cl.Torrents()); n != 1 {
-		t.Errorf("torrent count = %d, want 1", n)
+	if n := len(c.privateClient.Torrents()); n != 1 {
+		t.Errorf("torrent count in private client = %d, want 1", n)
 	}
 }
 

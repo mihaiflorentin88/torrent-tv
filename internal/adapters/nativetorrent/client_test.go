@@ -2,6 +2,7 @@ package nativetorrent
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -24,6 +25,27 @@ func buildTestMetainfo(t *testing.T, root string) (mi metainfo.MetaInfo, raw []b
 	var info metainfo.Info
 	private := true
 	info.Private = &private
+	if err := info.BuildFromFilePath(root); err != nil {
+		t.Fatal(err)
+	}
+	b, err := bencode.Marshal(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mi = metainfo.MetaInfo{InfoBytes: b}
+	raw, err = bencode.Marshal(mi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mi, raw
+}
+
+// buildPublicTestMetainfo is identical to buildTestMetainfo but leaves the
+// private bit unset, producing the metainfo a public-tracker download and
+// authorized public magnet discovery would deliver.
+func buildPublicTestMetainfo(t *testing.T, root string) (mi metainfo.MetaInfo, raw []byte) {
+	t.Helper()
+	var info metainfo.Info
 	if err := info.BuildFromFilePath(root); err != nil {
 		t.Fatal(err)
 	}
@@ -129,8 +151,8 @@ func TestAddIsIdempotent(t *testing.T) {
 	if h1 != h2 {
 		t.Fatalf("duplicate add returned %q then %q", h1, h2)
 	}
-	if got := len(c.cl.Torrents()); got != 1 {
-		t.Fatalf("expected 1 torrent in client, got %d", got)
+	if got := len(c.privateClient.Torrents()); got != 1 {
+		t.Fatalf("expected 1 torrent in private client, got %d", got)
 	}
 }
 
@@ -398,5 +420,40 @@ func TestWriteChunkErrorSurfacesAndClears(t *testing.T) {
 	c.mu.Unlock()
 	if errs != 0 || hooks != 0 {
 		t.Fatalf("Remove must clear error bookkeeping: %d errors, %d hooks", errs, hooks)
+	}
+}
+
+func TestPrivateTorrentRoutedToPrivateClient(t *testing.T) {
+	root := seedContent(t)
+	_, raw := buildTestMetainfo(t, root) // private=true fixture
+	c := newTestClient(t)
+	hash, err := c.Add(context.Background(), bytes.NewReader(raw), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(c.publicClient.Torrents()); n != 0 {
+		t.Fatalf("public client holds %d torrents, want 0", n)
+	}
+	if n := len(c.privateClient.Torrents()); n != 1 {
+		t.Fatalf("private client holds %d torrents, want 1", n)
+	}
+	// Public-flag metainfo (absent private bit) routes public:
+	_, publicRaw := buildPublicTestMetainfo(t, root)
+	phash, err := c.Add(context.Background(), bytes.NewReader(publicRaw), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if phash == hash {
+		t.Fatal("fixture collision")
+	}
+	if n := len(c.publicClient.Torrents()); n != 1 {
+		t.Fatalf("public client holds %d torrents after public add, want 1", n)
+	}
+	// Full facade surface still resolves both:
+	if _, err := c.Files(context.Background(), hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Files(context.Background(), phash); err != nil {
+		t.Fatal(err)
 	}
 }

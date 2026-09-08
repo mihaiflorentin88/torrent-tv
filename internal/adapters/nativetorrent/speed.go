@@ -2,6 +2,8 @@ package nativetorrent
 
 import (
 	"time"
+
+	"github.com/anacrolix/torrent"
 )
 
 // speedMeter keeps an exponential moving average of per-second download
@@ -31,7 +33,14 @@ func (c *Client) speedLoop() {
 			return
 		case <-ticker.C:
 			c.mu.Lock()
-			for _, t := range c.cl.Torrents() {
+			var torrents []*torrent.Torrent
+			if c.privateClient != nil {
+				torrents = append(torrents, c.privateClient.Torrents()...)
+			}
+			if c.publicClient != nil {
+				torrents = append(torrents, c.publicClient.Torrents()...)
+			}
+			for _, t := range torrents {
 				hash := t.InfoHash().HexString()
 				m := c.speeds[hash]
 				if m == nil {

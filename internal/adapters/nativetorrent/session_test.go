@@ -40,7 +40,7 @@ func TestSessionRoundTripReloadsTorrents(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c2.Close()
-	if got := len(c2.cl.Torrents()); got != 1 {
+	if got := len(c2.privateClient.Torrents()); got != 1 {
 		t.Fatalf("reloaded engine must hold 1 torrent, got %d", got)
 	}
 	media, subs, paused, ok := c2.session.lookup(hash)

@@ -80,9 +80,7 @@ func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, _ doma
 	gate := c.acquireHashGate(ih)
 	defer c.releaseHashGate(ih, gate)
 
-	c.mu.Lock()
 	t := c.torrent(ih.HexString())
-	c.mu.Unlock()
 	if t != nil {
 		// Existing torrent: export without changing trackers, selection,
 		// pause state, or persistence. Never drop.
@@ -97,7 +95,10 @@ func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, _ doma
 	}
 
 	c.mu.Lock()
-	t, new, err := c.cl.AddTorrentSpec(spec)
+	t, new, err := c.publicClient.AddTorrentSpec(spec)
+	if err == nil {
+		c.owners[ih] = c.publicClient
+	}
 	c.mu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("add torrent spec: %w", err)
@@ -115,7 +116,12 @@ func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, _ doma
 
 	// Ownership confirmed: drop only the owned transient torrent before
 	// returning, while the per-hash gate is still held.
-	defer t.Drop()
+	defer func() {
+		c.mu.Lock()
+		delete(c.owners, ih)
+		c.mu.Unlock()
+		t.Drop()
+	}()
 	select {
 	case <-t.GotInfo():
 	case <-ctx.Done():
