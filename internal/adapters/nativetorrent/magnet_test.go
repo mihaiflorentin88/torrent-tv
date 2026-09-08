@@ -68,7 +68,7 @@ func magnetFor(ih metainfo.Hash, peer string) string {
 
 func TestResolveMagnetFetchesMetadataOverLoopback(t *testing.T) {
 	root := seedContent(t)
-	mi, _ := buildTestMetainfo(t, root)
+	mi, _ := buildPublicTestMetainfo(t, root)
 	ih := mi.HashInfoBytes()
 	wantInfo, err := mi.UnmarshalInfo()
 	if err != nil {
@@ -140,7 +140,7 @@ func TestResolveMagnetFetchesMetadataOverLoopback(t *testing.T) {
 
 func TestResolveMagnetCancellationLeavesNoTorrent(t *testing.T) {
 	root := seedContent(t)
-	mi, raw := buildTestMetainfo(t, root)
+	mi, raw := buildPublicTestMetainfo(t, root)
 	ih := mi.HashInfoBytes()
 
 	// A peer that accepts TCP but never speaks: the handshake cannot
@@ -297,5 +297,35 @@ func TestResolveMagnetRejectsV2OnlyMagnet(t *testing.T) {
 	uri := "magnet:?xt=urn:btmh:1220" + strings.Repeat("0", 64)
 	if _, err := c.ResolveMagnet(t.Context(), uri, t.TempDir(), domain.MagnetDiscoveryPublic); err == nil {
 		t.Fatal("accepted a v2-only magnet")
+	}
+}
+
+func TestResolveMagnetDeniesUnsetDiscovery(t *testing.T) {
+	c := newTestClient(t)
+	ih := "abababababababababababababababababababab"
+	_, err := c.ResolveMagnet(t.Context(),
+		"magnet:?xt=urn:btih:"+ih+"&x.pe=127.0.0.1:1", t.TempDir(), 0)
+	if !errors.Is(err, domain.ErrMagnetDiscoveryDenied) {
+		t.Fatalf("err = %v, want domain.ErrMagnetDiscoveryDenied", err)
+	}
+	if c.torrent(ih) != nil {
+		t.Fatal("denied resolve must not touch the session or clients")
+	}
+}
+
+func TestResolveMagnetRejectsPrivateMetadata(t *testing.T) {
+	root := seedContent(t)
+	mi, _ := buildTestMetainfo(t, root) // private=true fixture
+	addr := startMetadataSeeder(t, mi, root)
+	c := newTestClient(t)
+	ih := mi.HashInfoBytes()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	_, err := c.ResolveMagnet(ctx, magnetFor(ih, addr), t.TempDir(), domain.MagnetDiscoveryPublic)
+	if !errors.Is(err, domain.ErrPrivateMagnet) {
+		t.Fatalf("err = %v, want domain.ErrPrivateMagnet", err)
+	}
+	if c.torrent(ih.HexString()) != nil {
+		t.Fatal("rejected private magnet must not be admitted to any client")
 	}
 }

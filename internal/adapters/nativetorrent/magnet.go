@@ -55,7 +55,10 @@ func (c *Client) releaseHashGate(ih metainfo.Hash, gate *hashGate) {
 // root argument is accepted for port parity and ignored, mirroring Add's
 // save-path convention. Bounded waiting is governed strictly by ctx: the
 // engine's fixed five-second waitInfo helper is not used here.
-func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, _ domain.MagnetDiscovery) ([]byte, error) {
+func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, discovery domain.MagnetDiscovery) ([]byte, error) {
+	if discovery != domain.MagnetDiscoveryPublic {
+		return nil, domain.ErrMagnetDiscoveryDenied
+	}
 	// Validate before the pinned library call: AddTorrentOpt panics on a
 	// zero v1 infohash, so hashless and v2-only magnets must be rejected
 	// here, not in the library.
@@ -111,6 +114,9 @@ func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, _ doma
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
+		if err := rejectPrivateMetainfo(t); err != nil {
+			return nil, err
+		}
 		return exportMetainfo(t, ih)
 	}
 
@@ -127,7 +133,22 @@ func (c *Client) ResolveMagnet(ctx context.Context, uri string, _ string, _ doma
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+	if err := rejectPrivateMetainfo(t); err != nil {
+		return nil, err
+	}
 	return exportMetainfo(t, ih)
+}
+
+func rejectPrivateMetainfo(t *torrent.Torrent) error {
+	mi := t.Metainfo()
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		return fmt.Errorf("decode resolved metainfo info: %w", err)
+	}
+	if info.Private != nil && *info.Private {
+		return domain.ErrPrivateMagnet
+	}
+	return nil
 }
 
 func exportMetainfo(t *torrent.Torrent, ih metainfo.Hash) ([]byte, error) {
