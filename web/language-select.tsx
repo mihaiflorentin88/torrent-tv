@@ -8,33 +8,35 @@ import { LANGUAGE_NAMES, canonicalLanguage, languageDisplayName } from '@torrent
 
 export interface LanguageOption { code: string; label: string }
 
-// Common TMDB metadata languages (ISO 639-1 + region) for the metadata
-// language fields. The list is a convenience, not a gate: any existing
-// region-coded value stays editable and saveable even when absent here.
-const TMDB_REGION_CODES = [
- 'af-ZA', 'ar-SA', 'az-AZ', 'bg-BG', 'bn-BD', 'ca-ES', 'cs-CZ', 'da-DK', 'de-AT', 'de-CH', 'de-DE',
- 'el-GR', 'en-AU', 'en-CA', 'en-GB', 'en-IN', 'en-NZ', 'en-US', 'es-AR', 'es-ES', 'es-MX', 'et-EE',
- 'eu-ES', 'fa-IR', 'fi-FI', 'fr-CA', 'fr-FR', 'gl-ES', 'he-IL', 'hi-IN', 'hr-HR', 'hu-HU', 'id-ID',
- 'is-IS', 'it-IT', 'ja-JP', 'ka-GE', 'kk-KZ', 'km-KH', 'ko-KR', 'lo-LA', 'lt-LT', 'lv-LV', 'mk-MK',
- 'mn-MN', 'ms-MY', 'my-MM', 'nb-NO', 'ne-NP', 'nl-BE', 'nl-NL', 'pl-PL', 'pt-BR', 'pt-PT', 'ro-RO',
- 'ru-RU', 'si-LK', 'sk-SK', 'sl-SI', 'sq-AL', 'sr-RS', 'sv-SE', 'sw-KE', 'ta-IN', 'te-IN', 'th-TH',
- 'tr-TR', 'uk-UA', 'ur-PK', 'uz-UZ', 'vi-VN', 'zh-CN', 'zh-HK', 'zh-TW',
+// The exact set TMDB serves from /configuration/primary_translations (the
+// codes its `language` parameter and site language picker accept). Snapshot
+// cross-checked against Radarr/Radarr#10482; do not hand-add region pairs.
+const TMDB_PRIMARY_TRANSLATIONS = [
+ 'af-ZA', 'ar-AE', 'ar-BH', 'ar-EG', 'ar-IQ', 'ar-JO', 'ar-LY', 'ar-MA', 'ar-QA', 'ar-SA', 'ar-TD', 'ar-YE',
+ 'be-BY', 'bg-BG', 'bn-BD', 'br-FR', 'ca-AD', 'ca-ES', 'ch-GU', 'cs-CZ', 'cy-GB', 'da-DK', 'de-AT', 'de-CH',
+ 'de-DE', 'el-CY', 'el-GR', 'en-AG', 'en-AU', 'en-BB', 'en-BZ', 'en-CA', 'en-CM', 'en-GB', 'en-GG', 'en-GH',
+ 'en-GI', 'en-GY', 'en-IE', 'en-JM', 'en-KE', 'en-LC', 'en-MW', 'en-NZ', 'en-PG', 'en-TC', 'en-US', 'en-ZM',
+ 'en-ZW', 'eo-EO', 'es-AR', 'es-CL', 'es-DO', 'es-EC', 'es-ES', 'es-GQ', 'es-GT', 'es-HN', 'es-MX', 'es-NI',
+ 'es-PA', 'es-PE', 'es-PY', 'es-SV', 'es-UY', 'et-EE', 'eu-ES', 'fa-IR', 'fi-FI', 'fr-BF', 'fr-CA', 'fr-CD',
+ 'fr-CI', 'fr-FR', 'fr-GF', 'fr-GP', 'fr-MC', 'fr-ML', 'fr-MU', 'fr-PF', 'ga-IE', 'gd-GB', 'gl-ES', 'he-IL',
+ 'hi-IN', 'hr-HR', 'hu-HU', 'id-ID', 'it-IT', 'it-VA', 'ja-JP', 'ka-GE', 'kk-KZ', 'kn-IN', 'ko-KR', 'ku-TR',
+ 'ky-KG', 'lt-LT', 'lv-LV', 'ml-IN', 'mr-IN', 'ms-MY', 'ms-SG', 'nb-NO', 'nl-BE', 'nl-NL', 'no-NO', 'pa-IN',
+ 'pl-PL', 'pt-AO', 'pt-BR', 'pt-MZ', 'pt-PT', 'ro-MD', 'ro-RO', 'ru-RU', 'si-LK', 'sk-SK', 'sl-SI', 'so-SO',
+ 'sq-AL', 'sq-XK', 'sr-ME', 'sr-RS', 'sv-SE', 'sw-TZ', 'ta-IN', 'te-IN', 'th-TH', 'tl-PH', 'tr-TR', 'uk-UA',
+ 'ur-PK', 'uz-UZ', 'vi-VN', 'zh-CN', 'zh-HK', 'zh-SG', 'zh-TW', 'zu-ZA',
 ];
 
 const optionLabel = (code: string) => `${languageDisplayName(code) || canonicalLanguage(code).toUpperCase() || code} — ${code}`;
 
-// TMDB variant: one option per language, region-coded wherever TMDB tags a
-// region (ro-RO, en-US, pt-BR, …), because TMDB serves localized metadata per
-// region and a bare code forfeits that. Languages without a TMDB region entry
-// stay bare. The list is a suggestion, not a gate: any existing value —
-// including bare codes — stays editable and saveable.
+// TMDB variant: exactly TMDB's primary translations — the region-coded set
+// its language parameter accepts — so a picked option is always compatible.
+// The list is a suggestion, not a gate: any existing value, including bare
+// codes, stays editable and saveable.
 export function languageOptions(variant: 'base' | 'tmdb'): LanguageOption[] {
  if (variant === 'base') {
   return Object.keys(LANGUAGE_NAMES).map(code => ({ code, label: optionLabel(code) })).sort((a, b) => a.label.localeCompare(b.label));
  }
- const bare = new Set(TMDB_REGION_CODES.map(candidate => candidate.split('-')[0]));
- const codes = [...TMDB_REGION_CODES, ...Object.keys(LANGUAGE_NAMES).filter(code => !bare.has(code))];
- return codes.map(code => ({ code, label: optionLabel(code) })).sort((a, b) => a.label.localeCompare(b.label));
+ return TMDB_PRIMARY_TRANSLATIONS.map(code => ({ code, label: optionLabel(code) })).sort((a, b) => a.label.localeCompare(b.label));
 }
 
 // One-shot option list per variant; the datasets are static so the settings

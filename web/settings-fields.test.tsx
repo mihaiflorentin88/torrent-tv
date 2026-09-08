@@ -119,9 +119,13 @@ describe('language combobox fields', () => {
   await mountSettings();
   const metadataOptions = await openOptions('Metadata fallback language');
   expect(metadataOptions.map(item => item.textContent)).toContain('Portuguese — pt-BR');
-  // Metadata options are region-coded where TMDB tags a region: no bare ro.
+  // Metadata options mirror TMDB's primary translations exactly: every
+  // option is region-coded, including entries the old list got wrong.
   expect(metadataOptions.map(item => item.textContent)).not.toContain('Romanian — ro');
   expect(metadataOptions.map(item => item.textContent)).toContain('Romanian — ro-RO');
+  expect(metadataOptions.map(item => item.textContent)).toContain('Zulu — zu-ZA');
+  expect(metadataOptions.every(item => /^[A-Z][^—]*— [a-z]{2}-[A-Z]{2}$/.test(item.textContent || ''))).toBe(true);
+  expect(metadataOptions.some(item => ['Icelandic — is-IS', 'Azerbaijani — az-AZ', 'Nepali — ne-NP'].includes(item.textContent || ''))).toBe(false);
   await act(async () => { document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) });
   await openTab('Playback');
   const playbackOptions = await openOptions('Preferred subtitle language');
