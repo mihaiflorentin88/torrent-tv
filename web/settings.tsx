@@ -4,6 +4,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChild } from 'preact';
 import { SettingsField, TrackerStatus } from '@torrent-tv/shared';
+import { LanguageSelect } from './language-select';
+import { trackerSourceKey } from './tracker-badge';
 import { sharedApi } from './shared-api';
 
 export function Events({ onError, confirmRebuild = false }: { onError: (value: string) => void; confirmRebuild?: boolean }) {
@@ -31,7 +33,7 @@ function TrackerReadiness({ tick }: { tick: number }) {
       <h2>Tracker readiness</h2>
       <div class="tracker-chips">
         {trackers.map((tracker: TrackerStatus) => (
-          <span key={tracker.id} class={`tracker-chip ${tracker.enabled ? 'on' : 'off'}`}>
+          <span key={tracker.id} class={`tracker-chip ${tracker.enabled ? 'on' : 'off'}${trackerSourceKey(tracker.id) ? ` accent-${trackerSourceKey(tracker.id)}` : ''}`}>
             {tracker.name}{tracker.enabled ? (tracker.configured ? ' · ready' : ' · needs setup') : ' · disabled'}
           </span>
         ))}
@@ -78,16 +80,16 @@ const TAB_GROUPS: Record<string, Array<{ title: string; note?: string; fields: S
     { title: 'Enabled trackers', note: 'Disabling a tracker hides its discovery. Existing downloads remain listed and playable.', fields: [['FileList enabled', 'fileListEnabled', 'checkbox'], ['The Pirate Bay enabled', 'pirateBayEnabled', 'checkbox']] },
     { title: 'FileList account', fields: [['FileList URL', 'fileListUrl'], ['FileList username', 'fileListUsername'], ['FileList passkey', 'fileListPasskey', 'password']] },
     { title: 'The Pirate Bay', fields: [['The Pirate Bay website URL', 'pirateBayWebsiteUrl'], ['The Pirate Bay API URL (advanced)', 'pirateBayApiUrl']] },
-    { title: 'Metadata', fields: [['TMDB API key or token', 'tmdbApiKey', 'password'], ['Metadata language', 'metadataLanguage'], ['Metadata fallback language', 'metadataFallbackLanguage']] },
+    { title: 'Metadata', fields: [['TMDB API key or token', 'tmdbApiKey', 'password'], ['Metadata language', 'metadataLanguage', 'language', 'tmdb'], ['Metadata fallback language', 'metadataFallbackLanguage', 'language', 'tmdb']] },
   ],
   storage: [
     { title: 'Download engine', note: 'Selection controls new acquisitions. Existing downloads keep the engine that owns them.', fields: [['Download engine', 'downloadEngine', 'engine-toggle']] },
     { title: 'Built-in torrent engine', fields: [['Torrent peer port', 'torrentPeerPort', 'number'], ['Torrent public peer port', 'torrentPublicPeerPort', 'number'], ['Torrent session directory', 'torrentSessionDir']], when: current => current.downloadEngine === 'native' },
     { title: 'qBittorrent', fields: [['qBittorrent URL', 'qbittorrentUrl'], ['qBittorrent username', 'qbittorrentUsername'], ['qBittorrent password', 'qbittorrentPassword', 'password']], when: current => current.downloadEngine === 'qbittorrent' },
-    { title: 'Storage', fields: [['Download root', 'downloadRoot'], ['Allocation (GB)', 'allocationGb', 'number', '0.5'], ['Free-space reserve (GB)', 'reserveGb', 'number', '0.5'], ['Eviction rules (comma separated)', 'evictionRules'], ['Protect incomplete downloads', 'protectIncomplete', 'checkbox'], ['Protect actively streamed downloads', 'protectLeased', 'checkbox'], ['Protect favorites', 'protectFavorites', 'checkbox'], ['Protect never-watched downloads', 'protectNeverWatched', 'checkbox'], ['Artwork cache path', 'artworkCachePath'], ['Artwork cache maximum bytes', 'artworkCacheMaxBytes', 'number']] },
+    { title: 'Storage', fields: [['Download root', 'downloadRoot'], ['Allocation (GB)', 'allocationGb', 'number', '0.5'], ['Free-space reserve (GB)', 'reserveGb', 'number', '0.5'], ['Eviction rules (comma separated)', 'evictionRules'], ['Protect incomplete downloads', 'protectIncomplete', 'checkbox'], ['Protect actively streamed downloads', 'protectLeased', 'checkbox'], ['Protect favorites', 'protectFavorites', 'checkbox'], ['Protect never-watched downloads', 'protectNeverWatched', 'checkbox'], ['Artwork cache path', 'artworkCachePath'], ['Artwork cache maximum', 'artworkCacheMaxBytes', 'bytes', 'GB']] },
   ],
   playback: [
-    { title: 'Playback and subtitles', fields: [['Initial buffer bytes', 'initialBufferBytes', 'number'], ['Read-ahead bytes', 'readAheadBytes', 'number'], ['Piece timeout seconds', 'pieceWaitTimeoutSeconds', 'number'], ['SubDL API URL', 'subDLUrl'], ['SubDL API key', 'subDLApiKey', 'password'], ['Preferred audio language', 'preferredAudioLanguage'], ['Preferred subtitle language', 'preferredSubtitleLanguage'], ['Fallback subtitle language', 'fallbackSubtitleLanguage'], ['Watched threshold percent', 'watchedThresholdPercent', 'number'], ['Subtitle cache path', 'subtitleCachePath'], ['Subtitle cache maximum bytes', 'subtitleCacheMaxBytes', 'number'], ['ffprobe path', 'ffprobePath'], ['FFmpeg path', 'ffmpegPath']] },
+    { title: 'Playback and subtitles', fields: [['Initial buffer', 'initialBufferBytes', 'bytes', 'MB'], ['Read-ahead', 'readAheadBytes', 'bytes', 'MB'], ['Piece timeout seconds', 'pieceWaitTimeoutSeconds', 'number'], ['SubDL API URL', 'subDLUrl'], ['SubDL API key', 'subDLApiKey', 'password'], ['Preferred audio language', 'preferredAudioLanguage', 'language'], ['Preferred subtitle language', 'preferredSubtitleLanguage', 'language'], ['Fallback subtitle language', 'fallbackSubtitleLanguage', 'language'], ['Watched threshold percent', 'watchedThresholdPercent', 'number'], ['Subtitle cache path', 'subtitleCachePath'], ['Subtitle cache maximum', 'subtitleCacheMaxBytes', 'bytes', 'GB'], ['ffprobe path', 'ffprobePath'], ['FFmpeg path', 'ffmpegPath']] },
   ],
   server: [
     { title: 'Server and background work', fields: [['Server name', 'instanceName'], ['Listen address', 'listenAddress'], ['Database path', 'databasePath'], ['Catalog max age hours', 'catalogMaxAgeHours', 'number'], ['Maximum concurrent jobs', 'maxConcurrentJobs', 'number'], ['Title refresh timeout minutes', 'titleRefreshTimeoutMinutes', 'number'], ['Trusted CIDRs (comma separated)', 'trustedCidrs']] },
@@ -118,6 +120,27 @@ const linkify = (text: string) =>
   text.split(/(https?:\/\/[^\s,)]+)/).map((part, i) =>
     /^https?:\/\//.test(part) ? <a key={i} href={part} target="_blank" rel="noreferrer">{part}</a> : part
   );
+
+// Disk-size fields (fixed unit per field): the text input carries the value in
+// the field's unit while the settings draft keeps raw bytes, so dirty checks
+// and saves stay byte-exact. Local text state lets people type "0.50" without
+// the controlled value reformatting mid-keystroke; a resync only fires when
+// the text stops matching the underlying bytes (discard, save, external load).
+function ByteField({ bytes, unit, disabled, onBytes }: { bytes: number; unit: 'MB' | 'GB'; disabled?: boolean; onBytes: (bytes: number) => void }) {
+  const factor = unit === 'GB' ? 2 ** 30 : 2 ** 20;
+  const display = (value: number) => {
+    if (!Number.isFinite(value)) return '';
+    const fixed = (value / factor).toFixed(unit === 'GB' ? 3 : 2);
+    return fixed.includes('.') ? fixed.replace(/0+$/, '').replace(/\.$/, '') : fixed;
+  };
+  const [text, setText] = useState(() => display(bytes));
+  useEffect(() => {
+    const parsed = Number(text);
+    const textBytes = text.trim() !== '' && Number.isFinite(parsed) ? Math.round(parsed * factor) : 0;
+    if (textBytes !== bytes) setText(display(bytes));
+  }, [bytes, factor]);
+  return <span class="byte-field"><input type="text" inputMode="decimal" autoComplete="off" spellcheck={false} disabled={disabled} value={text} onInput={event => { const next = event.currentTarget.value; setText(next); const parsed = Number(next); onBytes(next.trim() !== '' && Number.isFinite(parsed) ? Math.round(parsed * factor) : 0) }} /><span class="byte-unit">{unit}</span></span>;
+}
 
 export function Settings({ value, fields, onSaved, onError, onDirtyChange, accountsEnabled, updateSection, save: saveTransport }: {
   value: Record<string, unknown>; fields: SettingsField[]; onSaved: (v: Record<string, unknown>) => void; onError: (s: string) => void; onDirtyChange?: (dirty: boolean) => void; accountsEnabled?: boolean; updateSection?: ComponentChild;
@@ -236,6 +259,18 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
       const runningEngine = typeof value.engineRunning === 'string' ? value.engineRunning : '';
       const savedEngine = String(value.downloadEngine ?? '');
       return <label class="engine-toggle"><span>{label}{info.restartRequired && <small> restart required</small>}{info.readOnly && <small> environment managed</small>}{info.help && <button type="button" class="help-button" aria-label={`Help for ${label}`} title={info.help} onClick={() => setHelp(info)}>?</button>}</span><span class="engine-toggle-options" role="group" aria-label={label}>{options.map(([engineValue, engineLabel]) => <button type="button" key={engineValue} disabled={info.readOnly} aria-pressed={active === engineValue} onClick={e => { e.preventDefault(); setCurrent({ ...current, [key]: engineValue }) }}>{engineLabel}</button>)}</span>{runningEngine !== '' && runningEngine !== savedEngine && <span class="supporting">Running now: {engineName(runningEngine)}. The saved selection ({engineName(savedEngine)}) applies to new downloads after restart; existing downloads keep the engine that owns them.</span>}</label>;
+    }
+    if (type === 'language') {
+      // Language fields are suggesting comboboxes: the stored code renders and
+      // saves verbatim (compat with any existing value), the filtered list
+      // offers canonical codes to pick instead of typing them blind.
+      return <label><span>{label}{info.restartRequired && <small> restart required</small>}{info.readOnly && <small> environment managed</small>}{info.help && <button type="button" class="help-button" aria-label={`Help for ${label}`} title={info.help} onClick={() => setHelp(info)}>?</button>}</span><LanguageSelect value={String(current[key] ?? '')} variant={step === 'tmdb' ? 'tmdb' : 'base'} disabled={info.readOnly} ariaLabel={label} onChange={next => setCurrent({ ...current, [key]: next })} /></label>;
+    }
+    if (type === 'bytes') {
+      // Byte-backed sizes render in a fixed unit per field (buffers MB, caches
+      // GB); the draft keeps raw bytes so saves and dirty checks are unchanged.
+      const unit = step === 'GB' ? 'GB' : 'MB';
+      return <label><span>{label}{info.restartRequired && <small> restart required</small>}{info.readOnly && <small> environment managed</small>}{info.help && <button type="button" class="help-button" aria-label={`Help for ${label}`} title={info.help} onClick={() => setHelp(info)}>?</button>}</span><ByteField bytes={Number(current[key] ?? 0)} unit={unit} disabled={info.readOnly} onBytes={next => setCurrent({ ...current, [key]: next })} /></label>;
     }
     if (type === 'checkbox') {
       // Protection flags render as switches: a real checkbox stays in the

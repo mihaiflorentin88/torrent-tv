@@ -2848,3 +2848,128 @@ progress {
  margin-top: 8px;
  flex-basis: 100%;
 }
+
+/* Tracker source badges: pill identity per tracker, keyed on tracker id.
+   Unknown trackers keep the neutral gray so a new source still renders. */
+.tracker-badge {
+ display: inline-flex;
+ align-items: center;
+ align-self: flex-start;
+ padding: 1px 9px;
+ border: 1px solid var(--line);
+ border-radius: 999px;
+ font-size: 11px;
+ font-weight: 600;
+ letter-spacing: .02em;
+ color: var(--muted);
+ background: var(--panel);
+}
+
+.tracker-badge.filelist {
+ color: var(--amber);
+ border-color: rgba(242, 184, 75, .55);
+ background: rgba(242, 184, 75, .12);
+}
+
+.tracker-badge.piratebay {
+ color: var(--teal);
+ border-color: rgba(89, 214, 173, .55);
+ background: rgba(89, 214, 173, .12);
+}
+
+dl .tracker-badge,
+.removal-confirm .tracker-badge {
+ vertical-align: middle;
+}
+
+.tracker-names {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 6px;
+}
+
+.tracker-names .tracker-badge {
+ margin-top: 0;
+}
+
+.tracker-chip.on.accent-filelist {
+ border-color: var(--amber);
+ color: var(--amber);
+}
+
+.tracker-chip.on.accent-piratebay {
+ border-color: var(--teal);
+ color: var(--teal);
+}
+
+/* Searchable language dropdown: the anchor input keeps the standard field
+   look from .fields input; only the popup layer is added here. */
+.language-combobox {
+ position: relative;
+ display: block;
+}
+
+.language-list {
+ position: absolute;
+ z-index: 30;
+ top: calc(100% + 4px);
+ left: 0;
+ right: 0;
+ margin: 0;
+ padding: 4px;
+ list-style: none;
+ max-height: 260px;
+ overflow-y: auto;
+ background: var(--panel-2);
+ border: 1px solid var(--line);
+ border-radius: 10px;
+ box-shadow: 0 12px 30px rgba(0, 0, 0, .45);
+}
+
+.language-list li {
+ padding: 8px 10px;
+ border-radius: 7px;
+ font-size: 14px;
+ color: var(--text);
+ cursor: pointer;
+}
+
+.language-list li.active {
+ background: var(--teal-soft);
+}
+
+.language-list li.language-empty {
+ color: var(--muted);
+ cursor: default;
+}
+
+/* Fixed-unit byte fields: value input with a trailing MB/GB suffix. */
+.byte-field {
+ position: relative;
+ display: block;
+}
+
+.byte-field input {
+ padding-right: 46px;
+}
+
+.byte-unit {
+ position: absolute;
+ right: 11px;
+ top: 50%;
+ transform: translateY(-50%);
+ color: var(--muted);
+ font-size: 12px;
+ font-weight: 600;
+ pointer-events: none;
+}
+
+.player-heading .tracker-badge {
+ vertical-align: middle;
+ margin-right: 4px;
+}
+
+.help-modal h2 .tracker-badge {
+ vertical-align: middle;
+ margin-left: 6px;
+}
