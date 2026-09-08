@@ -358,6 +358,7 @@ func newTestApp(t *testing.T) *App {
 	settingsPath := filepath.Join(dir, "settings.json")
 	body := `{"listenAddress": "127.0.0.1:0",` +
 		` "torrentPeerPort": 0,` +
+		` "torrentPublicPeerPort": 0,` +
 		` "databasePath": "` + filepath.Join(dir, "test.db") + `",` +
 		` "torrentSessionDir": "` + filepath.Join(dir, "torrent") + `",` +
 		` "artworkCachePath": "` + filepath.Join(dir, "artwork") + `",` +

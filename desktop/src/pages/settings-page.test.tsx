@@ -87,7 +87,7 @@ const settingsValue = {
   downloadRoot: '/opt/fs/downloads', fileListUrl: 'https://filelist.io', fileListUsername: 'user',
   fileListPasskey: '', fileListPasskeyConfigured: true, tmdbApiKey: '', tmdbApiKeyConfigured: true,
   qbittorrentUrl: 'http://127.0.0.1:8080', qbittorrentUsername: '', qbittorrentPassword: '', qbittorrentPasswordConfigured: false,
-  downloadEngine: 'native', torrentPeerPort: 42069, torrentSessionDir: '/opt/fs/data/torrent-session',
+  downloadEngine: 'native', torrentPeerPort: 42069, torrentPublicPeerPort: 0, torrentSessionDir: '/opt/fs/data/torrent-session',
   trustedCidrs: ['127.0.0.0/8'], evictionRules: ['oldest-completed'],
 };
 

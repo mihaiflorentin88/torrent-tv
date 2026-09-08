@@ -15,6 +15,7 @@ export interface Settings {
     "qbittorrentPassword"?: string;
     "downloadEngine": string;
     "torrentPeerPort": number;
+    "torrentPublicPeerPort": number;
     "torrentSessionDir": string;
     "initialBufferBytes": number;
     "readAheadBytes": number;

@@ -39,6 +39,7 @@ type Settings struct {
 	QBittorrentPassword        string   `json:"qbittorrentPassword,omitempty"`
 	DownloadEngine             string   `json:"downloadEngine"`
 	TorrentPeerPort            int      `json:"torrentPeerPort"`
+	TorrentPublicPeerPort      int      `json:"torrentPublicPeerPort"`
 	TorrentSessionDir          string   `json:"torrentSessionDir"`
 	InitialBufferBytes         int64    `json:"initialBufferBytes"`
 	ReadAheadBytes             int64    `json:"readAheadBytes"`
@@ -78,7 +79,7 @@ func Defaults() Settings {
 		ListenAddress: ":8097", TrustedCIDRs: []string{"127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}, DatabasePath: "data/filelist.db",
 		DownloadRoot: "data/downloads", FileListEnabled: true, FileListURL: "https://filelist.io",
 		PirateBayEnabled: false, PirateBayWebsiteURL: "https://thepiratebay.org", PirateBayAPIURL: "https://apibay.org",
-		QBittorrentURL: "http://127.0.0.1:8080", DownloadEngine: "native", TorrentPeerPort: 42069, TorrentSessionDir: "data/torrent-session",
+		QBittorrentURL: "http://127.0.0.1:8080", DownloadEngine: "native", TorrentPeerPort: 42069, TorrentPublicPeerPort: 0, TorrentSessionDir: "data/torrent-session",
 		InitialBufferBytes: 128 << 20, ReadAheadBytes: 256 << 20, PieceWaitTimeoutSeconds: 600, StreamStartBytes: 2 << 20, CatalogMaxAgeHours: 24,
 		AllocationGB: 15, ReserveGB: 8, EvictionRules: []string{"oldest-completed"}, ProtectIncomplete: true, ProtectLeased: true, PreferredSubtitleLanguage: "ro", FallbackSubtitleLanguage: "en", PreferredAudioLanguage: "en",
 		MetadataLanguage: "ro-RO", MetadataFallbackLanguage: "en-US", ArtworkCachePath: "data/artwork", ArtworkCacheMaxBytes: 512 << 20,
@@ -395,6 +396,12 @@ func (s *Store) validate(v Settings) error {
 	if v.TorrentPeerPort < 0 || v.TorrentPeerPort > 65535 {
 		return fmt.Errorf("torrentPeerPort must be between 0 and 65535")
 	}
+	if v.TorrentPublicPeerPort < 0 || v.TorrentPublicPeerPort > 65535 {
+		return fmt.Errorf("torrentPublicPeerPort must be between 0 and 65535")
+	}
+	if v.TorrentPeerPort != 0 && v.TorrentPublicPeerPort != 0 && v.TorrentPeerPort == v.TorrentPublicPeerPort {
+		return fmt.Errorf("torrentPublicPeerPort must differ from torrentPeerPort")
+	}
 	if strings.TrimSpace(v.TorrentSessionDir) == "" {
 		return fmt.Errorf("torrentSessionDir is required")
 	}
@@ -551,6 +558,7 @@ func RestartRequired(old, new Settings) bool {
 	return old.ListenAddress != new.ListenAddress || old.DatabasePath != new.DatabasePath ||
 		old.MaxConcurrentJobs != new.MaxConcurrentJobs || old.TitleRefreshTimeoutMinutes != new.TitleRefreshTimeoutMinutes ||
 		old.DownloadEngine != new.DownloadEngine || old.TorrentPeerPort != new.TorrentPeerPort ||
+		old.TorrentPublicPeerPort != new.TorrentPublicPeerPort ||
 		old.TorrentSessionDir != new.TorrentSessionDir
 }
 

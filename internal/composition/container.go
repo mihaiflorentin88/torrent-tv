@@ -182,11 +182,12 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 		switch prefix {
 		case "native:":
 			nt, err := nativetorrent.New(nativetorrent.Config{
-				DataDir:     current.DownloadRoot,
-				SessionDir:  current.TorrentSessionDir,
-				PeerPort:    current.TorrentPeerPort,
-				Readahead:   current.ReadAheadBytes,
-				StartWindow: current.InitialBufferBytes,
+				DataDir:        current.DownloadRoot,
+				SessionDir:     current.TorrentSessionDir,
+				PeerPort:       current.TorrentPeerPort,
+				PublicPeerPort: current.TorrentPublicPeerPort,
+				Readahead:      current.ReadAheadBytes,
+				StartWindow:    current.InitialBufferBytes,
 			})
 			if err != nil {
 				if defaultPrefix == "native:" {

@@ -351,6 +351,19 @@ func TestDownloadEngineValidation(t *testing.T) {
 	if err := (&Store{}).validate(base); err == nil {
 		t.Fatal("blank torrentSessionDir must fail validation")
 	}
+	base.TorrentSessionDir = "data/torrent-session"
+	base.TorrentPublicPeerPort = -1
+	if err := (&Store{}).validate(base); err == nil {
+		t.Fatal("negative torrentPublicPeerPort must fail validation")
+	}
+	base.TorrentPublicPeerPort = 42069
+	if err := (&Store{}).validate(base); err == nil {
+		t.Fatal("duplicate fixed peer ports must fail validation")
+	}
+	base.TorrentPublicPeerPort = 0
+	if err := (&Store{}).validate(base); err != nil {
+		t.Fatalf("OS-assigned public port must validate: %v", err)
+	}
 }
 
 func TestLoadAtUsesGivenPath(t *testing.T) {

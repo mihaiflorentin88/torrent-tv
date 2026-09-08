@@ -15,7 +15,7 @@ const settingsValue: Record<string, unknown> = {
  fileListUrl: 'https://filelist.io', fileListUsername: 'user', fileListPasskey: '', fileListPasskeyConfigured: true,
  tmdbApiKey: '', tmdbApiKeyConfigured: true, metadataLanguage: 'en', metadataFallbackLanguage: 'en',
  qbittorrentUrl: 'http://localhost:8080', qbittorrentUsername: 'admin', qbittorrentPassword: '', qbittorrentPasswordConfigured: true,
- downloadEngine: 'native', engineRunning: 'native', torrentPeerPort: 42069, torrentSessionDir: 'data/torrent-session',
+ downloadEngine: 'native', engineRunning: 'native', torrentPeerPort: 42069, torrentPublicPeerPort: 0, torrentSessionDir: 'data/torrent-session',
  downloadRoot: '/data', allocationGb: 100, reserveGb: 5, evictionRules: ['oldest-completed'],
  protectIncomplete: true, protectLeased: false, protectFavorites: true, protectNeverWatched: false,
  artworkCachePath: 'data/artwork', artworkCacheMaxBytes: 1073741824,
@@ -33,6 +33,7 @@ const schemaFields = [
  { key: 'listenAddress', label: 'Listen address', help: 'HTTP listen address.', tvVisible: false, sensitive: false, restartRequired: true, readOnly: true },
  { key: 'downloadEngine', label: 'Download engine', help: 'Selects how downloads are acquired.', tvVisible: false, sensitive: false, restartRequired: true },
  { key: 'torrentPeerPort', label: 'Torrent peer port', help: 'Built-in engine peer port.', tvVisible: false, sensitive: false, restartRequired: true },
+ { key: 'torrentPublicPeerPort', label: 'Torrent public peer port', help: 'Built-in engine public peer port.', tvVisible: false, sensitive: false, restartRequired: true },
  { key: 'torrentSessionDir', label: 'Torrent session directory', help: 'Built-in engine session state.', tvVisible: false, sensitive: false, restartRequired: true },
  { key: 'qbittorrentUrl', label: 'qBittorrent URL', help: 'qBittorrent Web UI address.', tvVisible: false, sensitive: false, restartRequired: false },
  { key: 'fileListPasskey', label: 'FileList passkey', help: 'Private API credential used for tracker requests.', obtain: 'Sign in at https://filelist.io and copy the passkey from your profile page.', tvVisible: false, sensitive: true, restartRequired: false },
@@ -567,6 +568,7 @@ describe('download engine toggle', () => {
   const put = putCalls.at(-1)!;
   expect(put.body.downloadEngine).toBe('qbittorrent');
   expect(put.body.torrentPeerPort).toBe(42069);
+  expect(put.body.torrentPublicPeerPort).toBe(0);
   expect(put.body.torrentSessionDir).toBe('data/torrent-session');
  });
  it('warns on a running/saved engine mismatch and strips engineRunning from the PUT', async () => {

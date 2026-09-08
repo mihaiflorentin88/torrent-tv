@@ -477,7 +477,7 @@ func TestSettingsSchemaMarksEngineFieldsRestartRequired(t *testing.T) {
 	for _, item := range page.Items {
 		restart[item.Key] = item.RestartRequired
 	}
-	for _, key := range []string{"downloadEngine", "torrentPeerPort", "torrentSessionDir"} {
+	for _, key := range []string{"downloadEngine", "torrentPeerPort", "torrentPublicPeerPort", "torrentSessionDir"} {
 		if !restart[key] {
 			t.Fatalf("schema field %q must be marked restartRequired", key)
 		}

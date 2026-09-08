@@ -82,7 +82,7 @@ const TAB_GROUPS: Record<string, Array<{ title: string; note?: string; fields: S
   ],
   storage: [
     { title: 'Download engine', note: 'Selection controls new acquisitions. Existing downloads keep the engine that owns them.', fields: [['Download engine', 'downloadEngine', 'engine-toggle']] },
-    { title: 'Built-in torrent engine', fields: [['Torrent peer port', 'torrentPeerPort', 'number'], ['Torrent session directory', 'torrentSessionDir']], when: current => current.downloadEngine === 'native' },
+    { title: 'Built-in torrent engine', fields: [['Torrent peer port', 'torrentPeerPort', 'number'], ['Torrent public peer port', 'torrentPublicPeerPort', 'number'], ['Torrent session directory', 'torrentSessionDir']], when: current => current.downloadEngine === 'native' },
     { title: 'qBittorrent', fields: [['qBittorrent URL', 'qbittorrentUrl'], ['qBittorrent username', 'qbittorrentUsername'], ['qBittorrent password', 'qbittorrentPassword', 'password']], when: current => current.downloadEngine === 'qbittorrent' },
     { title: 'Storage', fields: [['Download root', 'downloadRoot'], ['Allocation (GB)', 'allocationGb', 'number', '0.5'], ['Free-space reserve (GB)', 'reserveGb', 'number', '0.5'], ['Eviction rules (comma separated)', 'evictionRules'], ['Protect incomplete downloads', 'protectIncomplete', 'checkbox'], ['Protect actively streamed downloads', 'protectLeased', 'checkbox'], ['Protect favorites', 'protectFavorites', 'checkbox'], ['Protect never-watched downloads', 'protectNeverWatched', 'checkbox'], ['Artwork cache path', 'artworkCachePath'], ['Artwork cache maximum bytes', 'artworkCacheMaxBytes', 'number']] },
   ],

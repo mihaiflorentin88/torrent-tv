@@ -34,6 +34,8 @@ type Config struct {
 	SessionDir string
 	// PeerPort is the BitTorrent listen port; 0 lets the OS assign one.
 	PeerPort int
+	// PublicPeerPort is the BitTorrent listen port for the public-discovery client; 0 lets the OS assign one.
+	PublicPeerPort int
 	// Readahead is the seek-window size in bytes.
 	Readahead int64
 	// StartWindow is the window elevated when a file is first prepared.
