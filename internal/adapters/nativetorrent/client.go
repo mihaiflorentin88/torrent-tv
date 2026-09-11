@@ -230,6 +230,7 @@ func (c *Client) loadSession() error {
 		if err != nil {
 			return err
 		}
+		forceUDP4Trackers(mi)
 		info, err := mi.UnmarshalInfo()
 		if err != nil {
 			return err
@@ -317,6 +318,7 @@ func (c *Client) Add(ctx context.Context, r io.Reader, _ string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("torrent metainfo: %w", err)
 	}
+	forceUDP4Trackers(mi)
 	info, err := mi.UnmarshalInfo()
 	if err != nil {
 		return "", fmt.Errorf("decode torrent metainfo info: %w", err)

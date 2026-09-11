@@ -156,6 +156,7 @@ func rejectPrivateMetainfo(t *torrent.Torrent) error {
 
 func exportMetainfo(t *torrent.Torrent, ih metainfo.Hash) ([]byte, error) {
 	mi := t.Metainfo()
+	forceUDP4Trackers(&mi)
 	if mi.HashInfoBytes() != ih {
 		return nil, errors.New("resolved metadata does not match magnet info hash")
 	}
