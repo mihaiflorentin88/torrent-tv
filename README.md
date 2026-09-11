@@ -1,6 +1,6 @@
 # Torrent TV
 
-A self-hosted Go media server with a built-in torrent engine, a responsive web application, Samsung Tizen and LG webOS TV clients, an Android TV client (TorrentTV), and a desktop app for browsing FileList and streaming downloads as they arrive. It is designed for a trusted private LAN and a small server such as a Raspberry Pi 4.
+A self-hosted Go media server with a built-in torrent engine, a responsive web application, Samsung Tizen and LG webOS TV clients, an Android TV client (TorrentTV), and a desktop app for browsing FileList and streaming downloads as they arrive. The TV clients are frontends for the server, not standalone apps: each one requires the torrent-tv server running on the same local network, and on its own a TV app cannot browse, download, or play anything. It is designed for a trusted private LAN and a small server such as a Raspberry Pi 4.
 
 Version **0.6.0** adds the LG webOS TV client: the same shared TV application rebuilt for the webOS Chromium 53 floor and packaged as a Developer Mode IPK; physical-LG verification is tracked in [docs/WEBOS-VERIFICATION.md](docs/WEBOS-VERIFICATION.md). Version **0.3.0** added the built-in torrent engine — no qBittorrent or Docker required — first-run setup prompts, and automatic ffmpeg/ffprobe detection. Progressive HTTP Range playback from an incomplete download is server-verified; physical Samsung AVPlay verification below 100% remains pending.
 
@@ -72,6 +72,8 @@ The default trusted networks are loopback and RFC1918 private address ranges. Na
 
 
 ## Frontend and TV packages
+
+Every client in the table below is a frontend for the torrent-tv server. A TV client with no running server on its network has nothing to connect to: browsing, downloading, and playback all happen server-side. Install and start the server first, then install the TV app on the same network.
 
 `make frontend` builds and tests the browser and Tizen clients in Docker, then creates and validates the unsigned Apps2Samsung artifact at `clients/tizen/.build/artifacts/torrent-tv-<version>-samsung-tizen.wgt`. Apps2Samsung signs it for the selected TV during installation. See [the Tizen build and installation guide](docs/TIZEN.md), including the living physical-TV verification log.
 

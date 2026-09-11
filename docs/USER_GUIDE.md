@@ -6,6 +6,8 @@ Start the standalone server and open its address in a browser, normally `http://
 
 The service has no client login in release 1. Keep it on trusted private CIDRs and do not port-forward it.
 
+The TV applications (Samsung Tizen, LG webOS, Android TV) are frontends for the server: they need it running on the same LAN, and on their own they cannot browse, download, or play. Without a reachable server a TV app stops at the server-selection screen with a connection error.
+
 ## Browse and choose a source
 
 Home begins with Continue Watching, followed by discovery rows. **My Library** separates Continue Watching, Favorites, Watched, Downloads, and a mixed dashboard. **Tracker** provides a dashboard, Browse, Recently Added, Categories, live tracker-backed search, filters, and sorting. Every dashboard and non-Downloads household rail shows one card per canonical TV series, even when several episodes were watched or downloaded; the card opens the complete show. Downloads deliberately remains file-level. The browser rail stays visible; the TV rail collapses after Right returns to content.
@@ -46,7 +48,7 @@ The webOS client is one IPK spanning webOS TV 4.0 (2018) through the current pla
 - **No results:** enter at least three characters and select **Search**. That explicit action queries FileList and stores every returned release. Zero-seeder releases remain cached but are hidden from discovery.
 - **Subtitle provider error:** open Settings → Playback, verify `https://api.subdl.com`, save a SubDL API key, then run **Test SubDL** on the **Test** tab. The error includes the provider response without exposing the key. Archive payloads are rejected because this integration intentionally accepts only direct subtitle files.
 - **Failed background work:** open Jobs, search by title or job ID, and inspect Details for provider, phase, attempt, wait, and error context. Retry is available for any terminal job. Rate-limited jobs resume when the provider reset is due; other transient failures are retried hourly.
-- **TV cannot connect:** verify the TV and Pi are on the same LAN and the TV server address includes `http://` and the port.
+- **TV cannot connect:** the TV apps have no standalone mode; they only talk to the torrent-tv server. Verify the server is running, the TV and server are on the same LAN, and the server address in the TV app includes `http://` and the port.
 ## Canonical series and download markers
 
 Selecting media in My Library or Tracker opens its details. A series item recorded from an individual episode opens the complete series page, selects its season, and expands that episode. Selecting an episode shows its versions; it does not start a download.
