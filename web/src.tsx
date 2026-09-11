@@ -149,6 +149,7 @@ export function BrowserPlayer({ active, onClose, onStateChanged, onAdvance }: { 
   const saveFailed = useRef(false);
   const shouldPlay = useRef(true);
   const preferenceRef = useRef<PlaybackPreferences>(active.preferences || defaults);
+  const attemptedSubtitles = useRef<Set<string>>(new Set());
   const durationRef = useRef(0);
   const [message, setMessage] = useState('Reading media details…');
   const [osd, setOsd] = useState<OsdFeedback | null>(null);
@@ -278,6 +279,16 @@ export function BrowserPlayer({ active, onClose, onStateChanged, onAdvance }: { 
   }, [volume, muted]);
   useEffect(() => {
     let cancelled = false;
+    // Every candidate is prepared at most once per playback: the ranked
+    // fallback must not re-prepare the remembered pick that just failed, and
+    // a failed prepare must not re-trigger while the same download plays.
+    attemptedSubtitles.current = new Set();
+    const attempt = async (candidate: SubtitleCandidate, persist: boolean) => {
+      const key = `${candidate.provider}:${candidate.id}`;
+      if (attemptedSubtitles.current.has(key)) return false;
+      attemptedSubtitles.current.add(key);
+      return chooseSubtitle(candidate, true, persist);
+    };
     void (async () => {
       try {
         const saved = active.preferences || await api.playbackPreferences(active.download.id);
@@ -289,10 +300,10 @@ export function BrowserPlayer({ active, onClose, onStateChanged, onAdvance }: { 
         if (saved.subtitleMode === 'off') { disableSubtitles(false); return }
         if (saved.subtitleMode === 'selected' && saved.subtitleProvider && saved.subtitleCandidateId) {
           const remembered = page.items.find(candidate => candidate.provider === saved.subtitleProvider && candidate.id === saved.subtitleCandidateId);
-          if (remembered && await chooseSubtitle(remembered, true, false)) return;
+          if (remembered && await attempt(remembered, false)) return;
         }
         const preferred = [...page.items].sort((a, b) => subtitleRank(a.language, preferenceRef.current.subtitleLanguage || 'ro') - subtitleRank(b.language, preferenceRef.current.subtitleLanguage || 'ro'));
-        for (const candidate of preferred) if (await chooseSubtitle(candidate, true, true)) return;
+        for (const candidate of preferred) if (await attempt(candidate, true)) return;
         setMessage((page.warnings || []).map(w => `${w.provider}: ${w.message}`).join(' · ') || 'No Romanian or English subtitle was found.');
       } catch (error) { if (!cancelled) setMessage(`Subtitles unavailable: ${(error as Error).message}`) }
     })();

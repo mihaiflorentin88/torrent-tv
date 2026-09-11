@@ -185,7 +185,7 @@ export function updateApplyOutcome(status: number | undefined, message: string):
 export class API {
  base: string;
  constructor(base: string) { this.base = base.replace(/\/$/, '') }
- async call<T>(path: string, init?: RequestInit): Promise<T> { const r = await fetch(`${this.base}/api/v1${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } }); if (!r.ok) { const p = await r.json().catch(() => ({ detail: r.statusText })); throw Object.assign(new Error(p.detail || r.statusText), { status: r.status }) } if (r.status === 204 || r.status === 201) return undefined as T; return r.json() }
+ async call<T>(path: string, init?: RequestInit): Promise<T> { const r = await fetch(`${this.base}/api/v1${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } }); if (!r.ok) { const p = await r.json().catch(() => ({ detail: r.statusText })); throw Object.assign(new Error(p.detail || r.statusText), { status: r.status }) } if (r.status === 204) return undefined as T; return r.json() }
  info() { return this.call<{ name: string; instanceName?: string; version: string; apiVersion?: string; configured: boolean; capabilities?: string[] }>('/system/info') }
  latest(category = '') { return this.call<Page<Release>>('/catalog/latest?category=' + encodeURIComponent(category)) }
  search(q: string) { return this.call<Page<Release>>('/catalog/search?query=' + encodeURIComponent(q)) }
