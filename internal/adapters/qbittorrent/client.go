@@ -344,6 +344,14 @@ func (c *Client) PrepareFiles(ctx context.Context, hash string, indices []int, s
 	}
 	_, preparedBefore := c.ready.Load(hash)
 	reapplySchedulers := prioritiesChanged || !preparedBefore
+	// Sequential download stays on for every torrent. The compatibility
+	// stream reads the selected file through ordered range gates, and
+	// qBittorrent exposes no per-range steering: with the flag off, pieces of
+	// the played episode arrive unordered, each read behind a missing piece
+	// blocks, and the browser stalls in an abort/reopen loop (observed live
+	// playing an in-flight season-pack episode at 62% with the flag off).
+	// Unplayed episodes are deselected at preparation time, so the ordered
+	// window lands on the file actually being streamed.
 
 	// File priority changes can flatten qBittorrent's special first/last
 	// piece priorities. qBittorrent 4.3 also sometimes reports both streaming
@@ -386,8 +394,9 @@ func (c *Client) PrepareFiles(ctx context.Context, hash string, indices []int, s
 	return nil
 }
 
-// PrepareRange is a no-op: qBittorrent exposes no range-priority API and its
-// sequential download scheduler already reaches any requested range.
+// PrepareRange is a no-op: qBittorrent exposes no range-priority API. The
+// scheduler flags asserted in PrepareFiles are the strongest steering the
+// engine offers.
 func (c *Client) PrepareRange(context.Context, string, int, int64, int64) error {
 	return nil
 }

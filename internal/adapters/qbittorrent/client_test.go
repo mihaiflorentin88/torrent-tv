@@ -27,7 +27,7 @@ func TestInfoHashUsesExactInfoDictionary(t *testing.T) {
 }
 
 func TestPrepareFileEnablesAndVerifiesStreamingPriorities(t *testing.T) {
-	sequential, firstLast, firstLastToggles := false, false, 0
+	sequential, firstLast, firstLastToggles, sequentialToggles := false, false, 0, 0
 	priorities := map[string]string{}
 	client := New(func() (string, string, string) { return "http://qb.test", "user", "password" })
 	client.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -42,9 +42,10 @@ func TestPrepareFileEnablesAndVerifiesStreamingPriorities(t *testing.T) {
 		case "/api/v2/torrents/trackers":
 			body = `[]`
 		case "/api/v2/torrents/files":
-			body = `[{"index":0,"name":"movie.mkv","size":90,"priority":7},{"index":1,"name":"movie.srt","size":5,"priority":7},{"index":2,"name":"sample.mkv","size":5,"priority":1}]`
+			body = `[{"index":0,"name":"movie.mkv","size":90,"priority":7}]`
 		case "/api/v2/torrents/toggleSequentialDownload":
-			sequential = true
+			sequential = !sequential
+			sequentialToggles++
 		case "/api/v2/torrents/toggleFirstLastPiecePrio":
 			firstLast = !firstLast
 			firstLastToggles++
@@ -56,16 +57,16 @@ func TestPrepareFileEnablesAndVerifiesStreamingPriorities(t *testing.T) {
 		}
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
 	})
-	if err := client.PrepareFile(t.Context(), "abc", 0, []int{1}); err != nil {
+	if err := client.PrepareFile(t.Context(), "abc", 0, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !sequential || !firstLast || firstLastToggles != 1 || priorities["0|1"] != "1" || priorities["2"] != "0" {
+	if !sequential || !firstLast || firstLastToggles != 1 || sequentialToggles != 1 || priorities["0"] != "1" {
 		t.Fatalf("unexpected preparation: sequential=%v firstLast=%v priorities=%v", sequential, firstLast, priorities)
 	}
 }
 
 func TestPrepareFilesSelectsEverySeasonEpisode(t *testing.T) {
-	sequential, firstLast := false, false
+	sequential, firstLast, sequentialToggles := true, false, 0
 	priorities := map[string]string{}
 	client := New(func() (string, string, string) { return "http://qb.test", "user", "password" })
 	client.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -82,7 +83,8 @@ func TestPrepareFilesSelectsEverySeasonEpisode(t *testing.T) {
 		case "/api/v2/torrents/files":
 			body = `[{"index":0,"name":"Show.S01E01.mkv","size":100,"priority":0},{"index":1,"name":"sample.mkv","size":5,"priority":1},{"index":2,"name":"Show.S01E02.mkv","size":100,"priority":0},{"index":3,"name":"Show.S01.srt","size":1,"priority":0}]`
 		case "/api/v2/torrents/toggleSequentialDownload":
-			sequential = true
+			sequential = !sequential
+			sequentialToggles++
 		case "/api/v2/torrents/toggleFirstLastPiecePrio":
 			firstLast = true
 		case "/api/v2/torrents/filePrio":
@@ -96,8 +98,10 @@ func TestPrepareFilesSelectsEverySeasonEpisode(t *testing.T) {
 	if err := client.PrepareFiles(t.Context(), "season", []int{0, 2}, []int{3}); err != nil {
 		t.Fatal(err)
 	}
-	if !sequential || !firstLast || priorities["0|2|3"] != "1" || priorities["1"] != "0" {
-		t.Fatalf("season priorities were not preserved: sequential=%v firstLast=%v priorities=%v", sequential, firstLast, priorities)
+	// The deselected sample must stay deselected, the season episodes and
+	// subtitles selected, and both streaming flags verified on afterwards.
+	if !sequential || sequentialToggles != 2 || !firstLast || priorities["0|2|3"] != "1" || priorities["1"] != "0" {
+		t.Fatalf("season priorities were not preserved: sequential=%v toggles=%d firstLast=%v priorities=%v", sequential, sequentialToggles, firstLast, priorities)
 	}
 }
 
@@ -117,7 +121,7 @@ func TestPrepareFileDoesNotRetoggleStablePriorities(t *testing.T) {
 		case "/api/v2/torrents/trackers":
 			body = `[]`
 		case "/api/v2/torrents/files":
-			body = `[{"index":0,"name":"movie.mkv","size":95,"priority":1},{"index":1,"name":"sample.mkv","size":5,"priority":0}]`
+			body = `[{"index":0,"name":"movie.mkv","size":95,"priority":1}]`
 		case "/api/v2/torrents/toggleFirstLastPiecePrio":
 			firstLast = !firstLast
 			firstLastToggles++
@@ -141,7 +145,7 @@ func TestPrepareFileDoesNotRetoggleStablePriorities(t *testing.T) {
 }
 
 func TestPrepareFileReappliesFirstLastAfterPriorityChanges(t *testing.T) {
-	firstLast, firstLastToggles, sequentialToggles := true, 0, 0
+	sequential, firstLast, firstLastToggles, sequentialToggles := true, true, 0, 0
 	client := New(func() (string, string, string) { return "http://qb.test", "user", "password" })
 	client.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		body := "{}"
@@ -149,7 +153,7 @@ func TestPrepareFileReappliesFirstLastAfterPriorityChanges(t *testing.T) {
 		case "/api/v2/auth/login":
 			body = "Ok."
 		case "/api/v2/torrents/info":
-			body = fmt.Sprintf(`[{"state":"downloading","total_size":100,"amount_left":50,"save_path":"/srv/downloads","seq_dl":true,"f_l_piece_prio":%t}]`, firstLast)
+			body = fmt.Sprintf(`[{"state":"downloading","total_size":100,"amount_left":50,"save_path":"/srv/downloads","seq_dl":%t,"f_l_piece_prio":%t}]`, sequential, firstLast)
 		case "/api/v2/torrents/properties":
 			body = `{"piece_size":4}`
 		case "/api/v2/torrents/trackers":
@@ -160,6 +164,7 @@ func TestPrepareFileReappliesFirstLastAfterPriorityChanges(t *testing.T) {
 			firstLast = !firstLast
 			firstLastToggles++
 		case "/api/v2/torrents/toggleSequentialDownload":
+			sequential = !sequential
 			sequentialToggles++
 		}
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
@@ -167,8 +172,38 @@ func TestPrepareFileReappliesFirstLastAfterPriorityChanges(t *testing.T) {
 	if err := client.PrepareFile(t.Context(), "abc", 0, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !firstLast || firstLastToggles != 2 || sequentialToggles != 2 {
+	// The deselected sample's priority rewrite reapplies first/last; the
+	// reapply cycle passes sequential through off and back on.
+	if !firstLast || firstLastToggles != 2 || sequentialToggles != 2 || !sequential {
 		t.Fatalf("first/last priority state=%v toggles=%d sequential toggles=%d", firstLast, firstLastToggles, sequentialToggles)
+	}
+}
+
+func TestPrepareFilesFailsWhenServerDoesNotRetainSequentialFlag(t *testing.T) {
+	firstLast := true
+	client := New(func() (string, string, string) { return "http://qb.test", "user", "password" })
+	client.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		body := "{}"
+		switch r.URL.Path {
+		case "/api/v2/auth/login":
+			body = "Ok."
+		case "/api/v2/torrents/info":
+			// The server ignores the sequential toggle and keeps reporting it off.
+			body = fmt.Sprintf(`[{"state":"downloading","total_size":100,"amount_left":50,"save_path":"/srv/downloads","seq_dl":false,"f_l_piece_prio":%t}]`, firstLast)
+		case "/api/v2/torrents/properties":
+			body = `{"piece_size":4}`
+		case "/api/v2/torrents/trackers":
+			body = `[]`
+		case "/api/v2/torrents/files":
+			body = `[{"index":0,"name":"movie.mkv","size":95,"priority":1}]`
+		case "/api/v2/torrents/toggleFirstLastPiecePrio":
+			firstLast = !firstLast
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+	})
+	single := client.PrepareFile(t.Context(), "abc", 0, nil)
+	if single == nil || !strings.Contains(single.Error(), "did not retain progressive streaming priorities") {
+		t.Fatalf("torrents must hard-fail when sequential cannot be enabled: %v", single)
 	}
 }
 
@@ -330,6 +365,7 @@ func TestResumeReportsTorrentNotFoundForUnknownHash(t *testing.T) {
 		t.Fatalf("resume of an unknown hash should report the torrent missing: %v", err)
 	}
 }
+
 func TestCredentialFreeClientPerformsStatusAndAddWithoutLogin(t *testing.T) {
 	torrent := []byte("d8:announce13:https://test/4:infod6:lengthi5e4:name9:video.mp412:piece lengthi4e6:pieces20:aaaaaaaaaaaaaaaaaaaaee")
 	loginCalls := 0
