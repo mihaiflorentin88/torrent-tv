@@ -352,6 +352,56 @@ func TestDownloadsMarksForeignEngineRouteUnavailable(t *testing.T) {
 	}
 }
 
+type countingEngine struct {
+	TorrentEngine
+	statuses, filesCalls int
+}
+
+func (e *countingEngine) Status(context.Context, string) (domain.DownloadStatus, error) {
+	e.statuses++
+	return domain.DownloadStatus{Hash: "sharehash", State: "downloading", TotalBytes: 100}, nil
+}
+
+func (e *countingEngine) Files(context.Context, string) ([]domain.TorrentFile, error) {
+	e.filesCalls++
+	return []domain.TorrentFile{
+		{Index: 0, Path: "Show.S01E01.mkv", SizeBytes: 60, Playable: true},
+		{Index: 1, Path: "Show.S01E02.mkv", SizeBytes: 40, Playable: true},
+	}, nil
+}
+
+func TestDownloadsFetchesEachTorrentOncePerAggregation(t *testing.T) {
+	repo, settings := retryHarness(t)
+	ctx := context.Background()
+	release := domain.TorrentRelease{ID: "filelist:pack", TrackerID: "filelist", TrackerName: "FileList", ProviderID: "release", Name: "Show.S01.1080p.WEB-DL", Category: "Series"}
+	if _, err := repo.UpsertReleases(ctx, []domain.TorrentRelease{release}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	for i, id := range []string{"episode-one", "episode-two"} {
+		row := domain.Download{ID: id, ReleaseID: release.ID, EngineID: "qb:sharehash", FileIndex: i, FilePath: fmt.Sprintf("Show.S01E0%d.mkv", i+1), State: "downloading", CreatedAt: now, UpdatedAt: now}
+		if err := repo.SaveDownload(ctx, row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine := &countingEngine{}
+	service := NewService(testRegistry(openCatalog{}), singleEngineSet(t, "qb:", engine), repo, settings)
+	items, err := service.Downloads(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected both rows sharing the torrent to list, got %d", len(items))
+	}
+	if engine.statuses != 1 || engine.filesCalls != 1 {
+		t.Fatalf("rows sharing a torrent must fetch it once: statuses=%d files=%d", engine.statuses, engine.filesCalls)
+	}
+	sizes := map[int]int64{items[0].FileIndex: items[0].SizeBytes, items[1].FileIndex: items[1].SizeBytes}
+	if sizes[0] != 60 || sizes[1] != 40 {
+		t.Fatalf("each row must reflect its own selected file: %v", sizes)
+	}
+}
+
 type dummyEngine struct{ TorrentEngine }
 
 func singleEngineSet(t *testing.T, prefix string, e TorrentEngine) *EngineSet {
