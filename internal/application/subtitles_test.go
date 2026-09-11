@@ -384,3 +384,52 @@ func newSubtitleTestRepository(t *testing.T) *sqlite.Repository {
 	t.Cleanup(func() { _ = repo.Close() })
 	return repo
 }
+
+// ffmpeg 4.4's `-f webvtt` output omits the hours component for tracks
+// shorter than one hour; both shapes must convert with correct millisecond
+// math (the strict HH-only parser used to return "no readable cues").
+func TestToSAMIReadsHoursLessWebVTTCues(t *testing.T) {
+	data := []byte("WEBVTT\n\n00:42.209 --> 00:45.212\ncue text\n\n01:02:03.004 --> 01:02:06.500\nsecond\n\n")
+	sami, err := toSAMI(data, ".vtt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(sami)
+	for _, want := range []string{
+		"<SYNC Start=42209><P Class=SUBTTL>cue text</P>",
+		"<SYNC Start=45212><P Class=SUBTTL>&nbsp;</P>",
+		"<SYNC Start=3723004><P Class=SUBTTL>second</P>",
+		"<SYNC Start=3726500><P Class=SUBTTL>&nbsp;</P>",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("converted SAMI is missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestToWebVTTAcceptsHoursLessSRTTimings(t *testing.T) {
+	data := []byte("1\n00:42,209 --> 00:45,212\ncue text\n\n2\n01:02:03,004 --> 01:02:06,500\nsecond\n\n")
+	vtt, err := toWebVTT(data, ".srt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(vtt)
+	for _, want := range []string{"00:42.209 --> 00:45.212", "01:02:03.004 --> 01:02:06.500"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("converted WebVTT is missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// Regression guard: tolerating hours-less ffmpeg output must not break the
+// classic HH:MM:SS[,.]mmm shape every SRT uses.
+func TestSubtitleTimeLineMatchesClassicSRTTimings(t *testing.T) {
+	for _, timing := range []string{
+		"00:01:02,345 --> 00:01:05,678",
+		"1:02:03.456 --> 1:02:06.789",
+	} {
+		if !timeLine.MatchString(timing) {
+			t.Fatalf("classic timing %q must still match", timing)
+		}
+	}
+}

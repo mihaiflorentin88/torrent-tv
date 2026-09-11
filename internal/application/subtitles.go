@@ -513,7 +513,7 @@ func supportedSubtitleExt(ext string) bool {
 }
 
 var (
-	timeLine = regexp.MustCompile(`(?i)(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})`)
+	timeLine = regexp.MustCompile(`(?i)(?:(\d{1,3}):)?(\d{1,2}):(\d{2})[,.](\d{3})\s*-->\s*(?:(\d{1,3}):)?(\d{1,2}):(\d{2})[,.](\d{3})`)
 	assLine  = regexp.MustCompile(`(?i)^Dialogue:[^,]*,(\d+):(\d{2}):(\d{2})[.](\d{2}),(\d+):(\d{2}):(\d{2})[.](\d{2}),[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,(.*)$`)
 )
 
@@ -550,7 +550,7 @@ func toSAMI(data []byte, format string) ([]byte, error) {
 			for i++; i < len(lines) && strings.TrimSpace(lines[i]) != ""; i++ {
 				body = append(body, lines[i])
 			}
-			cues = append(cues, cue{clockMS(m[1:5]), clockMS(m[5:9]), cleanCue(strings.Join(body, "\n"))})
+			cues = append(cues, cue{vttClockMS(m[1:5]), vttClockMS(m[5:9]), cleanCue(strings.Join(body, "\n"))})
 		}
 	}
 	if len(cues) == 0 {
@@ -565,12 +565,18 @@ func toSAMI(data []byte, format string) ([]byte, error) {
 	return []byte(out.String()), nil
 }
 
-func clockMS(parts []string) int64 {
-	values := make([]int64, 4)
-	for i := range values {
-		values[i], _ = strconv.ParseInt(parts[i], 10, 64)
+// vttClockMS converts a timeLine submatch group ([hours,]minutes,seconds,millis)
+// to milliseconds. The hours group is empty for ffmpeg-emitted WebVTT tracks
+// shorter than one hour, which omit the hours component.
+func vttClockMS(match []string) int64 {
+	var hours int64
+	if match[0] != "" {
+		hours, _ = strconv.ParseInt(match[0], 10, 64)
 	}
-	return ((values[0]*60+values[1])*60+values[2])*1000 + values[3]
+	minutes, _ := strconv.ParseInt(match[1], 10, 64)
+	seconds, _ := strconv.ParseInt(match[2], 10, 64)
+	millis, _ := strconv.ParseInt(match[3], 10, 64)
+	return ((hours*60+minutes)*60+seconds)*1000 + millis
 }
 
 func assMS(parts []string) int64 {
