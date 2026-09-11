@@ -25,13 +25,16 @@ func (s *Service) MediaInfo(ctx context.Context, sourceID string) (domain.MediaI
 	identity := ""
 	if complete {
 		if stat, statErr := os.Stat(path); statErr == nil {
-			identity = fmt.Sprintf("%s:%d:%d", path, stat.Size(), stat.ModTime().UnixNano())
+			identity = fmt.Sprintf("%s:%d", path, stat.Size())
 			s.mediaInfoMu.Lock()
 			cached, ok := s.mediaInfoCache[sourceID]
 			s.mediaInfoMu.Unlock()
 			if ok && cached.identity == identity {
 				return cached.info, true, nil
 			}
+		}
+		if log := s.log; log != nil {
+			log.Debug("media info cache miss; probing completed file", "sourceId", sourceID, "identity", identity)
 		}
 	} else {
 		count := s.settings.Get().InitialBufferBytes

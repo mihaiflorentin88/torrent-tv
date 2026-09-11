@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -50,6 +51,7 @@ type Service struct {
 	providerCancel   context.CancelFunc
 	baseCtx          context.Context
 	cancelBase       context.CancelFunc
+	log              *slog.Logger
 	stopping         chan struct{}
 	closeOnce        sync.Once
 	closeErr         error
@@ -118,6 +120,8 @@ func (s *Service) SetMetadataProvider(provider MetadataProvider) {
 }
 
 func (s *Service) SetMediaProbe(probe MediaProbe) { s.mediaProbe = probe }
+
+func (s *Service) SetLogger(log *slog.Logger) { s.log = log }
 
 func (s *Service) acquireJob(ctx context.Context) error {
 	select {
@@ -2042,6 +2046,9 @@ func (s *Service) prepareManagedDownload(ctx context.Context, d domain.Download)
 	if err != nil {
 		return d, err
 	}
+	// qBittorrent keeps sequential download on for every torrent: the
+	// compatibility stream needs ordered piece arrival, and the adapter has
+	// no per-range steering to reproduce it without the flag.
 	if !status.Sequential || !status.FirstLastPriority {
 		return d, fmt.Errorf("engine did not enable progressive streaming priorities")
 	}
@@ -2069,35 +2076,48 @@ func (s *Service) Downloads(ctx context.Context) ([]domain.Download, error) {
 	if projErr != nil {
 		return nil, projErr
 	}
+	// Live status fan-out: every row on the same torrent shares one Status
+	// and Files fetch. The downloads view polls every few seconds, and
+	// qBittorrent answers each call over its HTTP API — per-row fetching
+	// multiplied a handful of torrents into dozens of sequential round
+	// trips, which stalled the page while a download saturated the engine.
+	snapshots := make(map[string]torrentSnapshot, len(items))
 	for i := range items {
 		if release, releaseErr := s.repo.GetRelease(ctx, items[i].ReleaseID); releaseErr == nil {
 			s.enrichDownload(ctx, &items[i], release, projected[items[i].ReleaseID])
 		}
 		engine, hash, ok := s.owner(items[i].EngineID)
-		var st domain.DownloadStatus
-		statusErr := error(nil)
-		if ok {
-			st, statusErr = engine.Status(ctx, hash)
-		} else {
+		if !ok {
 			// The owning engine is absent from the set: the row surfaces as
 			// unavailable rather than serving stale persisted state.
-			statusErr = s.engineUnavailableErr(items[i].EngineID)
+			items[i].Error = s.engineUnavailableErr(items[i].EngineID).Error()
+			items[i].State = "unavailable"
+			_ = s.repo.SaveDownload(ctx, items[i])
+			continue
 		}
-		if statusErr != nil {
-			items[i].Error = statusErr.Error()
+		key := items[i].EngineID + "|" + hash
+		snapshot, cached := snapshots[key]
+		if !cached {
+			st, statusErr := engine.Status(ctx, hash)
+			var files []domain.TorrentFile
+			if statusErr == nil {
+				files, _ = engine.Files(ctx, hash)
+			}
+			snapshot = torrentSnapshot{status: st, files: files, err: statusErr}
+			snapshots[key] = snapshot
+		}
+		if snapshot.err != nil {
+			items[i].Error = snapshot.err.Error()
 			items[i].State = "unavailable"
 		} else {
 			var selected *domain.TorrentFile
-			if files, filesErr := engine.Files(ctx, hash); filesErr == nil {
-				for _, file := range files {
-					if file.Index == items[i].FileIndex {
-						copy := file
-						selected = &copy
-						break
-					}
+			for j := range snapshot.files {
+				if snapshot.files[j].Index == items[i].FileIndex {
+					selected = &snapshot.files[j]
+					break
 				}
 			}
-			applyDownloadStatus(&items[i], st, selected)
+			applyDownloadStatus(&items[i], snapshot.status, selected)
 		}
 		// Telemetry refreshes must not make an existing row look newly added.
 		// Keep UpdatedAt stable so clients can patch progress in place without
@@ -2105,6 +2125,14 @@ func (s *Service) Downloads(ctx context.Context) ([]domain.Download, error) {
 		_ = s.repo.SaveDownload(ctx, items[i])
 	}
 	return items, nil
+}
+
+// torrentSnapshot caches one engine round trip per torrent within a single
+// Downloads aggregation: rows sharing a torrent must not each re-fetch it.
+type torrentSnapshot struct {
+	status domain.DownloadStatus
+	files  []domain.TorrentFile
+	err    error
 }
 
 func dedupeManagedDownloads(items []domain.Download) []domain.Download {

@@ -1109,6 +1109,31 @@ func copyRange(ctx context.Context, w io.Writer, path string, offset, count int6
 	return nil
 }
 
+// copyFlush streams chunks to the client as they arrive and flushes after
+// each write, so fMP4 headers and early fragments reach the browser
+// immediately instead of buffering in net/http while ffmpeg warms up.
+func copyFlush(w io.Writer, r io.Reader) error {
+	buf := make([]byte, 1<<20)
+	flusher, canFlush := w.(http.Flusher)
+	for {
+		n, readErr := r.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			if canFlush {
+				flusher.Flush()
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return nil
+			}
+			return readErr
+		}
+	}
+}
+
 // streamSnap reports the effective compatibility-stream start for a seek
 // target: the video keyframe the route will actually start on. Clients use it
 // to keep their clock and subtitle offsets aligned with the real content
@@ -1179,7 +1204,7 @@ func (a *API) browserStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "inline")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
-	_, copyErr := io.Copy(w, stdout)
+	copyErr := copyFlush(w, stdout)
 	waitErr := cmd.Wait()
 	if copyErr != nil && !errors.Is(copyErr, context.Canceled) {
 		a.log.Warn("browser compatibility stream stopped", "sourceId", r.PathValue("id"), "error", copyErr)
@@ -1239,6 +1264,11 @@ func browserStreamArgs(input string, info domain.MediaInfo, requestedTrack, requ
 	}
 	args = append(
 		args,
+		// Bound the input probing phase: over the internal HTTP loopback,
+		// unbounded sniffing of a DDP-in-MKV stream produced multi-second
+		// silence and a flood of aborted internal reads before the first
+		// output byte.
+		"-probesize", "10M", "-analyzeduration", "15M",
 		"-i", input,
 		"-map", "0:v:0", "-map", "0:"+strconv.Itoa(track.Index),
 		// Raspberry Pi safety invariant: video is always copied. Only the selected

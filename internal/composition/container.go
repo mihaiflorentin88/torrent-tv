@@ -220,6 +220,7 @@ func assemble(settings *config.Store, log *slog.Logger) (*App, error) {
 	service := application.NewService(registry, engineSet, repo, settings, subtitles.NewSubDL(settings))
 	service.SetMetadataProvider(tmdb.New(func() string { return settings.Get().TMDBAPIKey }))
 	service.SetMediaProbe(mediaprobe.New(settings))
+	service.SetLogger(log)
 	service.StartScheduler()
 
 	// Integration wiring: the hub and the update coordinator are
