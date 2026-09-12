@@ -29,6 +29,7 @@ type Promotion struct {
 	Title      string `json:"title"`
 	Text       string `json:"text"`
 	Image      string `json:"image"`
+	Link       string `json:"link"`
 	ScreenTime int    `json:"screenTime"`
 }
 

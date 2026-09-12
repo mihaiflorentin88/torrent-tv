@@ -155,13 +155,13 @@ func TestPromotionsMapScreenTimeAndEmptyPool(t *testing.T) {
 		if r.URL.RawQuery != "count=2" {
 			t.Errorf("unexpected query %q", r.URL.RawQuery)
 		}
-		w.Write([]byte(`[{"provider":"house","id":"7","title":"t","text":"x","image":"data:image/png;base64,AA","screen_time":10}]`))
+		w.Write([]byte(`[{"provider":"house","id":"7","title":"t","text":"x","image":"data:image/png;base64,AA","link":"https://supporter.example/","screen_time":10}]`))
 	})
 	got, err := c.Promotions(context.Background(), 2)
 	if err != nil {
 		t.Fatalf("Promotions: %v", err)
 	}
-	if len(got) != 1 || got[0].ScreenTime != 10 || got[0].Provider != "house" || got[0].ID != "7" || got[0].Image == "" {
+	if len(got) != 1 || got[0].ScreenTime != 10 || got[0].Provider != "house" || got[0].ID != "7" || got[0].Image == "" || got[0].Link != "https://supporter.example/" {
 		t.Errorf("unexpected promotions: %+v", got)
 	}
 

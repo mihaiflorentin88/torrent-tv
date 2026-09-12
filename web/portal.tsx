@@ -70,7 +70,7 @@ export function PortalPromotionSlot({ client, snapshot, openExternal, visible = 
       {creative.image ? <img src={creative.image} alt="" loading="lazy" /> : null}
       <strong>{creative.title}</strong>
       <span>{creative.text}</span>
-      <small class="portal-promo-url">{url}</small>
+      {creative.link ? <small class="portal-promo-url">{creative.link}</small> : null}
     </a>
   </aside>;
 }

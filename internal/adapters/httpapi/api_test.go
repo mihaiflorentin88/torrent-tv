@@ -941,7 +941,7 @@ func TestPortalStateExposesRefreshedSurfacesWithExactTags(t *testing.T) {
 		case r.URL.Path == "/api/v1/ads/weights":
 			w.Write([]byte(`[{"provider":"p1","id":"ad1"}]`))
 		case r.URL.Path == "/api/v1/ads":
-			w.Write([]byte(`[{"provider":"p1","id":"ad1","title":"Hello","text":"World","image":"https://img.example/1.png","screen_time":8},{"provider":"p2","id":"ad2","title":"Other","text":"","image":"","screen_time":5}]`))
+			w.Write([]byte(`[{"provider":"p1","id":"ad1","title":"Hello","text":"World","image":"https://img.example/1.png","link":"https://supporter.example/","screen_time":8},{"provider":"p2","id":"ad2","title":"Other","text":"","image":"","screen_time":5}]`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -974,7 +974,7 @@ func TestPortalStateExposesRefreshedSurfacesWithExactTags(t *testing.T) {
 	if err := json.Unmarshal(body, &promotions); err != nil {
 		t.Fatal(err)
 	}
-	if len(promotions) != 1 || promotions[0].Provider != "p1" || promotions[0].ScreenTime != 8 {
+	if len(promotions) != 1 || promotions[0].Provider != "p1" || promotions[0].ScreenTime != 8 || promotions[0].Link != "https://supporter.example/" {
 		t.Fatalf("count must cap the delivered creatives, got %s", body)
 	}
 	if !strings.Contains(string(body), `"screenTime":8`) {

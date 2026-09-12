@@ -78,7 +78,7 @@ export function formatBytes(value: number): string { if (!Number.isFinite(value)
 // response decodes without reshaping.
 export interface PortalLink { id: number; title: string; url: string; description: string }
 export interface PortalState { accountsEnabled: boolean; adsEnabled: boolean; donor: boolean; links: PortalLink[] }
-export interface PortalPromotion { id: string; provider: string; title: string; text: string; image: string; screenTime: number }
+export interface PortalPromotion { id: string; provider: string; title: string; text: string; image: string; link: string; screenTime: number }
 export interface PortalSession { token: string; expires_at: string }
 export interface PortalUser { id: number; email: string; display_name: string; role: string }
 export interface UpdateStatus { currentVersion: string; available: boolean; latest?: string; notes?: string; releasedAt?: string; releasesUrl: string; selfUpdate: boolean; applying: boolean }

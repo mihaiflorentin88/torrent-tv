@@ -257,8 +257,8 @@ describe('promotion slot', () => {
   it('delivers only while visible, clicks through the local tracking route, rotates by screenTime, and cancels on hidden and unmount', async () => {
     vi.useFakeTimers();
     const delivery = vi.spyOn(API.prototype, 'portalPromotions').mockResolvedValue([
-      { id: 'p1', provider: 'prov', title: 'First', text: 'one', image: '', screenTime: 8 },
-      { id: 'p2', provider: 'prov', title: 'Second', text: 'two', image: '', screenTime: 10 },
+      { id: 'p1', provider: 'prov', title: 'First', text: 'one', image: '', link: 'https://first.example/', screenTime: 8 },
+      { id: 'p2', provider: 'prov', title: 'Second', text: 'two', image: '', link: 'https://second.example/', screenTime: 10 },
     ]);
     const opened: string[] = [];
     const flush = async () => { for (let i = 0; i < 4; i++) await act(async () => { await Promise.resolve() }) };
@@ -272,9 +272,10 @@ describe('promotion slot', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(8000) });
     expect(mounted.host.textContent).toContain('Second');
     expect(delivery).toHaveBeenCalledTimes(1);
-    // Clicks go through the local tracking route, never a direct upstream
-    // URL, and the address prints on the tile.
-    expect(mounted.host.querySelector('.portal-promo-url')!.textContent).toContain('/api/v1/portal/promotions/prov/p2/click');
+    // Clicks route through the local tracking endpoint, but the tile prints
+    // the supporter's real site; the tracking route never appears as text.
+    expect(mounted.host.querySelector('.portal-promo-url')!.textContent).toBe('https://second.example/');
+    expect(mounted.host.textContent).not.toContain('/api/v1/portal/promotions');
     await act(async () => { (mounted.host.querySelector('.portal-promo a') as HTMLElement).click() });
     expect(opened).toEqual([`${location.origin}/api/v1/portal/promotions/prov/p2/click`]);
     // A hidden document cancels the rotation timer: no advance, no refetch.

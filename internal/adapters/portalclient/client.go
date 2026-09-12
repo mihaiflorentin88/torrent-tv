@@ -172,6 +172,7 @@ type adDTO struct {
 	Title      string `json:"title"`
 	Text       string `json:"text"`
 	Image      string `json:"image"`
+	Link       string `json:"link"`
 	ScreenTime int    `json:"screen_time"`
 }
 
@@ -258,6 +259,7 @@ func (c *Client) Promotions(ctx context.Context, count int) ([]portal.Promotion,
 			Title:      d.Title,
 			Text:       d.Text,
 			Image:      d.Image,
+			Link:       d.Link,
 			ScreenTime: d.ScreenTime,
 		})
 	}
