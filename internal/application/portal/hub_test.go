@@ -432,10 +432,17 @@ func TestHubDonorExpiryScheduledAtActualExpiryTime(t *testing.T) {
 
 	clock.Advance(200 * time.Millisecond) // donorUntil is now in the past
 	waitFor(t, 2*time.Second, func() bool { return !hub.Snapshot().Donor }, "donor expiry at the actual expiry time")
+	// The snapshot flip and the sink delivery are two steps; wait for the
+	// republish instead of racing it.
+	waitFor(t, 2*time.Second, func() bool {
+		recorded := sink.recorded()
+		if len(recorded) == 0 || recorded[len(recorded)-1].kind != "portal.state" {
+			return false
+		}
+		var published Snapshot
+		return json.Unmarshal(recorded[len(recorded)-1].payload, &published) == nil && !published.Donor
+	}, "the expiry republish to carry the expired donor state")
 	events := sink.recorded()
-	if len(events) == 0 || events[len(events)-1].kind != "portal.state" {
-		t.Fatal("expiry must publish the updated portal.state")
-	}
 	var carried Snapshot
 	if err := json.Unmarshal(events[len(events)-1].payload, &carried); err != nil {
 		t.Fatal(err)

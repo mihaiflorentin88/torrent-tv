@@ -119,7 +119,13 @@ func TestAllocationEnvironmentOverrideWinsAndNeverPersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), "25") || !strings.Contains(string(data), `"allocationGb": 0.5`) {
+	var persisted struct {
+		AllocationGB float64 `json:"allocationGb"`
+	}
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if persisted.AllocationGB != 0.5 {
 		t.Fatalf("environment allocation leaked into persisted settings: %s", data)
 	}
 }
