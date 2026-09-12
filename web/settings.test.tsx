@@ -237,6 +237,40 @@ describe('settings tabs', () => {
   expect(led().className).toContain('fail');
   expect(panel().textContent).toContain('TMDB unreachable');
 
+
+ });
+
+ it('lists every storage folder with its status after the storage test', async () => {
+  await openSettings();
+  await act(async () => { settingsTabs()[1].click() });
+  await settle();
+  const spy = vi.spyOn(API.prototype, 'call').mockImplementation(async (path: string, init?: RequestInit) => {
+   if (path === '/dependencies/storage/test') {
+    return {
+     message: '4 of 5 storage folders are writable; Artwork cache: not writable: read-only file system',
+     success: false,
+     items: [
+      { label: 'Download root', path: '/mnt/sda1/torrent', ok: true, detail: 'writable', freeBytes: 1073741824 },
+      { label: 'Artwork cache', path: '/mnt/sda1/artwork', ok: false, detail: 'not writable: read-only file system' },
+     ],
+    };
+   }
+   return fakeCall(path, init);
+  });
+  try {
+   await act(async () => { Array.from(panel().querySelectorAll<HTMLButtonElement>('.diagnostics button')).find(button => button.textContent === 'Test Storage')!.click() });
+   await settle();
+   const rows = Array.from(panel().querySelectorAll('.storage-folders li'));
+   expect(rows).toHaveLength(2);
+   expect(rows[0].textContent).toContain('Download root');
+   expect(rows[0].textContent).toContain('/mnt/sda1/torrent');
+   expect(rows[0].textContent).toContain('1.1 GB free');
+   expect(rows[1].className).toContain('failed');
+   expect(rows[1].textContent).toContain('not writable: read-only file system');
+   expect(panel().textContent).toContain('4 of 5 storage folders are writable');
+  } finally {
+   spy.mockRestore();
+  }
  });
  it('fires beforeunload only while any tab is dirty and disarms after save', async () => {
   await openSettings();

@@ -2739,21 +2739,91 @@ func (s *Service) ValidateSourcePath(d domain.Download) error {
 	return nil
 }
 
-func (s *Service) TestStorage() (string, error) {
-	root := s.settings.Get().DownloadRoot
-	info, err := os.Stat(root)
+// StorageCheck is the result of probing one configured storage folder from
+// inside the service: the write probe runs in-process, so filesystem
+// sandboxing (systemd ReadWritePaths) is reflected exactly as the app
+// experiences it, not as the host sees it.
+type StorageCheck struct {
+	Label     string `json:"label"`
+	Path      string `json:"path"`
+	Ok        bool   `json:"ok"`
+	Detail    string `json:"detail"`
+	FreeBytes int64  `json:"freeBytes,omitempty"`
+}
+
+// StorageReport aggregates every configured storage folder probe with a
+// one-line summary that stays meaningful for clients which render messages
+// only.
+type StorageReport struct {
+	Ok      bool           `json:"ok"`
+	Message string         `json:"message"`
+	Folders []StorageCheck `json:"folders"`
+}
+
+// TestStorage probes every configured storage folder: existence (cache-style
+// folders are created on demand, mirroring the app's behavior), a real
+// write, and free space.
+func (s *Service) TestStorage() StorageReport {
+	settings := s.settings.Get()
+	folders := []StorageCheck{
+		checkStorageFolder("Download root", settings.DownloadRoot),
+		checkStorageFolder("Torrent session state", settings.TorrentSessionDir),
+		checkStorageFolder("Artwork cache", settings.ArtworkCachePath),
+		checkStorageFolder("Subtitle cache", settings.SubtitleCachePath),
+		checkStorageFolder("Database", filepath.Dir(settings.DatabasePath)),
+	}
+	deduped := folders[:0]
+	seen := map[string]bool{}
+	for _, check := range folders {
+		if seen[check.Path] {
+			continue
+		}
+		seen[check.Path] = true
+		deduped = append(deduped, check)
+	}
+	folders = deduped
+	ok := 0
+	for _, check := range folders {
+		if check.Ok {
+			ok++
+		}
+	}
+	message := fmt.Sprintf("All %d storage folders are writable", len(folders))
+	if ok < len(folders) {
+		message = fmt.Sprintf("%d of %d storage folders are writable", ok, len(folders))
+		for _, check := range folders {
+			if !check.Ok {
+				message += fmt.Sprintf("; %s: %s", check.Label, check.Detail)
+			}
+		}
+	}
+	return StorageReport{Ok: ok == len(folders), Message: message, Folders: folders}
+}
+
+func checkStorageFolder(label, path string) StorageCheck {
+	check := StorageCheck{Label: label, Path: path}
+	if stat, err := os.Stat(path); err != nil {
+		if mkErr := os.MkdirAll(path, 0o750); mkErr != nil {
+			check.Detail = fmt.Sprintf("unavailable: %v", mkErr)
+			return check
+		}
+	} else if !stat.IsDir() {
+		check.Detail = "path exists but is not a directory"
+		return check
+	}
+	probe, err := os.CreateTemp(path, ".storage-test-*")
 	if err != nil {
-		return "", fmt.Errorf("download root %q is unavailable: %w", root, err)
+		check.Detail = fmt.Sprintf("not writable: %v", err)
+		return check
 	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("download root %q is not a directory", root)
+	_ = probe.Close()
+	_ = os.Remove(probe.Name())
+	check.Ok = true
+	check.Detail = "writable"
+	if free, err := freeDiskBytes(path); err == nil {
+		check.FreeBytes = free
 	}
-	f, err := os.Open(root)
-	if err != nil {
-		return "", fmt.Errorf("download root %q is not readable: %w", root, err)
-	}
-	_ = f.Close()
-	return "Download root is readable", nil
+	return check
 }
 
 func sourceID(release, path string) string {

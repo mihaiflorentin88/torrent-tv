@@ -3,7 +3,7 @@
 // renders these on both the Settings and Events views.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChild } from 'preact';
-import { SettingsField, TrackerStatus } from '@torrent-tv/shared';
+import { formatBytes, SettingsField, TrackerStatus } from '@torrent-tv/shared';
 import { LanguageSelect } from './language-select';
 import { trackerSourceKey } from './tracker-badge';
 import { sharedApi } from './shared-api';
@@ -155,6 +155,7 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
   const [help, setHelp] = useState<SettingsField | null>(null);
   const [tests, setTests] = useState<Record<string, string>>({});
   const [connState, setConnState] = useState<Record<string, string>>({});
+  const [storageFolders, setStorageFolders] = useState<Array<{ label: string; path: string; ok: boolean; detail: string; freeBytes?: number }> | null>(null);
   const [readinessTick, setReadinessTick] = useState<number>(0);
   const [tab, setTabState] = useState(() => tabFromHash(accountsEnabled === true));
   // The account tab can disappear under the user (capability loss mid-edit):
@@ -238,9 +239,10 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
     setTests(current => ({ ...current, [name]: 'Testing…' }));
     setConnState(current => ({ ...current, [name]: 'testing' }));
     try {
-      const result = await sharedApi().call<{ message: string }>(`/dependencies/${name}/test`, { method: 'POST' });
+      const result = await sharedApi().call<{ message: string; success?: boolean; items?: Array<{ label: string; path: string; ok: boolean; detail: string; freeBytes?: number }> }>(`/dependencies/${name}/test`, { method: 'POST' });
       setTests(current => ({ ...current, [name]: result.message }));
-      setConnState(current => ({ ...current, [name]: 'pass' }));
+      setConnState(current => ({ ...current, [name]: result.success === false ? 'fail' : 'pass' }));
+      if (name === 'storage') setStorageFolders(result.items || null);
     } catch (e) {
       setTests(current => ({ ...current, [name]: (e as Error).message }));
       setConnState(current => ({ ...current, [name]: 'fail' }));
@@ -280,7 +282,7 @@ export function Settings({ value, fields, onSaved, onError, onDirtyChange, accou
     }
     return <label><span>{label}{info.restartRequired && <small> restart required</small>}{info.readOnly && <small> environment managed</small>}<button type="button" class="help-button" aria-label={`Help for ${label}`} title={info.help} onClick={() => setHelp(info)}>?</button></span><input disabled={info.readOnly} type={type || 'text'} step={type === 'number' ? (step || undefined) : undefined} value={String(current[key] ?? '')} placeholder={type === 'password' && value[`${key}Configured`] ? 'Configured — leave blank to keep' : key === 'evictionRules' ? 'oldest-completed' : ''} onInput={e => setCurrent({ ...current, [key]: type === 'number' ? Number(e.currentTarget.value) : e.currentTarget.value })} /></label>;
   };
-  const diagnostics = (connections: typeof CONNECTIONS) => <section class="diagnostics"><h2>Connection checks</h2>{connections.map(connection => <div><button type="button" onClick={() => void test(connection.name)}>Test {connection.label}</button><span role="status">{tests[connection.name]}</span></div>)}</section>;
+  const diagnostics = (connections: typeof CONNECTIONS) => <section class="diagnostics"><h2>Connection checks</h2>{connections.map(connection => <div key={connection.name}><button type="button" onClick={() => void test(connection.name)}>Test {connection.label}</button><span role="status">{tests[connection.name]}</span>{connection.name === 'storage' && storageFolders && <ul class="storage-folders">{storageFolders.map(folder => <li key={folder.path} class={folder.ok ? 'ok' : 'failed'}><span class="folder-name">{folder.label}</span><code>{folder.path}</code><span class="folder-status">{folder.ok ? `writable${folder.freeBytes ? ` · ${formatBytes(folder.freeBytes)} free` : ''}` : folder.detail}</span></li>)}</ul>}</div>)}</section>;
   const panelContent = () => {
     if (activeTab === 'maintenance') return <><CacheCoverage /><Events onError={onError} confirmRebuild /></>;
     if (activeTab === 'test') return diagnostics(CONNECTIONS);

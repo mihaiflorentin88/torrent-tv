@@ -242,12 +242,8 @@ func (a *API) testDependency(w http.ResponseWriter, r *http.Request) {
 		engine := a.service.EngineDefault()
 		write(w, 200, map[string]any{"success": true, "message": "Connected to " + engine + " torrent engine: " + v, "engine": engine})
 	case "storage":
-		message, err := a.service.TestStorage()
-		if err != nil {
-			problem(w, 503, err)
-			return
-		}
-		write(w, 200, map[string]any{"success": true, "message": message})
+		report := a.service.TestStorage()
+		write(w, 200, map[string]any{"success": report.Ok, "message": report.Message, "items": report.Folders})
 	case "tmdb":
 		if a.settings.Get().TMDBAPIKey == "" {
 			problem(w, 409, fmt.Errorf("TMDB is not configured"))
