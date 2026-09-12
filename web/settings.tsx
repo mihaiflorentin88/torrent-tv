@@ -56,6 +56,8 @@ const CONNECTIONS = [
   { name: 'tmdb', label: 'TMDB', tab: 'tracker' },
   { name: 'qbittorrent', label: 'qBittorrent', tab: 'storage' },
   { name: 'storage', label: 'Storage', tab: 'storage' },
+  { name: 'ffmpeg', label: 'FFmpeg', tab: 'storage' },
+  { name: 'ffprobe', label: 'FFprobe', tab: 'storage' },
   { name: 'subdl', label: 'SubDL', tab: 'playback' },
 ];
 

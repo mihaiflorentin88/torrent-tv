@@ -244,6 +244,13 @@ func (a *API) testDependency(w http.ResponseWriter, r *http.Request) {
 	case "storage":
 		report := a.service.TestStorage()
 		write(w, 200, map[string]any{"success": report.Ok, "message": report.Message, "items": report.Folders})
+	case "ffmpeg", "ffprobe":
+		message, err := a.service.TestTranscoder(ctx, name)
+		if err != nil {
+			problem(w, 502, err)
+			return
+		}
+		write(w, 200, map[string]any{"success": true, "message": message})
 	case "tmdb":
 		if a.settings.Get().TMDBAPIKey == "" {
 			problem(w, 409, fmt.Errorf("TMDB is not configured"))
