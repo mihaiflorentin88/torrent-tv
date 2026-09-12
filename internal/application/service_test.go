@@ -701,3 +701,69 @@ func TestCloseClosesEachEngineOnceBeforeRepositoryIdempotently(t *testing.T) {
 		t.Fatalf("a second Close must not re-close engines, got native=%d qb=%d", native.closeCount(), qb.closeCount())
 	}
 }
+
+func TestStorageReportProbesEveryConfiguredFolder(t *testing.T) {
+	repo, settings := retryHarness(t)
+	root := t.TempDir()
+	missing := filepath.Join(root, "artwork")
+	value := settings.Get()
+	value.DownloadRoot = filepath.Join(root, "downloads")
+	value.TorrentSessionDir = value.DownloadRoot
+	value.ArtworkCachePath = missing
+	value.SubtitleCachePath = filepath.Join(root, "subtitles")
+	value.DatabasePath = filepath.Join(root, "data", "filelist.db")
+	if err := settings.Save(value); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(nil, singleEngineSet(t, "qb:", &dummyEngine{}), repo, settings)
+	report := service.TestStorage()
+	if !report.Ok {
+		t.Fatalf("every folder must be creatable and writable, got: %s", report.Message)
+	}
+	// The download root and the session dir resolve to the same path and
+	// must collapse into one check.
+	if len(report.Folders) != 4 {
+		t.Fatalf("expected 4 deduplicated folder checks, got %d", len(report.Folders))
+	}
+	if _, err := os.Stat(missing); err != nil {
+		t.Fatalf("a missing cache folder must be created on demand: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "data")); err != nil {
+		t.Fatalf("the database folder must be created on demand: %v", err)
+	}
+}
+
+func TestStorageReportNamesUnwritableFolders(t *testing.T) {
+	repo, settings := retryHarness(t)
+	root := t.TempDir()
+	locked := filepath.Join(root, "locked")
+	if err := os.Mkdir(locked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	value := settings.Get()
+	value.DownloadRoot = filepath.Join(root, "downloads")
+	value.TorrentSessionDir = filepath.Join(root, "sessions")
+	value.ArtworkCachePath = locked
+	value.SubtitleCachePath = filepath.Join(root, "subtitles")
+	value.DatabasePath = filepath.Join(root, "filelist.db")
+	if err := settings.Save(value); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(nil, singleEngineSet(t, "qb:", &dummyEngine{}), repo, settings)
+	report := service.TestStorage()
+	if report.Ok {
+		t.Fatalf("an unwritable folder must fail the report: %s", report.Message)
+	}
+	if !strings.Contains(report.Message, "Artwork cache") {
+		t.Fatalf("summary must name the failing folder: %s", report.Message)
+	}
+	for _, folder := range report.Folders {
+		if folder.Label == "Artwork cache" && folder.Ok {
+			t.Fatal("the read-only artwork folder must not report ok")
+		}
+	}
+}
