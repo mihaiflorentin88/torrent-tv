@@ -47,9 +47,11 @@ done
 # page's engine focuses a control in response, the poll reports it, and
 # every later press must move that focus.
 focus_key() {
-  adb logcat -d 2>/dev/null | grep -o 'TVFOCUS [A-Za-z0-9_-]*' | tail -1 | cut -d' ' -f2
+  # The bridge logs focus mirrors as "TVFOCUS : TVFOCUS <key>", while the
+  # boot watchdog's "TVBOOT tick" lines share the same logcat tag. Matching
+  # the full message keeps a later tick from masking the last real focus.
+  adb logcat -d 2>/dev/null | grep -o 'TVFOCUS : TVFOCUS [A-Za-z0-9_-]*' | tail -1 | cut -d' ' -f4
 }
-
 fail_with_evidence() {
   adb logcat -d | tail -2000 > torrenttv-logcat.txt
   adb exec-out screencap -p > torrenttv-failure.png
