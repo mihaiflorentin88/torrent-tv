@@ -65,7 +65,7 @@ const navGroups: { label?: string; items: { id: View; label: string; icon: strin
 
 
 function Sidebar({ view, onView, dock }: { view: View; onView: (view: View) => void; dock?: ComponentChild }) {
-  return <aside class="sidebar"><div class="brand"><span class="brand-mark">FL</span><strong>FileList <span>Streaming</span></strong></div><nav aria-label="Main navigation">{navGroups.map((group, index) => <div class="nav-group" key={index}>{group.label && <p>{group.label}</p>}{group.items.map(item => <button class={view === item.id ? 'selected' : ''} onClick={() => onView(item.id)} aria-current={view === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span></button>)}</div>)}</nav>{dock}</aside>;
+  return <aside class="sidebar"><div class="brand"><span class="brand-mark">TT</span><strong>Torrent <span>TV</span></strong></div><nav aria-label="Main navigation">{navGroups.map((group, index) => <div class="nav-group" key={index}>{group.label && <p>{group.label}</p>}{group.items.map(item => <button class={view === item.id ? 'selected' : ''} onClick={() => onView(item.id)} aria-current={view === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span></button>)}</div>)}</nav>{dock}</aside>;
 }
 
 function Artwork({ title, kind = 'poster' }: { title: CatalogTitle; kind?: 'poster' | 'backdrop' }) {
