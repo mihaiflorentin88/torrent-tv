@@ -474,6 +474,9 @@ while True:
 `).toString('base64');
  const result = spawnSync('docker', [
   'run', '--rm', '-d', '--name', name, '--platform', 'linux/amd64',
+  // Linux engines have no built-in host.docker.internal (Docker Desktop
+  // does); host-gateway maps the name to the host-side bridge address.
+  '--add-host', 'host.docker.internal:host-gateway',
   '-p', `127.0.0.1:${cdpPort}:${cdpPort}`,
   '--entrypoint', '/bin/sh', state.image,
   '-c',
@@ -790,7 +793,10 @@ async function bootCompleted(session) {
   bundleRan: typeof window.TorrentTV !== 'undefined'
  };
 })()`);
-  return { done: Boolean(view && view.startupGone), view };
+  // A non-app document (connection error page, empty response) has no
+  // #startup either, so absence alone must never complete the boot: the
+  // gate also demands the app root rendered real children.
+  return { done: Boolean(view && view.startupGone && view.appChildren > 0), view };
  }, BOOT_TIMEOUT_MS);
 }
 
@@ -823,16 +829,13 @@ async function runCleanAndFatal(state, session, errors, appBase, browser, output
  if (!boot.done) {
   const view = boot.last?.view ?? {};
   reportErrors('clean boot', errors);
-  throw new SmokeFailure(`case clean FAILED — the startup handoff never completed within ${BOOT_TIMEOUT_MS / 1000}s${view.startupMessage ? `; startup screen message: ${JSON.stringify(view.startupMessage)}` : ''} `);
+  throw new SmokeFailure(`case clean FAILED — the app never completed its startup handoff within ${BOOT_TIMEOUT_MS / 1000}s (last view: ${JSON.stringify(view)}; startupGone with appChildren <= 0 means the engine document is not the app page, e.g. a fixture connection error)${view.startupMessage ? `; startup screen message: ${JSON.stringify(view.startupMessage)}` : ''} `);
  }
  if (errors.length > 0) {
   reportErrors('clean boot', errors);
   throw new SmokeFailure(`case clean FAILED — the page reached first render but produced ${errors.length} page / console error(s)`);
  }
- if (!boot.view.appChildren) throw new SmokeFailure('case clean FAILED — #startup was removed but #app has no rendered children');
  console.log(`case clean: boot PASS — engine ${browser}; window.FileListBoot.ready() removed #startup after the first render of #app(${boot.view.appChildren} child node(s)); 0 page errors, 0 console errors.`);
-
- // -- milestone 2: Setup screen, D-pad to Manual address
  const setupProbe = await poll(async () => {
   const view = await evaluate(session, `(function() {
  var focusables = document.querySelectorAll('[data-focus-region="setup"]');
@@ -1340,7 +1343,9 @@ async function main() {
  state.server = createServer(state, root);
  const servePort = await new Promise((resolve, reject) => {
   state.server.once('error', reject);
-  state.server.listen(0, '127.0.0.1', () => resolve(state.server.address().port));
+  // All interfaces: on Linux the engine reaches the fixture through
+  // the docker host-gateway address, which is not the host loopback.
+  state.server.listen(0, '0.0.0.0', () => resolve(state.server.address().port));
  });
  const cdpPort = await freePort();
  if (state.browser) startHostChrome(state, cdpPort);
