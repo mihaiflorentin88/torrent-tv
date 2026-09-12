@@ -2,6 +2,7 @@ import { render, type ComponentChild } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { audioPlaybackRoute, buildPath, canonicalHouseholdItems, CatalogDetail, CatalogSource, CatalogTitle, clampVolume, ControlsVisibility, clearPortalSession, Download, DownloadTransferAction, eventPayload, formatBytes, HouseholdItem, HouseholdState, languageDisplayName, LibraryCategory, loadPlayerSettings, loadPortalSession, logicalPlaybackPosition, MediaAudioTrack, MediaInfo, MediaState, canonicalLanguage, PortalSessionStorage, PortalState, PortalSync, PortalUser, subtitleRank, parsePath, PlaybackPreferences, preferredAudioTrack, reconcileDownloads, Route, resumeActionLabel, resumeForTitle, resumeSummary, savePlayerSettings, seasonPackActionLabel, SettingsField, SubtitleCandidate, subtitleItemLabel, subtitleMenuGroups, SubtitleWarning, TrackerStatus, UpdateStatus, View } from '@torrent-tv/shared';
 import { applyVolumeStep, fractionTarget, resolveEscape, resolveShortcut, ScrubCoalescer, seekTarget, type PlayerCommand } from './shortcuts';
+import { attachCompatStream, compatStreamSupported, type CompatStream } from './compat-stream';
 import { OsdLayer, type OsdFeedback } from './osd';
 import { CacheCoverage, Events, Settings } from './settings';
 import { TrackerBadge, trackerSourceKey } from './tracker-badge';
@@ -187,15 +188,22 @@ export function BrowserPlayer({ active, onClose, onStateChanged, onAdvance }: { 
   const scrub = useRef<ScrubCoalescer | null>(null);
   const restartAtRef = useRef<(targetMs: number) => void>(() => { });
   restartAtRef.current = restartAt;
+  const compatRef = useRef<CompatStream | null>(null);
+  const [compatGeneration, setCompatGeneration] = useState(0);
+  const [compatFallback, setCompatFallback] = useState(false);
   const [selectedSubtitle, setSelectedSubtitle] = useState('off');
   const [controlsVisible, setControlsVisible] = useState(true);
   const controls = useMemo(() => new ControlsVisibility({ policy: { armWhilePaused: true, statusHolds: true, manualHideSuppressionMs: 500 }, onChange: setControlsVisible }), []);
   controls.setStatus(message !== '');
   controls.setPanelOpen(subtitleOpen || audioOpen);
   useModalFocus(root);
-
   const currentTrack = mediaInfo?.audioTracks.find(track => track.streamIndex === selectedAudio);
   const browserMode = !!currentTrack && !!mediaInfo && (audioPlaybackRoute(currentTrack.codec) === 'decode' || (mediaInfo.audioTracks.length > 1 && !currentTrack.default));
+  // The compatibility transcode is appended through MediaSource (see
+  // compat-stream.ts): <video src> cannot carry an unbounded fragmented MP4 —
+  // Chromium derives a bogus few-seconds duration, stops fetching at fragment
+  // boundaries, and playback stalls every few seconds.
+  const mseMode = browserMode && !compatFallback && compatStreamSupported();
   const playbackURL = useMemo(() => {
     if (!mediaInfo) return '';
     if (browserMode) return browserPlaybackURL(active.download, selectedAudio, streamOffset, snappedRef.current);
@@ -216,6 +224,26 @@ export function BrowserPlayer({ active, onClose, onStateChanged, onAdvance }: { 
     }
   };
   const savePreferences = async (value: PlaybackPreferences) => { preferenceRef.current = value; try { preferenceRef.current = await api.updatePlaybackPreferences(active.download.id, value) } catch { } };
+  // Attach the MediaSource pipeline for the compatibility transcode. Seeking
+  // re-issues the stream URL (playbackURL changes), and a recovery retry bumps
+  // compatGeneration — both re-run this effect, which is the reload model.
+  useEffect(() => {
+    if (!mseMode || !playbackURL || !mediaInfo || !video.current) return;
+    const element = video.current;
+    const stream = attachCompatStream(element, api.streamURL(playbackURL), mediaInfo.durationMs, reason => {
+      // A broken pipeline falls back to the plain source for the rest of this
+      // playback instead of looping on the same failure.
+      setCompatFallback(true);
+      setMessage(reason);
+    });
+    compatRef.current = stream;
+    if (!stream) return;
+    if (shouldPlay.current) void element.play().catch(() => setMessage('Press Play to start playback.'));
+    return () => {
+      stream.stop();
+      compatRef.current = null;
+    };
+  }, [mseMode, playbackURL, mediaInfo, compatGeneration]);
 
   useEffect(() => {
     let cancelled = false;
@@ -363,9 +391,18 @@ export function BrowserPlayer({ active, onClose, onStateChanged, onAdvance }: { 
         const latest = (await api.downloads()).items.find(item => item.id === active.download.id);
         if (!latest) throw new Error('The download is no longer managed.');
         setMessage(latest.playbackMode === 'progressive' ? `Streaming while downloading · ${Math.round(latest.progress * 100)}%` : 'Downloaded file ready · retrying playback…');
-        video.current?.load();
-        await video.current?.play();
-        recovering.current = false
+        if (mseMode) {
+          // A MediaSource pipeline cannot survive load(): the transport is
+          // re-attached instead, which restarts the stream at the same
+          // stream offset.
+          shouldPlay.current = true;
+          setCompatGeneration(value => value + 1);
+          recovering.current = false
+        } else {
+          video.current?.load();
+          await video.current?.play();
+          recovering.current = false
+        }
       } catch (error) {
         recovering.current = false;
         recoverAttempts.current++;
@@ -497,8 +534,7 @@ export function BrowserPlayer({ active, onClose, onStateChanged, onAdvance }: { 
     return { kind: 'seek', fraction: durationRef.current > 0 ? targetMs / durationRef.current : 0, hint };
   }
   return <div ref={root} tabindex={-1} class={`video ${controlsVisible ? 'controls-visible' : ''}`} role="dialog" aria-modal="true" aria-label={`Playing ${active.download.displayTitle || active.download.filePath}`}>
-    <video ref={video} src={playbackURL ? api.streamURL(playbackURL) : undefined} autoplay playsInline onLoadedMetadata={event => { reloading.current = false; const pending = pendingSeekRef.current >= 0 ? pendingSeekRef.current : (!browserMode && active.resumeMs > 0 ? active.resumeMs : -1); pendingSeekRef.current = -1; if (pending > 0) event.currentTarget.currentTime = pending / 1000; if (shouldPlay.current) void event.currentTarget.play().catch(() => setMessage('Press Play to start playback.')) }} onWaiting={() => { if (!reloading.current) setMessage(active.download.playbackMode === 'progressive' ? 'Buffering the next downloaded segment…' : 'Buffering…') }} onCanPlay={() => { recovering.current = false; recoverAttempts.current = 0; if (!reloading.current) setMessage('') }} onPlaying={() => { recovering.current = false; recoverAttempts.current = 0; setPlaying(true); if (!reloading.current) setMessage('') }} onTimeUpdate={event => { if (scrub.current?.target != null) return; const next = logicalPlaybackPosition(offsetRef.current, event.currentTarget.currentTime, durationRef.current); const now = Date.now(); if (now - lastRendered.current >= 250) { lastRendered.current = now; setPosition(next) } if (now - lastSaved.current > 10000) { lastSaved.current = now; void save() } }} onPause={() => { setPlaying(false); void save() }} onEnded={() => void save().then(() => onAdvance(preferenceRef.current))} onError={() => void recover()} onClick={onVideoClick} onDblClick={onVideoDoubleClick} />
-    <div class="player-chrome">
+    <video ref={video} src={!mseMode && playbackURL ? api.streamURL(playbackURL) : undefined} autoplay playsInline onLoadedMetadata={event => { reloading.current = false; const pending = pendingSeekRef.current >= 0 ? pendingSeekRef.current : (!browserMode && active.resumeMs > 0 ? active.resumeMs : -1); pendingSeekRef.current = -1; if (pending > 0) event.currentTarget.currentTime = pending / 1000; if (shouldPlay.current) void event.currentTarget.play().catch(() => setMessage('Press Play to start playback.')) }} onWaiting={() => { if (!reloading.current) setMessage(active.download.playbackMode === 'progressive' ? 'Buffering the next downloaded segment…' : 'Buffering…') }} onCanPlay={() => { recovering.current = false; recoverAttempts.current = 0; if (!reloading.current) setMessage('') }} onPlaying={() => { recovering.current = false; recoverAttempts.current = 0; setPlaying(true); if (!reloading.current) setMessage('') }} onTimeUpdate={event => { if (scrub.current?.target != null) return; const next = logicalPlaybackPosition(offsetRef.current, event.currentTarget.currentTime, durationRef.current); const now = Date.now(); if (now - lastRendered.current >= 250) { lastRendered.current = now; setPosition(next) } if (now - lastSaved.current > 10000) { lastSaved.current = now; void save() } }} onPause={() => { setPlaying(false); void save() }} onEnded={() => void save().then(() => onAdvance(preferenceRef.current))} onError={() => void recover()} onClick={onVideoClick} onDblClick={onVideoDoubleClick} />    <div class="player-chrome">
       <div class="player-heading"><strong>{active.download.displayTitle || active.download.filePath}</strong><span><TrackerBadge id={active.download.trackerId} name={active.download.trackerName} />{active.download.playbackMode === 'progressive' ? ' · Streaming while downloading' : ' · Downloaded file'}</span></div>
       <div class="player-scrubber"><input aria-label="Playback position" type="range" min="0" max={mediaInfo?.durationMs || 1} step="1000" value={Math.min(position, mediaInfo?.durationMs || 1)} disabled={!mediaInfo} onInput={event => setPosition(Number(event.currentTarget.value))} onChange={event => restartAt(Number(event.currentTarget.value))} /><div><time>{formatPlaybackTime(position)}</time><time>{mediaInfo ? formatPlaybackTime(mediaInfo.durationMs) : 'Preparing…'}</time></div></div>
       <div class="player-control-row"><button class="player-play" onClick={togglePlayback}>{playing ? 'Pause' : 'Play'}</button><button onClick={() => restartAt(position - 10000)} disabled={!mediaInfo}>−10 seconds</button><button onClick={() => restartAt(position + 10000)} disabled={!mediaInfo}>+10 seconds</button><label class="player-volume"><span>Volume</span><input aria-label="Volume" type="range" min="0" max="1" step="0.05" value={muted ? 0 : volume} onInput={event => setPlayerVolume(Number(event.currentTarget.value))} /></label><button onClick={toggleMuted}>{muted ? 'Unmute' : 'Mute'}</button><button onClick={() => { setSubtitleOpen(false); setAudioOpen(value => !value); revealControls() }} disabled={!mediaInfo}>Audio{currentTrack ? ` · ${audioTrackLabel(currentTrack).split(' · ')[0]}` : ''}</button><button onClick={() => { setAudioOpen(false); setSubtitleOpen(value => !value); revealControls() }}>Subtitles{selectedSubtitle === 'off' ? ' · Off' : ''}</button><button onClick={() => void toggleFullscreen()}>Fullscreen</button><button onClick={hideControls} aria-label="Hide controls">Hide</button><button onClick={() => { void save(); onClose() }} aria-label="Close player">Close</button></div>
