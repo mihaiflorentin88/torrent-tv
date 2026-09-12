@@ -219,6 +219,11 @@ jobs:
           api-level: ${{ matrix.api }}
           target: android-tv
           arch: ${{ matrix.arch }}
+          # Hosted runners starve the default 2-core AVD; the TV images
+          # above API 26 boot in minutes otherwise (see the matrix note).
+          cores: 4
+          ram-size: 4096M
+          disable-animations: true
           script: bash clients/android-tv/scripts/boot_smoke.sh
       - name: Upload smoke evidence
         if: always()
