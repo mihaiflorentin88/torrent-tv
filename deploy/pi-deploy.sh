@@ -61,6 +61,9 @@ case "$saved_app_target" in
 esac
 prompt "Application binary path" "$prompt_default"
 app_target=$REPLY
+saved_artwork_cache=$(configured ARTWORK_CACHE_PATH || true)
+prompt "Artwork cache path" "${saved_artwork_cache:-${download_root%/}/artwork}"
+artwork_cache=$REPLY
 
 valid_atom "$host" || {
 	echo "SSH target contains unsupported characters" >&2
@@ -95,6 +98,10 @@ valid_path "$app_target" || {
 	echo "application path must be absolute and contain no spaces" >&2
 	exit 2
 }
+valid_path "$artwork_cache" || {
+	echo "artwork cache path must be absolute and contain no spaces" >&2
+	exit 2
+}
 
 profile_tmp=$profile.tmp.$$
 umask 077
@@ -107,6 +114,7 @@ mkdir -p "$(dirname "$profile")"
 	printf 'QB_TEMP_PATH=%s\n' "$qb_temp"
 	printf 'QB_BACKUP_DIR=%s\n' "$qb_backup"
 	printf 'APP_TARGET=%s\n' "$app_target"
+	printf 'ARTWORK_CACHE_PATH=%s\n' "$artwork_cache"
 } >"$profile_tmp"
 mv "$profile_tmp" "$profile"
 
@@ -140,7 +148,7 @@ scp "$logrotate" "$host:$stage/torrent-tv.logrotate"
 scp "$repo_root/deploy/qbittorrent/qBittorrent.streaming.conf" "$host:$stage/qBittorrent.streaming.conf"
 scp "$repo_root/tools/qbittorrent_config.py" "$host:$stage/qbittorrent_config.py"
 
-ssh "$host" "sudo sh -s -- '$stage' '$qb_service' '$qb_config' '$download_root' '$qb_temp' '$qb_backup' '$app_target'" <<'REMOTE'
+ssh "$host" "sudo sh -s -- '$stage' '$qb_service' '$qb_config' '$download_root' '$qb_temp' '$qb_backup' '$app_target' '$artwork_cache'" <<'REMOTE'
 set -eu
 stage=$1
 qb_service=$2
@@ -149,6 +157,7 @@ download_root=$4
 qb_temp=$5
 qb_backup=$6
 target=$7
+artwork_cache=$8
 service=torrent-tv.service
 service_user=torrent-tv
 service_group=torrent-tv
@@ -276,6 +285,7 @@ test -s "${target}.new"
 # shipped ExecStart already points at the service-owned bin directory; a
 # custom target is substituted so the unit keeps matching the binary.
 sed -i "s|@DOWNLOAD_ROOT@|$download_root|" "$stage/torrent-tv.service"
+sed -i "s|@ARTWORK_CACHE_PATH@|$artwork_cache|" "$stage/torrent-tv.service"
 if [ "$target" != "$owned_target" ]; then
 	sed -i "s|^ExecStart=.*|ExecStart=$target serve --data-dir /var/lib/torrent-tv/data|" "$stage/torrent-tv.service"
 fi

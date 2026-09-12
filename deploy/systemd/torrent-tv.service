@@ -29,8 +29,11 @@ ProtectHome=true
 # order, and a later mention re-mutes an earlier grant. The application
 # binary lives in /var/lib/torrent-tv/bin, owned by the service
 # user, so the in-application updater stages and swaps it inside the
-# ReadWritePaths grant above without a privilege escalation.
-ReadWritePaths=/var/lib/torrent-tv -@DOWNLOAD_ROOT@
+# ReadWritePaths grant above without a privilege escalation. The artwork
+# cache path is granted for the same reason: metadata images are written
+# there on demand. Relocating the cache in the UI requires updating this
+# answer and redeploying.
+ReadWritePaths=/var/lib/torrent-tv -@DOWNLOAD_ROOT@ -@ARTWORK_CACHE_PATH@
 ReadOnlyPaths=-/var/lib/qbittorrent/qBittorrent/downloads
 MemoryHigh=1536M
 MemoryMax=2G
