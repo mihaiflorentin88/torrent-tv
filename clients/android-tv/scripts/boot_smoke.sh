@@ -59,11 +59,20 @@ fail_with_evidence() {
 adb shell input keyevent KEYCODE_DPAD_RIGHT
 deadline=$(( $(date +%s) + 60 ))
 base=""
+presses=1
 while [ -z "$base" ]; do
   base="$(focus_key)"
+  if [ -n "$base" ]; then break; fi
   if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "d-pad press never focused a page control" >&2
     fail_with_evidence
+  fi
+  # A press that lands before the WebView's key listener is installed is
+  # simply lost, so re-issue it while polling instead of failing on one
+  # swallowed event.
+  presses=$((presses + 1))
+  if [ $((presses % 3)) -eq 0 ]; then
+    adb shell input keyevent KEYCODE_DPAD_RIGHT
   fi
   sleep 2
 done
