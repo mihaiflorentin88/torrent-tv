@@ -7,8 +7,10 @@
 set -u
 
 APK="clients/android-tv/app/build/outputs/apk/debug/app-debug.apk"
-READY_BUDGET=${READY_BUDGET:-600}
-DUMP_BUDGET=${DUMP_BUDGET:-180}
+# CI emulators occasionally boot in 3-7 minutes under runner load; the
+# budgets must absorb a slow boot, not just a fast one.
+READY_BUDGET=${READY_BUDGET:-900}
+DUMP_BUDGET=${DUMP_BUDGET:-300}
 
 adb wait-for-device || exit 1
 adb install -r "$APK" || exit 1
